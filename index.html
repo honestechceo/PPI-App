@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Honestech PPI Inspector</title>
+<title>Honestech PPI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -141,17 +141,78 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
   .tally strong{font-size:24px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* app shell: schedule, settings, invoice */
+.brand-r{display:flex;gap:6px;align-items:center;min-width:0}
+.navbtn{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:600;white-space:nowrap}
+.navbtn[aria-current="page"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.jobbar{display:flex;align-items:center;gap:8px;padding:8px 0 0;min-width:0}
+.jobbar .veh{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.days{display:flex;gap:6px;overflow-x:auto;padding:4px 0 12px;scrollbar-width:none;margin:0 -2px}
+.days::-webkit-scrollbar{display:none}
+.day{flex:0 0 auto;width:54px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 0;display:flex;flex-direction:column;align-items:center;gap:1px}
+.day small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.day strong{font-family:var(--f-display);font-size:22px;line-height:1}
+.day i{width:6px;height:6px;border-radius:50%;background:transparent;font-style:normal}
+.day.has i{background:var(--accent)}
+.day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.day.all{width:auto;padding:6px 12px;justify-content:center}
+.group-h{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.jobs{display:flex;flex-direction:column;gap:10px}
+.job{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:4px 12px}
+.job .when-col{grid-row:span 3;border-right:1px solid var(--line);padding-right:10px}
+.job .t{font-family:var(--f-display);font-size:22px;font-weight:700;line-height:1}
+.job .d{font-size:12px;color:var(--muted)}
+.job .who{font-weight:600;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.job .meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.job .acts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.st{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:2px 8px}
+.st-sched{background:var(--accent-soft);color:var(--accent)} .st-active{background:var(--mon-soft);color:var(--mon)} .st-done{background:var(--na-soft);color:var(--na)} .st-paid{background:var(--good-soft);color:var(--good)} .st-unpaid{background:var(--bad-soft);color:var(--bad)}
+.mini.go{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.mini.del{color:var(--bad)}
+.emptybox{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--muted)}
+.formh{grid-column:1/-1;font-family:var(--f-display);font-size:20px;font-weight:700;margin:0}
+.formacts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
+.help{font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:400}
+.check{flex-direction:row!important;align-items:center;gap:10px!important;text-transform:none!important;letter-spacing:0!important;font-size:15px!important;color:var(--ink)!important;font-weight:500!important}
+.check input{width:22px!important;height:22px}
+/* invoice */
+.inv-table{width:100%;border-collapse:collapse;margin-top:14px;font-size:14px}
+.inv-table th{text-align:left;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:6px 0;border-bottom:1px solid var(--line)}
+.inv-table th:last-child,.inv-table td.amt{text-align:right}
+.inv-table td{padding:8px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+.inv-table td.amt{width:120px}
+.inv-table input{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:7px 8px;width:100%}
+.inv-table td.amt input{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.inv-table .sub{display:block;font-size:12px;color:var(--muted)}
+.rowx{display:flex;gap:6px;align-items:center}
+.rowx input.dist{width:70px}
+.xbtn{border:0;background:transparent;color:var(--bad);font-size:18px;padding:4px 8px}
+.totals{margin-top:10px;margin-left:auto;max-width:280px;display:grid;grid-template-columns:1fr auto;gap:4px 16px;font-variant-numeric:tabular-nums}
+.totals dt{color:var(--muted)}
+.totals dd{margin:0;text-align:right;font-family:var(--f-mono)}
+.totals .grand{font-family:var(--f-display);font-size:26px;font-weight:700;color:var(--ink)}
+.paybox{margin-top:16px;padding:12px;border-radius:10px;background:var(--bg);border:1px solid var(--line);white-space:pre-line;font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600}
+.chips button[aria-pressed="true"]{background:var(--good);border-color:var(--good);color:var(--surface)}
+.paidstamp{display:inline-block;border:2px solid var(--good);color:var(--good);font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:.1em;padding:2px 10px;border-radius:6px;transform:rotate(-4deg)}
+.madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
-
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Honestech <span>PPI</span></h1><div class="veh" id="vehLabel"></div></div>
-    <div class="bar"><i id="barFill"></i></div>
-    <div class="steps" id="steps" role="tablist" aria-label="Inspection stages"></div>
+    <div class="brand"><h1>Honestech <span>PPI</span></h1>
+      <div class="brand-r"><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></div>
+    </div>
+    <div id="jobChrome">
+      <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="steps" id="steps" role="tablist" aria-label="Inspection stages"></div>
+    </div>
+    <div id="plainPad" style="height:10px"></div>
   </div>
 </header>
 <main id="main"></main>
-<nav class="foot"><div class="foot-inner">
+<nav class="foot" id="foot"><div class="foot-inner">
   <button class="btn" id="prevBtn" type="button">Back</button>
   <span class="count" id="countLbl"></span>
   <button class="btn primary" id="nextBtn" type="button">Next</button>
@@ -159,7 +220,7 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 <div class="toast" id="toast" hidden></div>
 
 <script>
-/* ---------- Inspection flow, in field order ---------- */
+/* ================= Inspection checklist, in field order ================= */
 const SECTIONS = [
   {id:"arrive", title:"Arrival & Documents", when:"<strong>Before anyone starts the car.</strong> Touch the hood and upper radiator hose to confirm the engine is cold, then match paperwork to the vehicle.",
    items:[
@@ -262,16 +323,37 @@ const SECTIONS = [
 const RATES = [["good","Good"],["mon","Monitor"],["bad","Repair"],["na","N/A"]];
 const RLABEL = {good:"Good",mon:"Monitor",bad:"Repair",na:"N/A"};
 const VERDICTS = [["buy","Recommend"],["buyfix","Recommend with repairs"],["pass","Do not recommend"]];
-const KEY = "honestech-ppi-v2";
+const PAYMETHODS = ["Cash","Card","Zelle","Cash App","Venmo","Check"];
+const CORNERS=[["LF","Left front"],["RF","Right front"],["LR","Left rear"],["RR","Right rear"]];
+const KEY = "honestech-ppi-v3";
+const STAGES = [{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"},{id:"invoice",title:"Invoice"}];
+const ALL_ITEMS = SECTIONS.flatMap(s=>s.items.map(i=>({...i,sec:s})));
 
-/* ---------- Sample data (clearly labeled) ---------- */
-function sampleState(){
-  const r = {};
-  const set=(id,v,extra={})=>r[id]={r:v,note:"",val:"",photos:[],...extra};
-  ["cold","vinmatch","title","records","keys","paint","gaps","glass","lenses","latches","flood","oil","coolant","brakefl","psfl","belts","hoses","airfilter","bulbs","crank","noise","smoke","idle","monitors"].forEach(i=>set(i,"good"));
+/* ================= dates & money ================= */
+const isoDay=(d)=>{const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezoneOffset());return x.toISOString().slice(0,10)};
+const TODAY=isoDay(new Date());
+const addDays=(iso,n)=>{const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return isoDay(d)};
+const fmtDate=(iso,opt={weekday:"short",month:"short",day:"numeric"})=>iso?new Date(iso+"T12:00:00").toLocaleDateString(undefined,opt):"";
+const fmtTime=(t)=>{if(!t)return"";const[h,m]=t.split(":").map(Number);return `${(h%12)||12}:${String(m).padStart(2,"0")} ${h<12?"AM":"PM"}`};
+const money=(n)=>(+n||0).toLocaleString("en-US",{style:"currency",currency:"USD"});
+const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));return isNaN(n)?0:n};
+const uid=()=>Math.random().toString(36).slice(2,9);
+
+/* ================= state ================= */
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the inspection is complete.",prefix:"INV-",next:1001};}
+function newJob(info={}){
+  return {id:uid(),status:"sched",step:0,verdict:"",results:{},
+    info:{customer:"",phone:"",date:TODAY,time:"",location:"",dist:"",notes:"",year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",summary:"",...info},
+    invoice:{num:"",date:"",fee:null,travelOverride:"",items:[],tax:null,paid:false,paidVia:"",paidDate:""}};
+}
+function sampleApp(){
+  const s={...defaultSettings(),biz:"Sample Mobile Mechanic",owner:"Alex Rivera",phone:"(555) 010-0199",email:"service@example.com",web:"example.com",pay:"Zelle: (555) 010-0199\nCash or card accepted on site"};
+  const j1=newJob({customer:"Sample buyer",phone:"(555) 010-0142",time:"10:00",location:"Seller driveway, 12 Oak St",dist:"18",year:"2017",make:"Honda",model:"Accord",trim:"EX-L",vin:"1HGCR2F80HA012345",miles:"98412",color:"Silver"});
+  j1.status="active";j1.step=4;
+  const r=j1.results,set=(id,v,extra={})=>r[id]={r:v,note:"",val:"",photos:[],...extra};
+  ["cold","vinmatch","title","records","keys","paint","gaps","glass","lenses","latches","flood","rust","oil","coolant","brakefl","psfl","belts","hoses","airfilter","bulbs","crank","noise","smoke","idle","monitors"].forEach(i=>set(i,"good"));
   set("odo","good",{note:"Matches 2024 inspection sticker"});
   set("body","mon",{note:"Shallow door ding, rear passenger door"});
-  set("rust","good");
   set("atf","na",{note:"Sealed unit, no dipstick"});
   set("battery","mon",{val:"12.3",note:"Battery dated 08/2021"});
   set("leaks","mon",{note:"Light seep at valve cover gasket"});
@@ -279,46 +361,61 @@ function sampleState(){
   set("charging","good",{val:"14.1"});
   set("tread","mon",{val:{LF:"6",RF:"6",LR:"4",RR:"5"},auto:true});
   set("pads","bad",{val:{LF:"6",RF:"5",LR:"3",RR:"2"},auto:true,note:"Rear pads near metal, replace rear pads and inspect rotors"});
-  return {sample:true, step:4, verdict:"",
-    info:{customer:"Sample buyer",phone:"",date:new Date().toISOString().slice(0,10),location:"Seller driveway, Toms River",year:"2017",make:"Honda",model:"Accord",trim:"EX-L",vin:"1HGCR2F80HA012345",miles:"98412",color:"Silver",summary:""},
-    results:r};
+  const j2=newJob({customer:"Sample: Dana K.",phone:"(555) 010-0177",date:addDays(TODAY,1),time:"13:00",location:"Dealer lot, Route 9",dist:"6",year:"2019",make:"Toyota",model:"Tacoma",trim:"TRD Off-Road"});
+  const j3=newJob({customer:"Sample: Marcus T.",date:addDays(TODAY,3),time:"09:30",location:"Private seller, Main St",dist:"32",year:"2015",make:"BMW",model:"328i"});
+  const j4=newJob({customer:"Sample: Priya S.",date:addDays(TODAY,-1),time:"15:00",location:"Seller's office lot",dist:"12",year:"2018",make:"Ford",model:"F-150",trim:"XLT"});
+  j4.status="done";j4.step=STAGES.length-1;j4.verdict="buy";
+  ALL_ITEMS.forEach(it=>j4.results[it.id]={r:"good",note:"",val:"",photos:[]});
+  j4.invoice={num:"INV-1000",date:addDays(TODAY,-1),fee:100,travelOverride:"",items:[],tax:false,paid:true,paidVia:"Zelle",paidDate:addDays(TODAY,-1)};
+  return {v:3,sample:true,view:"jobs",active:j1.id,day:"",adding:false,draft:null,settings:{...s,next:1001},jobs:[j1,j2,j3,j4]};
 }
-function blankState(){
-  return {sample:false, step:0, verdict:"",
-    info:{customer:"",phone:"",date:new Date().toISOString().slice(0,10),location:"",year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",summary:""},
-    results:{}};
+function blankApp(keepSettings){
+  return {v:3,sample:false,view:keepSettings?"jobs":"settings",active:null,day:"",adding:false,draft:null,settings:keepSettings||defaultSettings(),jobs:[]};
 }
-let S;
+let APP;
 try{
   const raw=localStorage.getItem(KEY);
-  if(raw) S=JSON.parse(raw);
-  else { const old=localStorage.getItem("honestech-ppi-v1"); const o=old&&JSON.parse(old); S=(o&&!o.sample)?o:sampleState(); }
-}catch(e){ S = sampleState(); }
+  if(raw) APP=JSON.parse(raw);
+  else{
+    APP=sampleApp();
+    const old=localStorage.getItem("honestech-ppi-v2")||localStorage.getItem("honestech-ppi-v1");
+    const o=old&&JSON.parse(old);
+    if(o&&!o.sample){ const j=newJob(o.info);j.results=o.results||{};j.verdict=o.verdict||"";j.step=Math.min(o.step||0,STAGES.length-1);j.status="active";
+      APP=blankApp(defaultSettings());APP.jobs=[j];APP.view="jobs"; }
+  }
+}catch(e){ APP=sampleApp(); }
+APP.adding=false;
+let S=null; // the job being worked on
+function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
+syncActive();
 
 let saveWarned=false;
 function save(){
-  try{ localStorage.setItem(KEY,JSON.stringify(S)); }
-  catch(e){ if(!saveWarned){ toast("Storage is full. Photos may not be kept if the page reloads."); saveWarned=true; } }
+  try{ localStorage.setItem(KEY,JSON.stringify(APP)); }
+  catch(e){ if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
 }
 
-/* ---------- helpers ---------- */
+/* ================= helpers ================= */
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const STAGES = [{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"}];
-const ALL_ITEMS = SECTIONS.flatMap(s=>s.items.map(i=>({...i,sec:s})));
 const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
-const CORNERS=[["LF","Left front"],["RF","Right front"],["LR","Left rear"],["RR","Right rear"]];
+const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
+function bizName(){return APP.settings.biz||"Your business name";}
+function bizContact(){const s=APP.settings;return [s.phone,s.email,s.web].filter(Boolean).join(" · ");}
+function copyText(txt,boxId){
+  const box=boxId&&document.getElementById(boxId);
+  const fallback=()=>{if(box){box.value=txt;box.hidden=false;box.focus();box.select();}toast("Text selected. Use your phone's Copy.");};
+  try{navigator.clipboard.writeText(txt).then(()=>toast("Copied"),fallback);}catch(err){fallback();}
+}
 function cornerVals(r){ if(!r.val||typeof r.val!=="object") r.val={}; return r.val; }
 function cornerRate(c,v){ if(v===""||v==null||isNaN(+v)) return ""; v=+v; return v<=c.repair?"bad":v<=c.monitor?"mon":"good"; }
 function measText(it,r){
+  if(!r) return "";
   if(it.corners){const v=(r.val&&typeof r.val==="object")?r.val:{};const parts=CORNERS.filter(([k])=>v[k]!==undefined&&v[k]!=="").map(([k])=>`${k} ${v[k]}`);
     return parts.length?parts.join(" · ")+" "+it.corners.unit:"";}
   return r.val&&it.measure?`${r.val} ${it.measure.unit}`:"";
 }
-function vehName(){const i=S.info;return [i.year,i.make,i.model,i.trim].filter(Boolean).join(" ")}
-
-/* VIN check digit (North American VINs) */
 function vinCheck(v){
   v=(v||"").toUpperCase().replace(/\s/g,"");
   if(!v) return {cls:"",msg:""};
@@ -330,50 +427,207 @@ function vinCheck(v){
   const cd=sum%11===10?"X":String(sum%11);
   return cd===v[8]?{cls:"ok",msg:"Check digit valid"}:{cls:"err",msg:`Check digit fails (expected ${cd} in position 9). Re-read the VIN.`};
 }
-
-function stats(){
+function stats(job=S){
   let good=0,mon=0,bad=0,na=0;
-  ALL_ITEMS.forEach(i=>{const r=S.results[i.id]?.r;if(r==="good")good++;else if(r==="mon")mon++;else if(r==="bad")bad++;else if(r==="na")na++;});
+  ALL_ITEMS.forEach(i=>{const r=job.results[i.id]?.r;if(r==="good")good++;else if(r==="mon")mon++;else if(r==="bad")bad++;else if(r==="na")na++;});
   const done=good+mon+bad+na;
   return {good,mon,bad,na,done,open:ALL_ITEMS.length-done,total:ALL_ITEMS.length};
 }
+function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfix"; return"buy"; }
 
-/* ---------- render ---------- */
+/* ---------- money math ---------- */
+function travelCalc(job){
+  const st=APP.settings, inv=job.invoice;
+  if(inv.travelOverride!==""&&inv.travelOverride!=null) return {fee:num(inv.travelOverride),auto:false};
+  const d=num(job.info.dist), billable=Math.max(0,d-num(st.freeMiles));
+  return {fee:Math.round(billable*num(st.perMile)),auto:true,billable,d};
+}
+function totals(job){
+  const inv=job.invoice, st=APP.settings;
+  const fee=inv.fee==null?num(st.fee):num(inv.fee);
+  const tr=travelCalc(job);
+  const extras=inv.items.reduce((a,x)=>a+num(x.a),0);
+  const sub=fee+tr.fee+extras;
+  const taxOn=inv.tax==null?!!st.taxOn:inv.tax;
+  const tax=taxOn?Math.round(sub*num(st.taxRate))/100:0;
+  return {fee,travel:tr,extras,sub,taxOn,tax,total:sub+tax};
+}
+function jobTotal(job){return totals(job).total;}
+
+/* ================= chrome ================= */
 function renderChrome(){
+  const inJob=APP.view==="job"&&S;
+  $("#jobChrome").hidden=!inJob; $("#plainPad").hidden=!!inJob;
+  $("#navJobs").setAttribute("aria-current",APP.view==="jobs"?"page":"false");
+  $("#navSettings").setAttribute("aria-current",APP.view==="settings"?"page":"false");
+  const foot=$("#foot");
+  if(APP.view==="settings"){foot.hidden=true;return;}
+  foot.hidden=false;
+  if(APP.view==="jobs"){
+    $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
+    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";
+    return;
+  }
   const st=stats();
   $("#barFill").style.width=(st.done/st.total*100)+"%";
-  $("#vehLabel").textContent=vehName()||"New inspection";
+  $("#vehLabel").textContent=[S.info.customer,vehOf(S.info)].filter(Boolean).join(" · ")||"New inspection";
   $("#steps").innerHTML=STAGES.map((s,i)=>{
     let cls="step";
     if(i===S.step)cls+=" on";
     if(s.items){const rs=s.items.map(it=>S.results[it.id]?.r);
       if(rs.includes("bad"))cls+=" flag"; else if(rs.every(Boolean))cls+=" done";}
-    const num=s.id==="report"?"✓":(i===0?"0":i);
-    return `<button class="${cls}" role="tab" aria-selected="${i===S.step}" data-go="${i}"><b>${num}</b>${esc(s.title)}</button>`;
+    if(s.id==="invoice"&&S.invoice.paid)cls+=" done";
+    const n=s.id==="report"?"R":s.id==="invoice"?"$":i;
+    return `<button class="${cls}" role="tab" aria-selected="${i===S.step}" data-go="${i}"><b>${n}</b>${esc(s.title)}</button>`;
   }).join("");
   const on=$("#steps .on"); if(on) on.scrollIntoView({block:"nearest",inline:"center"});
-  $("#prevBtn").disabled=S.step===0;
   $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";
-  const last=S.step===STAGES.length-1;
-  $("#nextBtn").textContent=last?"New inspection":(S.step===STAGES.length-2?"Review report":"Next: "+STAGES[S.step+1].title);
+  const id=STAGES[S.step].id;
+  $("#nextBtn").textContent=id==="invoice"?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
   $("#countLbl").textContent=`${st.done}/${st.total}`;
 }
-
 function sampleBanner(){
-  return S.sample?`<div class="sample"><span><strong>Sample inspection.</strong> Example data so you can see how it works.</span><button class="mini" type="button" data-act="fresh">Start a real one</button></div>`:"";
+  return APP.sample?`<div class="sample"><span><strong>Sample data.</strong> Example jobs and business so you can see how it works.</span><button class="mini" type="button" data-act="fresh">Clear samples &amp; set up</button></div>`:"";
 }
 
+/* ================= schedule ================= */
+function renderJobs(){
+  const days=[...Array(14)].map((_,k)=>addDays(TODAY,k));
+  const counts={};APP.jobs.forEach(j=>{counts[j.info.date]=(counts[j.info.date]||0)+1});
+  const strip=`<div class="days" role="group" aria-label="Filter by day"><button type="button" class="day all" data-day="" aria-pressed="${!APP.day}"><strong style="font-size:16px">All</strong><small>upcoming</small></button>${days.map(d=>{
+    const dt=new Date(d+"T12:00:00");
+    return `<button type="button" class="day${counts[d]?" has":""}" data-day="${d}" aria-pressed="${APP.day===d}"><small>${d===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><i></i></button>`}).join("")}</div>`;
+  const sortKey=j=>(j.info.date||"")+(j.info.time||"99");
+  let upcoming=APP.jobs.filter(j=>j.status!=="done"&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
+  const done=APP.jobs.filter(j=>j.status==="done"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
+  const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
+  const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
+  <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p></div>
+  ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span><button class="mini" type="button" data-act="gobackup">Back up now</button></div>`:""}
+  ${APP.adding?renderJobForm():""}
+  ${strip}
+  ${upcoming.length?Object.entries(groups).map(([k,js])=>`<div class="group-h">${esc(k)}</div><div class="jobs">${js.map(jobCard).join("")}</div>`).join("")
+    :`<div class="emptybox">${APP.day?"Nothing booked this day.":"No upcoming jobs."} Tap <strong>+ Book a job</strong> to add one.</div>`}
+  ${done.length?`<div class="group-h">Completed</div><div class="jobs">${done.map(jobCard).join("")}</div>`:""}
+  <textarea class="copybox" id="jobCopy" hidden readonly></textarea>`;
+}
+function jobCard(j){
+  const i=j.info, st=stats(j);
+  const status=j.status==="done"?`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`
+    :j.status==="active"?`<span class="st st-active">In progress ${st.done}/${st.total}</span>`:`<span class="st st-sched">Booked</span>`;
+  const confirmDel=APP.confirmDel===j.id;
+  return `<div class="job">
+    <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
+    <div class="who">${esc(i.customer||"No customer name")} ${status}</div>
+    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}</div>
+    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}</div>
+    <div class="acts">
+      ${confirmDel?`<span class="meta">Delete this job and its inspection?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
+      :`<button class="mini go" type="button" data-open="${j.id}">${j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
+      ${j.status==="done"?`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`:`<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      <button class="mini" type="button" data-edit="${j.id}">Edit</button>
+      <button class="mini del" type="button" data-askdel="${j.id}">Delete</button>`}
+    </div></div>`;
+}
+function renderJobForm(){
+  const d=APP.draft, tr=Math.max(0,num(d.dist)-num(APP.settings.freeMiles))*num(APP.settings.perMile);
+  const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="d-${id}" data-draft="${id}" value="${esc(d[id])}" ${extra}></label>`;
+  return `<form class="form" id="jobForm" autocomplete="off">
+    <p class="formh">${APP.editing?"Edit job":"Book a job"}</p>
+    ${f("date","Date",'type="date" required')}
+    ${f("time","Time",'type="time"')}
+    ${f("customer","Customer name",'required')}
+    ${f("phone","Customer phone",'inputmode="tel"')}
+    ${f("location","Inspection address","","full")}
+    ${f("dist","Distance (miles, one way)",'inputmode="decimal"')}
+    <label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>
+    ${f("year","Year",'inputmode="numeric" maxlength="4"')}
+    ${f("make","Make")}
+    ${f("model","Model")}
+    ${f("trim","Trim")}
+    <label class="full">Notes<textarea id="d-notes" data-draft="notes" rows="2" placeholder="Seller name, listing link, gate code">${esc(d.notes)}</textarea></label>
+    <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button><button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
+  </form>`;
+}
+function confirmText(j){
+  const i=j.info, st=APP.settings, t=totals(j);
+  return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your pre-purchase inspection is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.\n\nPrice: ${money(t.total)} (${money(t.fee)} inspection${t.travel.fee?` + ${money(t.travel.fee)} travel`:""}). Please have the seller keep the engine cold before I arrive so I can check the cold start.\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
+}
+
+/* ================= settings ================= */
+function renderSettings(){
+  const s=APP.settings;
+  const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Your business</div><h2>Settings</h2><p class="when">This information appears on your reports, invoices, and booking confirmations.</p></div>
+  <div class="form">
+    <p class="formh">Business</p>
+    ${f("biz","Business name","","full")}
+    ${f("owner","Your name")}
+    ${f("phone","Phone",'inputmode="tel"')}
+    ${f("email","Email",'inputmode="email"')}
+    ${f("web","Website")}
+  </div>
+  <div class="form">
+    <p class="formh">Pricing</p>
+    ${f("fee","PPI fee ($)",'inputmode="decimal"')}
+    <span></span>
+    ${f("freeMiles","Free travel miles",'inputmode="decimal"',"","No travel fee within this distance")}
+    ${f("perMile","Travel rate ($ per mile)",'inputmode="decimal"',"","Charged on miles past the free distance")}
+    <p class="help full" style="margin:0">Example: a job ${num(s.freeMiles)+15} miles away is ${money(num(s.fee))} + ${money(Math.round(15*num(s.perMile)))} travel = ${money(num(s.fee)+Math.round(15*num(s.perMile)))}</p>
+    <label class="check full"><input type="checkbox" id="s-taxOn" data-setc="taxOn" ${s.taxOn?"checked":""}> Charge sales tax by default</label>
+    ${f("taxRate","Tax rate (%)",'inputmode="decimal"',"","Check with your accountant whether inspections are taxable in your state")}
+  </div>
+  <div class="form">
+    <p class="formh">Invoices</p>
+    ${f("prefix","Invoice number prefix")}
+    ${f("next","Next invoice number",'inputmode="numeric"')}
+    <label class="full">How customers pay you<textarea id="s-pay" data-set="pay" rows="3" placeholder="Zelle: your phone or email&#10;Cash App: $yourtag&#10;Card payment link">${esc(s.pay)}</textarea></label>
+    ${f("terms","Payment terms","","full")}
+  </div>
+  <div class="form" id="backup">
+    <p class="formh">Backup &amp; restore</p>
+    <p class="help full" style="margin:0">Your data lives only in this app on this phone. Copy a backup and paste it into Notes or email it to yourself. ${APP.lastBackup?`Last backup: <strong>${esc(fmtDate(APP.lastBackup,{month:"short",day:"numeric",year:"numeric"}))}</strong>.`:"<strong>No backup yet.</strong>"}</p>
+    <label class="check full"><input type="checkbox" id="bk-photos" ${APP.bkPhotos?"checked":""} data-bkphotos="1"> Include photos (makes the backup much larger)</label>
+    <div class="formacts"><button class="btn primary" type="button" data-act="backup">Copy backup</button></div>
+    <textarea class="copybox full" id="bkbox" hidden readonly></textarea>
+    <label class="full">Restore from a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
+    <div class="formacts" id="restoreActs"><button class="btn" type="button" data-act="askRestore">Restore</button></div>
+  </div>`;
+}
+function backupText(){
+  const copy=JSON.parse(JSON.stringify(APP));
+  delete copy.adding;delete copy.draft;delete copy.editing;delete copy.confirmDel;
+  if(!APP.bkPhotos)copy.jobs.forEach(j=>Object.values(j.results).forEach(r=>{r.photos=[]}));
+  return "HONESTECH-PPI-BACKUP:"+JSON.stringify(copy);
+}
+function parseBackup(txt){
+  txt=(txt||"").trim();const i=txt.indexOf("HONESTECH-PPI-BACKUP:");
+  if(i<0)return null;
+  try{const o=JSON.parse(txt.slice(i+21));return o&&Array.isArray(o.jobs)&&o.settings?o:null;}catch(e){return null;}
+}
+function backupDue(){
+  const real=APP.jobs.length&&!APP.sample;
+  if(!real)return false;
+  if(!APP.lastBackup)return true;
+  return (new Date(TODAY)-new Date(APP.lastBackup))/864e5>=3;
+}
+
+/* ================= inspection stages ================= */
 function renderIntake(){
   const i=S.info, vc=vinCheck(i.vin);
   const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="f-${id}" data-info="${id}" value="${esc(i[id])}" ${extra}></label>`;
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Stage 0 · Intake</div><h2>Vehicle &amp; Customer</h2>
-  <p class="when">Fill this in before you leave for the job or when you arrive. The VIN check catches misread characters.</p></div>
+  <p class="when">Booking details carry over. Add the VIN and mileage at the car; the VIN check catches misread characters.</p></div>
   <div class="form">
     ${f("customer","Customer / buyer")}
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
-    ${f("location","Inspection location")}
+    ${f("time","Time",'type="time"')}
+    ${f("location","Inspection address","","full")}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -381,10 +635,10 @@ function renderIntake(){
     <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span></label>
     ${f("miles","Odometer (miles)",'inputmode="numeric"')}
     ${f("color","Color")}
+    ${i.notes?`<p class="help full" style="margin:0"><strong>Booking notes:</strong> ${esc(i.notes)}</p>`:""}
   </div>
   <p class="when">Next stage starts at the car: confirm the engine is cold before anything else.</p>`;
 }
-
 function renderSection(sec,idx){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Stage ${idx} of ${SECTIONS.length}</div><h2>${esc(sec.title)}</h2><p class="when">${sec.when}</p></div>
@@ -397,7 +651,7 @@ function renderItem(it){
     <div class="rate" role="group" aria-label="Rating">${RATES.map(([v,l])=>`<button type="button" data-rate="${v}" data-v="${v}" aria-pressed="${r.r===v}">${l}</button>`).join("")}</div>
     ${it.corners?renderCorners(it,r):""}
     <div class="extras">
-      ${it.measure?`<label class="meas"><input id="m-${it.id}" data-val="${it.id}" inputmode="decimal" placeholder="${it.measure.ph}" value="${esc(r.val)}" aria-label="${esc(it.label)} measurement"><span>${esc(it.measure.unit)}</span></label>`:""}
+      ${it.measure?`<label class="meas"><input id="m-${it.id}" data-val="${it.id}" inputmode="decimal" placeholder="${it.measure.ph}" value="${esc(typeof r.val==="object"?"":r.val)}" aria-label="${esc(it.label)} measurement"><span>${esc(it.measure.unit)}</span></label>`:""}
       <label class="mini">＋ Photo<input type="file" accept="image/*" capture="environment" multiple data-photo="${it.id}"></label>
       ${!r.note&&!r.open?`<button class="mini" type="button" data-addnote="${it.id}">＋ Note</button>`:""}
     </div>
@@ -405,15 +659,15 @@ function renderItem(it){
     ${r.photos.length?`<div class="thumbs">${r.photos.map((p,k)=>`<figure><img src="${p}" alt="Photo ${k+1} for ${esc(it.label)}"><button type="button" aria-label="Remove photo" data-delphoto="${it.id}:${k}">×</button></figure>`).join("")}</div>`:""}
   </div>`;
 }
-
 function renderCorners(it,r){
   const v=cornerVals(r),c=it.corners;
   const cell=([k,name])=>`<label class="corner" data-cr="${cornerRate(c,v[k])}"><span class="cname">${k}</span>
     <input id="c-${it.id}-${k}" data-corner="${it.id}:${k}" inputmode="decimal" placeholder="${c.ph}" value="${esc(v[k]??"")}" aria-label="${name} ${esc(it.label)}"><span class="cunit">${esc(c.unit)}</span></label>`;
   return `<div class="corners"><div class="axle">Front</div>${CORNERS.slice(0,2).map(cell).join("")}${CORNERS.slice(2).map(cell).join("")}<div class="axle">Rear</div></div>`;
 }
-function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfix"; return"buy"; }
-
+function bizHead(title,right){
+  return `<div class="rep-head"><div><h3>${title}</h3><div class="biz"><strong>${esc(bizName())}</strong>${bizContact()?"<br>"+esc(bizContact()):""}</div></div><div class="biz" style="text-align:right">${right}</div></div>`;
+}
 function renderReport(){
   const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
   const line=(it)=>{const r=S.results[it.id];const extra=[measText(it,r),r.note].filter(Boolean).join(" — ");
@@ -422,13 +676,13 @@ function renderReport(){
   const mon=ALL_ITEMS.filter(it=>S.results[it.id]?.r==="mon");
   const photos=ALL_ITEMS.flatMap(it=>(S.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
   return `${sampleBanner()}
-  <div class="stage-head"><div class="eyebrow">Final</div><h2>Inspection Report</h2><p class="when">Review with the buyer, then copy the text into a text message or email.</p></div>
+  <div class="stage-head"><div class="eyebrow">Report</div><h2>Inspection Report</h2><p class="when">Review with the buyer, then copy the text into a text message or email.</p></div>
   <div class="report">
-    <div class="rep-head"><div><h3>Pre-Purchase Inspection</h3><div class="biz">Honestech Mobile Mechanic · honestechmobilemechanic.com</div></div><div class="biz">${esc(i.date)}</div></div>
+    ${bizHead("Pre-Purchase Inspection",esc(fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})))}
     <dl class="kv">
-      <div><dt>Vehicle</dt><dd>${esc(vehName()||"—")}</dd></div>
+      <div><dt>Vehicle</dt><dd>${esc(vehOf(i)||"—")}</dd></div>
       <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
-      <div><dt>Odometer</dt><dd class="mono">${i.miles?Number(i.miles).toLocaleString()+" mi":"—"}</dd></div>
+      <div><dt>Odometer</dt><dd class="mono">${i.miles?num(i.miles).toLocaleString()+" mi":"—"}</dd></div>
       <div><dt>Color</dt><dd>${esc(i.color||"—")}</dd></div>
       <div><dt>Customer</dt><dd>${esc(i.customer||"—")}</dd></div>
       <div><dt>Location</dt><dd>${esc(i.location||"—")}</dd></div>
@@ -441,26 +695,25 @@ function renderReport(){
     </div>
     <div class="verdict"><span class="eyebrow">Verdict${S.verdict?"":" (suggested)"}</span>
       <div class="opts">${VERDICTS.map(([k,l])=>`<button type="button" data-verdict="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></div>
-    <div class="form" style="padding:0;border:0;margin:0"><label class="full">Summary for the buyer<textarea id="f-summary" data-info="summary" rows="3" placeholder="Overall condition, what to negotiate on, what to fix first">${esc(i.summary)}</textarea></label></div>
+    <div class="form" style="padding:0;border:0;margin:0;background:transparent"><label class="full">Summary for the buyer<textarea id="f-summary" data-info="summary" rows="3" placeholder="Overall condition, what to negotiate on, what to fix first">${esc(i.summary)}</textarea></label></div>
     <div class="rep-sec"><h4>Needs repair</h4>${bad.length?`<ul class="rep-list">${bad.map(line).join("")}</ul>`:`<p class="empty">Nothing flagged for repair.</p>`}</div>
     <div class="rep-sec"><h4>Monitor</h4>${mon.length?`<ul class="rep-list">${mon.map(line).join("")}</ul>`:`<p class="empty">Nothing to monitor.</p>`}</div>
     ${photos.length?`<div class="rep-sec"><h4>Photos</h4><div class="thumbs">${photos.map(x=>`<figure><img src="${x.p}" alt="${esc(x.l)}"></figure>`).join("")}</div></div>`:""}
     ${st.open?`<div class="rep-sec"><h4>Not checked</h4><p class="empty">${st.open} items have no rating yet. Go back to finish them or mark them N/A.</p></div>`:""}
-    <div class="copyrow"><button class="btn primary" type="button" data-act="copy">Copy report text</button></div>
+    <div class="copyrow"><button class="btn primary" type="button" data-act="copyReport">Copy report text</button></div>
     <textarea class="copybox" id="copybox" hidden readonly></textarea>
-  </div>
-  <div id="confirmArea"></div>`;
+    <div class="madewith">Prepared with Honestech PPI</div>
+  </div>`;
 }
-
 function reportText(){
-  const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
+  const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st), s=APP.settings;
   const L=[];
-  L.push("HONESTECH MOBILE MECHANIC — PRE-PURCHASE INSPECTION");
-  L.push("honestechmobilemechanic.com");
-  L.push(`Date: ${i.date}`);
-  L.push(`Vehicle: ${vehName()}${i.color?" ("+i.color+")":""}`);
+  L.push(`${bizName().toUpperCase()} — PRE-PURCHASE INSPECTION`);
+  if(bizContact())L.push(bizContact());
+  L.push(`Date: ${fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})}`);
+  L.push(`Vehicle: ${vehOf(i)}${i.color?" ("+i.color+")":""}`);
   if(i.vin)L.push(`VIN: ${i.vin}`);
-  if(i.miles)L.push(`Odometer: ${Number(i.miles).toLocaleString()} mi`);
+  if(i.miles)L.push(`Odometer: ${num(i.miles).toLocaleString()} mi`);
   L.push("");
   L.push(`VERDICT: ${VERDICTS.find(x=>x[0]===v)[1].toUpperCase()}`);
   L.push(`Good ${st.good} · Monitor ${st.mon} · Repair ${st.bad} · Not checked ${st.open}`);
@@ -469,69 +722,182 @@ function reportText(){
     its.forEach(it=>{const x=S.results[it.id];const extra=[measText(it,x),x.note].filter(Boolean).join(" — ");L.push(`- ${it.label}${extra?": "+extra:""}`)});};
   grp("bad","NEEDS REPAIR");grp("mon","MONITOR");
   L.push("");L.push("FULL CHECKLIST");
-  SECTIONS.forEach(s=>{L.push(`[${s.title}]`);s.items.forEach(it=>{const x=S.results[it.id];L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${x&&measText(it,x)?` (${measText(it,x)})`:""}`)})});
+  SECTIONS.forEach(sec=>{L.push(`[${sec.title}]`);sec.items.forEach(it=>{const x=S.results[it.id];const m=measText(it,x);L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${m?` (${m})`:""}`)})});
+  L.push("");L.push("Prepared with Honestech PPI");
   return L.join("\n");
 }
 
+/* ================= invoice ================= */
+function ensureInvoice(){
+  const inv=S.invoice, st=APP.settings;
+  if(!inv.num){inv.num=(st.prefix||"")+(num(st.next)||1001);st.next=(num(st.next)||1001)+1;inv.date=TODAY;if(inv.fee==null)inv.fee=num(st.fee);if(inv.tax==null)inv.tax=!!st.taxOn;save();}
+}
+function renderInvoice(){
+  ensureInvoice();
+  const inv=S.invoice, i=S.info, t=totals(S), st=APP.settings;
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Invoice</div><h2>Invoice ${esc(inv.num)}</h2><p class="when">Travel is figured from the one-way distance. Type a travel amount to override it.</p></div>
+  <div class="report">
+    ${bizHead("Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
+    <dl class="kv">
+      <div><dt>Bill to</dt><dd>${esc(i.customer||"—")}${i.phone?`<br><span style="font-weight:400">${esc(i.phone)}</span>`:""}</dd></div>
+      <div><dt>Vehicle</dt><dd>${esc(vehOf(i)||"—")}</dd></div>
+      <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
+    </dl>
+    <div style="overflow-x:auto"><table class="inv-table">
+      <thead><tr><th>Description</th><th>Amount</th></tr></thead>
+      <tbody>
+        <tr><td>Pre-purchase inspection<span class="sub">${esc(vehOf(i))}</span></td><td class="amt"><input id="inv-fee" data-inv="fee" inputmode="decimal" value="${esc(inv.fee)}" aria-label="Inspection fee"></td></tr>
+        <tr><td>Travel<span class="sub rowx">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span></td>
+          <td class="amt"><input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}" aria-label="Travel fee"></td></tr>
+        ${inv.items.map((x,k)=>`<tr><td><div class="rowx"><input id="it-d-${k}" data-itd="${k}" value="${esc(x.d)}" placeholder="Description"><button class="xbtn" type="button" data-delitem="${k}" aria-label="Remove line">×</button></div></td><td class="amt"><input id="it-a-${k}" data-ita="${k}" inputmode="decimal" value="${esc(x.a)}" placeholder="0"></td></tr>`).join("")}
+      </tbody></table></div>
+    <div class="copyrow" style="margin-top:8px"><button class="mini" type="button" data-act="additem">＋ Add line item</button>
+      <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
+    <dl class="totals" id="totals">${totalsHTML(t)}</dl>
+    <div class="rep-sec"><h4>Payment</h4>
+      <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
+      ${st.pay?`<div class="paybox">${esc(st.pay)}${st.terms?`\n${esc(st.terms)}`:""}</div>`:`<p class="empty">Add how customers pay you in Settings so it shows on the invoice.</p>`}
+    </div>
+    <div class="copyrow"><button class="btn primary" type="button" data-act="copyInvoice">Copy invoice text</button><button class="btn" type="button" data-act="copyBoth">Copy report + invoice</button></div>
+    <textarea class="copybox" id="invbox" hidden readonly></textarea>
+    <div class="madewith">Prepared with Honestech PPI</div>
+  </div>`;
+}
+function totalsHTML(t){
+  return `<dt>Inspection</dt><dd>${money(t.fee)}</dd><dt>Travel</dt><dd>${money(t.travel.fee)}</dd>${t.extras?`<dt>Other</dt><dd>${money(t.extras)}</dd>`:""}${t.taxOn?`<dt>Subtotal</dt><dd>${money(t.sub)}</dd><dt>Tax</dt><dd>${money(t.tax)}</dd>`:""}<dt style="align-self:end">${S.invoice.paid?"Paid":"Total due"}</dt><dd class="grand">${money(t.total)}</dd>`;
+}
+function invoiceText(){
+  const inv=S.invoice,i=S.info,t=totals(S),st=APP.settings;
+  const L=[`${bizName().toUpperCase()} — INVOICE ${inv.num}`];
+  if(bizContact())L.push(bizContact());
+  L.push(`Date: ${fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"})}`);
+  L.push(`Bill to: ${i.customer||"—"}`);
+  if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
+  L.push("");
+  const row=(d,a)=>L.push(`${d.padEnd(30," ")} ${money(a).padStart(10," ")}`);
+  row("Pre-purchase inspection",t.fee);
+  if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
+  inv.items.filter(x=>x.d||num(x.a)).forEach(x=>row(x.d||"Item",num(x.a)));
+  if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
+  row(inv.paid?"PAID":"TOTAL DUE",t.total);
+  if(inv.paid)L.push(`Paid by ${inv.paidVia}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
+  else{ if(st.pay){L.push("");L.push("How to pay:");L.push(st.pay);} if(st.terms)L.push(st.terms); }
+  return L.join("\n");
+}
+
+/* ================= render & navigation ================= */
 function render(){
-  const s=STAGES[S.step];
+  syncActive();
   let html;
-  if(s.id==="intake")html=renderIntake();
-  else if(s.id==="report")html=renderReport();
-  else html=renderSection(s,S.step);
+  if(APP.view==="settings")html=renderSettings();
+  else if(APP.view==="jobs")html=renderJobs();
+  else{const s=STAGES[S.step];
+    html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   $("#main").innerHTML=html;
   renderChrome();
 }
-function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));save();render();window.scrollTo(0,0);}
+function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sched"&&S.step>0)S.status="active";save();render();window.scrollTo(0,0);}
+function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=null)S.step=step;save();render();window.scrollTo(0,0);}
+function startAdd(job){
+  APP.adding=true;APP.editing=job?job.id:null;
+  const b=job?job.info:{};
+  APP.draft={date:b.date||APP.day||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
+  render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
+}
+function saveDraft(){
+  const d=APP.draft;
+  if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
+  if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,d);}
+  else APP.jobs.push(newJob(d));
+  APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
+}
 
-/* ---------- events ---------- */
+/* ================= events ================= */
 document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
-  if(t.dataset.go!==undefined)return go(+t.dataset.go);
-  if(t.dataset.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===t.dataset.rate?"":t.dataset.rate;r.auto=false;
+  const d=t.dataset;
+  if(d.nav){APP.view=d.nav;APP.adding=false;save();render();window.scrollTo(0,0);return;}
+  if(d.day!==undefined){APP.day=d.day;render();return;}
+  if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
+  if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
+  if(d.confirm){copyText(confirmText(APP.jobs.find(x=>x.id===d.confirm)),"jobCopy");return;}
+  if(d.edit){startAdd(APP.jobs.find(x=>x.id===d.edit));return;}
+  if(d.askdel){APP.confirmDel=d.askdel;render();return;}
+  if(d.del){APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
+  if(d.act==="nodel"){APP.confirmDel=null;render();return;}
+  if(d.act==="cancelAdd"){APP.adding=false;APP.editing=null;render();return;}
+  if(d.act==="fresh"){APP=blankApp();save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
+  if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
+  if(d.act==="backup"){const txt=backupText();const box=$("#bkbox");
+    const done=()=>{APP.lastBackup=TODAY;save();toast("Backup copied. Paste it into Notes or an email.");};
+    const fallback=()=>{box.value=txt;box.hidden=false;box.focus();box.select();APP.lastBackup=TODAY;save();toast("Backup selected. Use your phone's Copy.");};
+    try{navigator.clipboard.writeText(txt).then(done,fallback);}catch(err){fallback();}
+    return;}
+  if(d.act==="askRestore"){const o=parseBackup($("#restoreIn").value);
+    if(!o){toast("That doesn't look like a Honestech PPI backup. Paste the whole thing.");return;}
+    $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
+  if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
+  if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;
+    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false};save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
+  if(d.go!==undefined)return go(+d.go);
+  if(d.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===d.rate?"":d.rate;r.auto=false;
     if(r.r==="bad"&&!r.note)r.open=true;
-    const el=t.closest(".item");el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));save();renderChrome();
+    t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));if(S.status==="sched")S.status="active";save();renderChrome();
     if(r.open&&!r.note){const n=document.getElementById("n-"+id);n&&n.focus();}
     return;}
-  if(t.dataset.addnote){const id=t.dataset.addnote;res(id).open=true;const el=t.closest(".item");el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));document.getElementById("n-"+id).focus();return;}
-  if(t.dataset.delphoto){const [id,k]=t.dataset.delphoto.split(":");res(id).photos.splice(+k,1);save();t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));return;}
-  if(t.dataset.verdict){S.verdict=t.dataset.verdict;save();render();return;}
-  if(t.dataset.act==="fresh"){S=blankState();save();render();toast("New inspection started");return;}
-  if(t.dataset.act==="copy"){const txt=reportText();const box=$("#copybox");box.value=txt;
-    const fallback=()=>{box.hidden=false;box.focus();box.select();toast("Text selected. Use your phone's Copy.");};
-    try{navigator.clipboard.writeText(txt).then(()=>toast("Report copied"),fallback);}catch(err){fallback();}
-    return;}
-  if(t.dataset.act==="confirmNew"){S=blankState();save();render();toast("New inspection started");return;}
-  if(t.dataset.act==="cancelNew"){$("#confirmArea").innerHTML="";return;}
+  if(d.addnote){const id=d.addnote;res(id).open=true;t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));document.getElementById("n-"+id).focus();return;}
+  if(d.delphoto){const [id,k]=d.delphoto.split(":");res(id).photos.splice(+k,1);save();t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));return;}
+  if(d.verdict){S.verdict=d.verdict;save();render();return;}
+  if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
+  if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
+  if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}
+  if(d.act==="additem"){S.invoice.items.push({d:"",a:""});save();render();const k=S.invoice.items.length-1;document.getElementById("it-d-"+k)?.focus();return;}
+  if(d.delitem!==undefined){S.invoice.items.splice(+d.delitem,1);save();render();return;}
+  if(d.paid!==undefined){const inv=S.invoice;if(!d.paid||(inv.paid&&inv.paidVia===d.paid)){inv.paid=false;inv.paidVia="";inv.paidDate="";}else{inv.paid=true;inv.paidVia=d.paid;inv.paidDate=TODAY;}save();render();toast(inv.paid?`Marked paid by ${inv.paidVia}`:"Marked unpaid");return;}
 });
-$("#prevBtn").addEventListener("click",()=>go(S.step-1));
+$("#prevBtn").addEventListener("click",()=>{if(APP.view==="job")go(S.step-1);});
 $("#nextBtn").addEventListener("click",()=>{
-  if(S.step===STAGES.length-1){
-    $("#confirmArea").innerHTML=`<div class="confirm"><span>Clear this inspection and start a new one? Copy the report first if you need it.</span><button class="btn danger" type="button" data-act="confirmNew">Clear and start new</button><button class="btn" type="button" data-act="cancelNew">Keep it</button></div>`;
-    $("#confirmArea").scrollIntoView({behavior:"smooth",block:"center"});return;}
+  if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
+  if(STAGES[S.step].id==="invoice"){S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);
 });
+document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();});
 document.addEventListener("input",e=>{
-  const t=e.target;
-  if(t.dataset.info){S.info[t.dataset.info]=t.dataset.info==="vin"?t.value.toUpperCase():t.value;
-    if(t.dataset.info==="vin"){const vc=vinCheck(t.value);const m=$("#vinMsg");m.className="vinmsg "+vc.cls;m.textContent=vc.msg;}
-    $("#vehLabel").textContent=vehName()||"New inspection";save();}
-  if(t.dataset.note){res(t.dataset.note).note=t.value;save();}
-  if(t.dataset.val){res(t.dataset.val).val=t.value;save();}
-  if(t.dataset.corner){
-    const [id,k]=t.dataset.corner.split(":");const it=ALL_ITEMS.find(x=>x.id===id);const r=res(id);const v=cornerVals(r);v[k]=t.value;
+  const t=e.target,d=t.dataset;
+  if(d.draft){APP.draft[d.draft]=t.value;
+    if(d.draft==="dist"){const tr=Math.round(Math.max(0,num(t.value)-num(APP.settings.freeMiles))*num(APP.settings.perMile));const est=document.getElementById("d-est");if(est){est.value=money(num(APP.settings.fee)+tr);est.nextElementSibling.textContent=`${money(APP.settings.fee)} PPI${tr?` + ${money(tr)} travel`:""}`;}}
+    return;}
+  if(d.set){APP.settings[d.set]=t.value;save();return;}
+  if(d.info){S.info[d.info]=d.info==="vin"?t.value.toUpperCase():t.value;
+    if(d.info==="vin"){const vc=vinCheck(t.value);const m=$("#vinMsg");m.className="vinmsg "+vc.cls;m.textContent=vc.msg;}
+    if(d.info==="dist")refreshTotals();
+    save();return;}
+  if(d.inv){S.invoice[d.inv]=t.value;save();refreshTotals();return;}
+  if(d.itd!==undefined){S.invoice.items[+d.itd].d=t.value;save();return;}
+  if(d.ita!==undefined){S.invoice.items[+d.ita].a=t.value;save();refreshTotals();return;}
+  if(d.note){res(d.note).note=t.value;save();return;}
+  if(d.val){res(d.val).val=t.value;save();return;}
+  if(d.corner){
+    const [id,k]=d.corner.split(":");const it=ALL_ITEMS.find(x=>x.id===id);const r=res(id);const v=cornerVals(r);v[k]=t.value;
     t.closest(".corner").dataset.cr=cornerRate(it.corners,t.value);
     if(!r.r||r.auto){
       const rs=CORNERS.map(([c])=>cornerRate(it.corners,v[c])).filter(Boolean);
       r.r=rs.includes("bad")?"bad":rs.includes("mon")?"mon":rs.length?"good":"";r.auto=true;
       const el=t.closest(".item");el.dataset.r=r.r;el.querySelectorAll("[data-rate]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.rate===r.r)));
-      renderChrome();
     }
-    save();
+    if(S.status==="sched")S.status="active";
+    save();renderChrome();
   }
 });
+function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S);box.innerHTML=totalsHTML(t);const tr=$("#inv-travel");if(tr)tr.placeholder=t.travel.auto?String(t.travel.fee):"";}
 document.addEventListener("change",e=>{
-  const t=e.target;if(!t.dataset.photo)return;const id=t.dataset.photo;
+  const t=e.target,d=t.dataset;
+  if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
+  if(d.bkphotos){APP.bkPhotos=t.checked;save();return;}
+  if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
+  if(d.set&&APP.view==="settings"){render();return;}
+  if(!d.photo)return;const id=d.photo;
   const files=[...t.files];if(!files.length)return;
   Promise.all(files.map(shrink)).then(urls=>{res(id).photos.push(...urls.filter(Boolean));save();
     const el=document.querySelector(`[data-item="${id}"]`);if(el)el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));toast(urls.length>1?`${urls.length} photos added`:"Photo added");});

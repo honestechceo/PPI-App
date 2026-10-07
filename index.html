@@ -1,0 +1,547 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Honestech PPI Inspector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: field tool. Sticky header with progress + numbered step strip, one inspection stage per screen, big tap targets, fixed prev/next bar. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#d5dbe2;
+  --accent:#1d5fa8; --accent-ink:#ffffff; --accent-soft:#e2ecf8;
+  --good:#1f7a45; --good-soft:#e1f2e8; --mon:#9a6200; --mon-soft:#fbf0d9; --bad:#b42323; --bad-soft:#fbe4e4; --na:#6b7480; --na-soft:#eceff2;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f151c; --surface:#18212b; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3744;
+  --accent:#5c9be0; --accent-ink:#0b1622; --accent-soft:#1b2c40;
+  --good:#5cc489; --good-soft:#163024; --mon:#e3a93d; --mon-soft:#33280f; --bad:#f07070; --bad-soft:#3a1a1a; --na:#9aa4ae; --na-soft:#222c36;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151c; --surface:#18212b; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3744;
+  --accent:#5c9be0; --accent-ink:#0b1622; --accent-soft:#1b2c40;
+  --good:#5cc489; --good-soft:#163024; --mon:#e3a93d; --mon-soft:#33280f; --bad:#f07070; --bad-soft:#3a1a1a; --na:#9aa4ae; --na-soft:#222c36;
+  color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}
+.top-inner{max-width:760px;margin:0 auto;padding:10px 16px 0}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.02em;margin:0;text-transform:uppercase}
+.brand h1 span{color:var(--accent)}
+.brand .veh{font-size:13px;color:var(--muted);text-align:right;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+.steps{display:flex;gap:6px;overflow-x:auto;padding:10px 0;scrollbar-width:none}
+.steps::-webkit-scrollbar{display:none}
+.step{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px 5px 6px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap}
+.step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--na-soft);font-family:var(--f-mono);font-size:11px;color:var(--ink)}
+.step.done b{background:var(--good);color:var(--surface)}
+.step.flag b{background:var(--bad);color:var(--surface)}
+.step.on{border-color:var(--accent);color:var(--ink);background:var(--accent-soft)}
+
+main{max-width:760px;margin:0 auto;padding:16px 16px 110px}
+.sample{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--mon-soft);border:1px solid var(--mon);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:14px}
+.stage-head{margin:4px 0 14px}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.stage-head h2{font-family:var(--f-display);font-weight:700;font-size:32px;line-height:1.05;margin:2px 0 6px;text-wrap:balance}
+.when{color:var(--muted);max-width:62ch;margin:0}
+.when strong{color:var(--ink)}
+
+.items{display:flex;flex-direction:column;gap:10px}
+.item{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:10px;padding:12px}
+.item[data-r="good"]{border-left-color:var(--good)}
+.item[data-r="mon"]{border-left-color:var(--mon)}
+.item[data-r="bad"]{border-left-color:var(--bad)}
+.item[data-r="na"]{border-left-color:var(--na)}
+.item-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.item-label{font-weight:600;min-width:0}
+.item-hint{color:var(--muted);font-size:13px;margin-top:2px}
+.rate{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
+.rate button{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px 4px;font-weight:600;font-size:14px;min-height:44px}
+.rate button[aria-pressed="true"][data-v="good"]{background:var(--good-soft);border-color:var(--good);color:var(--good)}
+.rate button[aria-pressed="true"][data-v="mon"]{background:var(--mon-soft);border-color:var(--mon);color:var(--mon)}
+.rate button[aria-pressed="true"][data-v="bad"]{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.rate button[aria-pressed="true"][data-v="na"]{background:var(--na-soft);border-color:var(--na);color:var(--na)}
+.extras{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;align-items:center}
+.meas{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:0 10px;background:var(--bg)}
+.meas input{width:72px;border:0;background:transparent;padding:8px 0;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.meas span{font-size:13px;color:var(--muted);white-space:nowrap}
+.mini{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 12px;font-size:13px;font-weight:500;min-height:38px;display:inline-flex;align-items:center;gap:6px}
+.mini input[type=file]{display:none}
+.corners{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin-top:10px;padding:8px 10px;border:1px dashed var(--line);border-radius:12px}
+.axle{grid-column:1/-1;text-align:center;font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.corner{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-left:4px solid var(--line);border-radius:8px;padding:0 10px;background:var(--bg);min-width:0}
+.corner[data-cr="good"]{border-left-color:var(--good)} .corner[data-cr="mon"]{border-left-color:var(--mon)} .corner[data-cr="bad"]{border-left-color:var(--bad);background:var(--bad-soft)}
+.cname{font-family:var(--f-mono);font-size:12px;font-weight:500;color:var(--muted);width:22px}
+.corner input{flex:1;min-width:0;width:100%;border:0;background:transparent;padding:11px 0;font-family:var(--f-mono);font-size:18px;font-variant-numeric:tabular-nums;text-align:right}
+.cunit{font-size:12px;color:var(--muted)}
+.note{width:100%;margin-top:8px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:42px;resize:vertical}
+.thumbs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.thumbs figure{margin:0;position:relative;width:72px;height:72px}
+.thumbs img{width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.thumbs button{position:absolute;top:-6px;right:-6px;width:24px;height:24px;border-radius:50%;border:0;background:var(--ink);color:var(--surface);font-size:13px;line-height:1}
+
+.form{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.form .full{grid-column:1/-1}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);min-width:0}
+.form input,.form select,.form textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;font-size:15px;text-transform:none;letter-spacing:0;font-weight:400;color:var(--ink);width:100%}
+.form input.mono{font-family:var(--f-mono);text-transform:uppercase;letter-spacing:.06em}
+.vinmsg{font-size:12px;font-weight:500;text-transform:none;letter-spacing:0}
+.vinmsg.ok{color:var(--good)} .vinmsg.err{color:var(--bad)}
+.subh{font-family:var(--f-display);font-size:22px;font-weight:700;margin:6px 0 10px}
+
+nav.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:10}
+.foot-inner{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 16px;font-weight:600;min-height:48px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);flex:1}
+.btn.danger{color:var(--bad);border-color:var(--bad);background:transparent}
+.foot .count{font-family:var(--f-mono);font-size:12px;color:var(--muted);white-space:nowrap}
+
+/* report */
+.report{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.rep-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;border-bottom:2px solid var(--ink);padding-bottom:12px}
+.rep-head h3{font-family:var(--f-display);font-size:26px;margin:0;text-transform:uppercase;letter-spacing:.02em}
+.rep-head .biz{font-size:13px;color:var(--muted)}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;margin:14px 0}
+.kv div{min-width:0}
+.kv dt{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.kv dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.kv dd.mono{font-family:var(--f-mono);font-weight:500}
+.tally{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.tally div{border-radius:8px;padding:10px;text-align:center}
+.tally strong{display:block;font-family:var(--f-display);font-size:28px;line-height:1;font-variant-numeric:tabular-nums}
+.tally span{font-size:12px}
+.t-good{background:var(--good-soft);color:var(--good)} .t-mon{background:var(--mon-soft);color:var(--mon)} .t-bad{background:var(--bad-soft);color:var(--bad)} .t-open{background:var(--na-soft);color:var(--na)}
+.verdict{display:flex;flex-direction:column;gap:6px;margin:14px 0}
+.verdict .opts{display:flex;flex-wrap:wrap;gap:6px}
+.verdict button{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:9px 12px;font-weight:600;font-size:14px}
+.verdict button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.rep-sec{margin-top:18px}
+.rep-sec h4{font-family:var(--f-display);font-size:20px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.03em}
+.rep-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rep-list li{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)}
+.rep-list li:last-child{border-bottom:0}
+.pill{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:3px 8px;min-width:64px;text-align:center}
+.p-good{background:var(--good-soft);color:var(--good)} .p-mon{background:var(--mon-soft);color:var(--mon)} .p-bad{background:var(--bad-soft);color:var(--bad)} .p-na{background:var(--na-soft);color:var(--na)}
+.rep-list .txt{min-width:0}
+.rep-list .txt small{display:block;color:var(--muted)}
+.empty{color:var(--muted);font-size:14px}
+.copyrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20}
+.confirm{background:var(--bad-soft);border:1px solid var(--bad);border-radius:10px;padding:12px;margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px}
+@media (max-width:480px){
+  .form{grid-template-columns:minmax(0,1fr)}
+  .stage-head h2{font-size:28px}
+  .tally strong{font-size:24px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand"><h1>Honestech <span>PPI</span></h1><div class="veh" id="vehLabel"></div></div>
+    <div class="bar"><i id="barFill"></i></div>
+    <div class="steps" id="steps" role="tablist" aria-label="Inspection stages"></div>
+  </div>
+</header>
+<main id="main"></main>
+<nav class="foot"><div class="foot-inner">
+  <button class="btn" id="prevBtn" type="button">Back</button>
+  <span class="count" id="countLbl"></span>
+  <button class="btn primary" id="nextBtn" type="button">Next</button>
+</div></nav>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ---------- Inspection flow, in field order ---------- */
+const SECTIONS = [
+  {id:"arrive", title:"Arrival & Documents", when:"<strong>Before anyone starts the car.</strong> Touch the hood and upper radiator hose to confirm the engine is cold, then match paperwork to the vehicle.",
+   items:[
+    {id:"cold",label:"Engine is cold on arrival",hint:"A warm engine can hide cold-start noises, smoke, and hard starting"},
+    {id:"vinmatch",label:"VIN matches: dash, door jamb, title",hint:"Check for tampered or missing VIN labels"},
+    {id:"title",label:"Title status",hint:"Clean, salvage, rebuilt, flood, or lien"},
+    {id:"odo",label:"Odometer agrees with records",hint:"Compare with service records, inspection stickers, oil change sticker"},
+    {id:"records",label:"Service records available"},
+    {id:"keys",label:"Keys and remotes",hint:"Count and test every key fob"},
+   ]},
+  {id:"ext", title:"Exterior Walkaround", when:"Walk the car clockwise from the driver's door. Look down the body lines in good light.",
+   items:[
+    {id:"paint",label:"Paint and repaint signs",hint:"Color mismatch, overspray on trim or rubber, orange peel"},
+    {id:"gaps",label:"Panel gaps even",hint:"Hood, fenders, doors, trunk"},
+    {id:"body",label:"Dents, scratches, collision damage"},
+    {id:"rust",label:"Rust: rockers, wheel arches, door bottoms"},
+    {id:"glass",label:"Windshield and glass",hint:"Chips, cracks, matching glass brand on all windows"},
+    {id:"lenses",label:"Headlight and taillight lenses",hint:"Cracks, moisture, haze, mismatched replacements"},
+    {id:"latches",label:"Doors, hood, trunk open and latch"},
+    {id:"flood",label:"Flood signs",hint:"Silt in lights or trunk well, corrosion on seat bolts, musty smell"},
+   ]},
+  {id:"hood", title:"Under Hood — Engine Off", when:"Engine still cold and off. Check levels and condition before the seller runs anything.",
+   items:[
+    {id:"oil",label:"Engine oil level and condition",hint:"Milky = coolant contamination; sludge on fill cap"},
+    {id:"coolant",label:"Coolant level and condition",hint:"Oil film or rust color in reservoir"},
+    {id:"brakefl",label:"Brake fluid level and color"},
+    {id:"psfl",label:"Power steering fluid"},
+    {id:"atf",label:"Transmission fluid (if dipstick)",hint:"Color and smell; burnt smell is a red flag"},
+    {id:"belts",label:"Drive belts",hint:"Cracks, glazing, tensioner wobble"},
+    {id:"hoses",label:"Radiator and heater hoses",hint:"Soft, swollen, or cracked"},
+    {id:"battery",label:"Battery test",hint:"Resting voltage, terminals, date code",measure:{unit:"V",ph:"12.6"}},
+    {id:"leaks",label:"Leaks and fresh engine cleaning",hint:"A freshly washed engine bay can hide leaks"},
+    {id:"airfilter",label:"Air filter"},
+   ]},
+  {id:"start", title:"Cold Start & Scan", when:"Plug in the scanner first. Watch the tailpipe and listen during the first 30 seconds.",
+   items:[
+    {id:"bulbs",label:"Key-on bulb check",hint:"Check engine, ABS, airbag, TPMS lights all light up then go out"},
+    {id:"crank",label:"Cold start",hint:"Cranks normally, no long crank or stumble"},
+    {id:"noise",label:"Start-up noises",hint:"Timing chain rattle, lifter tick, belt squeal"},
+    {id:"smoke",label:"Exhaust smoke",hint:"Blue = oil, white sweet smell = coolant, black = rich"},
+    {id:"idle",label:"Idle quality",hint:"Smooth, steady RPM"},
+    {id:"codes",label:"Stored and pending codes",hint:"Record every code in the note"},
+    {id:"monitors",label:"Readiness monitors",hint:"Several not ready = codes may have been cleared recently"},
+    {id:"charging",label:"Charging voltage, engine running",measure:{unit:"V",ph:"14.2"}},
+   ]},
+  {id:"int", title:"Interior & Electrical", when:"Engine running. Work from the driver's seat outward, then test every exterior light with a helper or reflection.",
+   items:[
+    {id:"warn",label:"No warning lights on the dash"},
+    {id:"gauges",label:"Gauges work",hint:"Temp, fuel, speedometer, tach"},
+    {id:"ac",label:"A/C blows cold"},
+    {id:"heat",label:"Heat and defrost"},
+    {id:"windows",label:"Windows, locks, mirrors"},
+    {id:"seats",label:"Seats, belts, adjusters"},
+    {id:"radio",label:"Radio, screen, backup camera"},
+    {id:"wipers",label:"Wipers, washers, horn"},
+    {id:"lights",label:"All exterior lights",hint:"Headlights high/low, signals, brake lights, reverse, plate"},
+    {id:"odor",label:"Odors and carpet",hint:"Smoke, mildew, damp carpet, water stains on headliner"},
+   ]},
+  {id:"wheels", title:"Wheels, Tires & Brakes", when:"Measure tread on all four. Look through the wheel spokes at pads and rotors.",
+   items:[
+    {id:"tread",label:"Tread depth, each tire",hint:"2/32 or less: repair · 3–4/32: monitor · 5/32+: good",corners:{unit:"/32",ph:"6",repair:2,monitor:4}},
+    {id:"wear",label:"Tire wear pattern",hint:"Inner or outer edge wear points to alignment or suspension"},
+    {id:"tireage",label:"Tire age (DOT date)",hint:"Older than 6 years should be replaced"},
+    {id:"pads",label:"Brake pad thickness, each wheel",hint:"3 mm or less: repair · 4–5 mm: monitor · 6 mm+: good. Record the thinner pad at each wheel.",corners:{unit:"mm",ph:"7",repair:3,monitor:5}},
+    {id:"rotors",label:"Rotors",hint:"Lip, scoring, heat spots"},
+    {id:"wheels",label:"Wheels and lug nuts",hint:"Curb damage, bends, missing locks"},
+    {id:"spare",label:"Spare tire and jack"},
+   ]},
+  {id:"under", title:"Underbody", when:"Creeper or lift. Bring a flashlight and look at the frame first.",
+   items:[
+    {id:"frame",label:"Frame and subframe",hint:"Kinks, welds, heavy rust, fresh undercoating over damage"},
+    {id:"oilleak",label:"Engine oil leaks",hint:"Oil pan, rear main seal, valve cover"},
+    {id:"transleak",label:"Transmission and axle leaks"},
+    {id:"exhaust",label:"Exhaust system",hint:"Rust holes, loose hangers, missing heat shields"},
+    {id:"susp",label:"Shocks and struts",hint:"Leaking, broken springs"},
+    {id:"joints",label:"Ball joints, tie rods, bushings",hint:"Check for play"},
+    {id:"cv",label:"CV boots and driveshaft",hint:"Torn boots throw grease"},
+    {id:"lines",label:"Brake and fuel lines",hint:"Heavy rust or wet spots"},
+   ]},
+  {id:"road", title:"Road Test", when:"At least 15 minutes: city stop-and-go, a highway merge, a hard (safe) stop, and a full-lock turn in a parking lot.",
+   items:[
+    {id:"power",label:"Engine power and acceleration"},
+    {id:"shift",label:"Transmission shifts",hint:"Slipping, harsh, delayed engagement"},
+    {id:"brakes",label:"Braking",hint:"Straight stop, no pulsation or grinding"},
+    {id:"steer",label:"Steering and alignment",hint:"Pull, wander, off-center wheel"},
+    {id:"susp2",label:"Ride and suspension noise",hint:"Clunks over bumps"},
+    {id:"hum",label:"Wheel bearing hum",hint:"Changes with speed or while turning"},
+    {id:"cruise",label:"Cruise control"},
+    {id:"awd",label:"4WD / AWD engagement (if equipped)"},
+   ]},
+  {id:"post", title:"Post-Drive", when:"Park on a clean spot and leave it idling. Hot problems show up now.",
+   items:[
+    {id:"leaks2",label:"New drips under the car"},
+    {id:"temp",label:"Temperature stays normal",hint:"Radiator fan cycles on"},
+    {id:"rescan",label:"Rescan for codes",hint:"Codes that set during the drive"},
+    {id:"smell",label:"Burning smells or smoke"},
+    {id:"restart",label:"Hot restart"},
+   ]},
+];
+const RATES = [["good","Good"],["mon","Monitor"],["bad","Repair"],["na","N/A"]];
+const RLABEL = {good:"Good",mon:"Monitor",bad:"Repair",na:"N/A"};
+const VERDICTS = [["buy","Recommend"],["buyfix","Recommend with repairs"],["pass","Do not recommend"]];
+const KEY = "honestech-ppi-v2";
+
+/* ---------- Sample data (clearly labeled) ---------- */
+function sampleState(){
+  const r = {};
+  const set=(id,v,extra={})=>r[id]={r:v,note:"",val:"",photos:[],...extra};
+  ["cold","vinmatch","title","records","keys","paint","gaps","glass","lenses","latches","flood","oil","coolant","brakefl","psfl","belts","hoses","airfilter","bulbs","crank","noise","smoke","idle","monitors"].forEach(i=>set(i,"good"));
+  set("odo","good",{note:"Matches 2024 inspection sticker"});
+  set("body","mon",{note:"Shallow door ding, rear passenger door"});
+  set("rust","good");
+  set("atf","na",{note:"Sealed unit, no dipstick"});
+  set("battery","mon",{val:"12.3",note:"Battery dated 08/2021"});
+  set("leaks","mon",{note:"Light seep at valve cover gasket"});
+  set("codes","bad",{note:"P0420 stored (catalyst efficiency below threshold, bank 1)"});
+  set("charging","good",{val:"14.1"});
+  set("tread","mon",{val:{LF:"6",RF:"6",LR:"4",RR:"5"},auto:true});
+  set("pads","bad",{val:{LF:"6",RF:"5",LR:"3",RR:"2"},auto:true,note:"Rear pads near metal, replace rear pads and inspect rotors"});
+  return {sample:true, step:4, verdict:"",
+    info:{customer:"Sample buyer",phone:"",date:new Date().toISOString().slice(0,10),location:"Seller driveway, Toms River",year:"2017",make:"Honda",model:"Accord",trim:"EX-L",vin:"1HGCR2F80HA012345",miles:"98412",color:"Silver",summary:""},
+    results:r};
+}
+function blankState(){
+  return {sample:false, step:0, verdict:"",
+    info:{customer:"",phone:"",date:new Date().toISOString().slice(0,10),location:"",year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",summary:""},
+    results:{}};
+}
+let S;
+try{
+  const raw=localStorage.getItem(KEY);
+  if(raw) S=JSON.parse(raw);
+  else { const old=localStorage.getItem("honestech-ppi-v1"); const o=old&&JSON.parse(old); S=(o&&!o.sample)?o:sampleState(); }
+}catch(e){ S = sampleState(); }
+
+let saveWarned=false;
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }
+  catch(e){ if(!saveWarned){ toast("Storage is full. Photos may not be kept if the page reloads."); saveWarned=true; } }
+}
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const STAGES = [{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"}];
+const ALL_ITEMS = SECTIONS.flatMap(s=>s.items.map(i=>({...i,sec:s})));
+const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
+function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+const CORNERS=[["LF","Left front"],["RF","Right front"],["LR","Left rear"],["RR","Right rear"]];
+function cornerVals(r){ if(!r.val||typeof r.val!=="object") r.val={}; return r.val; }
+function cornerRate(c,v){ if(v===""||v==null||isNaN(+v)) return ""; v=+v; return v<=c.repair?"bad":v<=c.monitor?"mon":"good"; }
+function measText(it,r){
+  if(it.corners){const v=(r.val&&typeof r.val==="object")?r.val:{};const parts=CORNERS.filter(([k])=>v[k]!==undefined&&v[k]!=="").map(([k])=>`${k} ${v[k]}`);
+    return parts.length?parts.join(" · ")+" "+it.corners.unit:"";}
+  return r.val&&it.measure?`${r.val} ${it.measure.unit}`:"";
+}
+function vehName(){const i=S.info;return [i.year,i.make,i.model,i.trim].filter(Boolean).join(" ")}
+
+/* VIN check digit (North American VINs) */
+function vinCheck(v){
+  v=(v||"").toUpperCase().replace(/\s/g,"");
+  if(!v) return {cls:"",msg:""};
+  if(/[IOQ]/.test(v)) return {cls:"err",msg:"VINs never contain I, O, or Q"};
+  if(v.length!==17) return {cls:"err",msg:`${v.length} of 17 characters`};
+  const map={A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,J:1,K:2,L:3,M:4,N:5,P:7,R:9,S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9};
+  const w=[8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+  let sum=0;for(let i=0;i<17;i++){const c=v[i];const n=/\d/.test(c)?+c:map[c];if(n===undefined)return{cls:"err",msg:"Invalid character"};sum+=n*w[i]}
+  const cd=sum%11===10?"X":String(sum%11);
+  return cd===v[8]?{cls:"ok",msg:"Check digit valid"}:{cls:"err",msg:`Check digit fails (expected ${cd} in position 9). Re-read the VIN.`};
+}
+
+function stats(){
+  let good=0,mon=0,bad=0,na=0;
+  ALL_ITEMS.forEach(i=>{const r=S.results[i.id]?.r;if(r==="good")good++;else if(r==="mon")mon++;else if(r==="bad")bad++;else if(r==="na")na++;});
+  const done=good+mon+bad+na;
+  return {good,mon,bad,na,done,open:ALL_ITEMS.length-done,total:ALL_ITEMS.length};
+}
+
+/* ---------- render ---------- */
+function renderChrome(){
+  const st=stats();
+  $("#barFill").style.width=(st.done/st.total*100)+"%";
+  $("#vehLabel").textContent=vehName()||"New inspection";
+  $("#steps").innerHTML=STAGES.map((s,i)=>{
+    let cls="step";
+    if(i===S.step)cls+=" on";
+    if(s.items){const rs=s.items.map(it=>S.results[it.id]?.r);
+      if(rs.includes("bad"))cls+=" flag"; else if(rs.every(Boolean))cls+=" done";}
+    const num=s.id==="report"?"✓":(i===0?"0":i);
+    return `<button class="${cls}" role="tab" aria-selected="${i===S.step}" data-go="${i}"><b>${num}</b>${esc(s.title)}</button>`;
+  }).join("");
+  const on=$("#steps .on"); if(on) on.scrollIntoView({block:"nearest",inline:"center"});
+  $("#prevBtn").disabled=S.step===0;
+  $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";
+  const last=S.step===STAGES.length-1;
+  $("#nextBtn").textContent=last?"New inspection":(S.step===STAGES.length-2?"Review report":"Next: "+STAGES[S.step+1].title);
+  $("#countLbl").textContent=`${st.done}/${st.total}`;
+}
+
+function sampleBanner(){
+  return S.sample?`<div class="sample"><span><strong>Sample inspection.</strong> Example data so you can see how it works.</span><button class="mini" type="button" data-act="fresh">Start a real one</button></div>`:"";
+}
+
+function renderIntake(){
+  const i=S.info, vc=vinCheck(i.vin);
+  const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="f-${id}" data-info="${id}" value="${esc(i[id])}" ${extra}></label>`;
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Stage 0 · Intake</div><h2>Vehicle &amp; Customer</h2>
+  <p class="when">Fill this in before you leave for the job or when you arrive. The VIN check catches misread characters.</p></div>
+  <div class="form">
+    ${f("customer","Customer / buyer")}
+    ${f("phone","Phone",'inputmode="tel"')}
+    ${f("date","Date",'type="date"')}
+    ${f("location","Inspection location")}
+    ${f("year","Year",'inputmode="numeric" maxlength="4"')}
+    ${f("make","Make")}
+    ${f("model","Model")}
+    ${f("trim","Trim")}
+    <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span></label>
+    ${f("miles","Odometer (miles)",'inputmode="numeric"')}
+    ${f("color","Color")}
+  </div>
+  <p class="when">Next stage starts at the car: confirm the engine is cold before anything else.</p>`;
+}
+
+function renderSection(sec,idx){
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Stage ${idx} of ${SECTIONS.length}</div><h2>${esc(sec.title)}</h2><p class="when">${sec.when}</p></div>
+  <div class="items">${sec.items.map(renderItem).join("")}</div>`;
+}
+function renderItem(it){
+  const r=res(it.id);
+  return `<div class="item" data-r="${r.r}" data-item="${it.id}">
+    <div class="item-top"><div class="item-label">${esc(it.label)}${it.hint?`<div class="item-hint">${esc(it.hint)}</div>`:""}</div></div>
+    <div class="rate" role="group" aria-label="Rating">${RATES.map(([v,l])=>`<button type="button" data-rate="${v}" data-v="${v}" aria-pressed="${r.r===v}">${l}</button>`).join("")}</div>
+    ${it.corners?renderCorners(it,r):""}
+    <div class="extras">
+      ${it.measure?`<label class="meas"><input id="m-${it.id}" data-val="${it.id}" inputmode="decimal" placeholder="${it.measure.ph}" value="${esc(r.val)}" aria-label="${esc(it.label)} measurement"><span>${esc(it.measure.unit)}</span></label>`:""}
+      <label class="mini">＋ Photo<input type="file" accept="image/*" capture="environment" multiple data-photo="${it.id}"></label>
+      ${!r.note&&!r.open?`<button class="mini" type="button" data-addnote="${it.id}">＋ Note</button>`:""}
+    </div>
+    ${r.note||r.open?`<textarea class="note" id="n-${it.id}" data-note="${it.id}" placeholder="What did you find?">${esc(r.note)}</textarea>`:""}
+    ${r.photos.length?`<div class="thumbs">${r.photos.map((p,k)=>`<figure><img src="${p}" alt="Photo ${k+1} for ${esc(it.label)}"><button type="button" aria-label="Remove photo" data-delphoto="${it.id}:${k}">×</button></figure>`).join("")}</div>`:""}
+  </div>`;
+}
+
+function renderCorners(it,r){
+  const v=cornerVals(r),c=it.corners;
+  const cell=([k,name])=>`<label class="corner" data-cr="${cornerRate(c,v[k])}"><span class="cname">${k}</span>
+    <input id="c-${it.id}-${k}" data-corner="${it.id}:${k}" inputmode="decimal" placeholder="${c.ph}" value="${esc(v[k]??"")}" aria-label="${name} ${esc(it.label)}"><span class="cunit">${esc(c.unit)}</span></label>`;
+  return `<div class="corners"><div class="axle">Front</div>${CORNERS.slice(0,2).map(cell).join("")}${CORNERS.slice(2).map(cell).join("")}<div class="axle">Rear</div></div>`;
+}
+function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfix"; return"buy"; }
+
+function renderReport(){
+  const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
+  const line=(it)=>{const r=S.results[it.id];const extra=[measText(it,r),r.note].filter(Boolean).join(" — ");
+    return `<li><span class="pill p-${r.r}">${RLABEL[r.r]}</span><span class="txt">${esc(it.label)}${extra?`<small>${esc(extra)}</small>`:""}<small>${esc(it.sec.title)}</small></span></li>`;};
+  const bad=ALL_ITEMS.filter(it=>S.results[it.id]?.r==="bad");
+  const mon=ALL_ITEMS.filter(it=>S.results[it.id]?.r==="mon");
+  const photos=ALL_ITEMS.flatMap(it=>(S.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Final</div><h2>Inspection Report</h2><p class="when">Review with the buyer, then copy the text into a text message or email.</p></div>
+  <div class="report">
+    <div class="rep-head"><div><h3>Pre-Purchase Inspection</h3><div class="biz">Honestech Mobile Mechanic · honestechmobilemechanic.com</div></div><div class="biz">${esc(i.date)}</div></div>
+    <dl class="kv">
+      <div><dt>Vehicle</dt><dd>${esc(vehName()||"—")}</dd></div>
+      <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
+      <div><dt>Odometer</dt><dd class="mono">${i.miles?Number(i.miles).toLocaleString()+" mi":"—"}</dd></div>
+      <div><dt>Color</dt><dd>${esc(i.color||"—")}</dd></div>
+      <div><dt>Customer</dt><dd>${esc(i.customer||"—")}</dd></div>
+      <div><dt>Location</dt><dd>${esc(i.location||"—")}</dd></div>
+    </dl>
+    <div class="tally">
+      <div class="t-good"><strong>${st.good}</strong><span>Good</span></div>
+      <div class="t-mon"><strong>${st.mon}</strong><span>Monitor</span></div>
+      <div class="t-bad"><strong>${st.bad}</strong><span>Repair</span></div>
+      <div class="t-open"><strong>${st.open}</strong><span>Not checked</span></div>
+    </div>
+    <div class="verdict"><span class="eyebrow">Verdict${S.verdict?"":" (suggested)"}</span>
+      <div class="opts">${VERDICTS.map(([k,l])=>`<button type="button" data-verdict="${k}" aria-pressed="${v===k}">${l}</button>`).join("")}</div></div>
+    <div class="form" style="padding:0;border:0;margin:0"><label class="full">Summary for the buyer<textarea id="f-summary" data-info="summary" rows="3" placeholder="Overall condition, what to negotiate on, what to fix first">${esc(i.summary)}</textarea></label></div>
+    <div class="rep-sec"><h4>Needs repair</h4>${bad.length?`<ul class="rep-list">${bad.map(line).join("")}</ul>`:`<p class="empty">Nothing flagged for repair.</p>`}</div>
+    <div class="rep-sec"><h4>Monitor</h4>${mon.length?`<ul class="rep-list">${mon.map(line).join("")}</ul>`:`<p class="empty">Nothing to monitor.</p>`}</div>
+    ${photos.length?`<div class="rep-sec"><h4>Photos</h4><div class="thumbs">${photos.map(x=>`<figure><img src="${x.p}" alt="${esc(x.l)}"></figure>`).join("")}</div></div>`:""}
+    ${st.open?`<div class="rep-sec"><h4>Not checked</h4><p class="empty">${st.open} items have no rating yet. Go back to finish them or mark them N/A.</p></div>`:""}
+    <div class="copyrow"><button class="btn primary" type="button" data-act="copy">Copy report text</button></div>
+    <textarea class="copybox" id="copybox" hidden readonly></textarea>
+  </div>
+  <div id="confirmArea"></div>`;
+}
+
+function reportText(){
+  const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
+  const L=[];
+  L.push("HONESTECH MOBILE MECHANIC — PRE-PURCHASE INSPECTION");
+  L.push("honestechmobilemechanic.com");
+  L.push(`Date: ${i.date}`);
+  L.push(`Vehicle: ${vehName()}${i.color?" ("+i.color+")":""}`);
+  if(i.vin)L.push(`VIN: ${i.vin}`);
+  if(i.miles)L.push(`Odometer: ${Number(i.miles).toLocaleString()} mi`);
+  L.push("");
+  L.push(`VERDICT: ${VERDICTS.find(x=>x[0]===v)[1].toUpperCase()}`);
+  L.push(`Good ${st.good} · Monitor ${st.mon} · Repair ${st.bad} · Not checked ${st.open}`);
+  if(i.summary){L.push("");L.push(i.summary);}
+  const grp=(r,title)=>{const its=ALL_ITEMS.filter(it=>S.results[it.id]?.r===r);if(!its.length)return;L.push("");L.push(title);
+    its.forEach(it=>{const x=S.results[it.id];const extra=[measText(it,x),x.note].filter(Boolean).join(" — ");L.push(`- ${it.label}${extra?": "+extra:""}`)});};
+  grp("bad","NEEDS REPAIR");grp("mon","MONITOR");
+  L.push("");L.push("FULL CHECKLIST");
+  SECTIONS.forEach(s=>{L.push(`[${s.title}]`);s.items.forEach(it=>{const x=S.results[it.id];L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${x&&measText(it,x)?` (${measText(it,x)})`:""}`)})});
+  return L.join("\n");
+}
+
+function render(){
+  const s=STAGES[S.step];
+  let html;
+  if(s.id==="intake")html=renderIntake();
+  else if(s.id==="report")html=renderReport();
+  else html=renderSection(s,S.step);
+  $("#main").innerHTML=html;
+  renderChrome();
+}
+function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));save();render();window.scrollTo(0,0);}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button");if(!t)return;
+  if(t.dataset.go!==undefined)return go(+t.dataset.go);
+  if(t.dataset.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===t.dataset.rate?"":t.dataset.rate;r.auto=false;
+    if(r.r==="bad"&&!r.note)r.open=true;
+    const el=t.closest(".item");el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));save();renderChrome();
+    if(r.open&&!r.note){const n=document.getElementById("n-"+id);n&&n.focus();}
+    return;}
+  if(t.dataset.addnote){const id=t.dataset.addnote;res(id).open=true;const el=t.closest(".item");el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));document.getElementById("n-"+id).focus();return;}
+  if(t.dataset.delphoto){const [id,k]=t.dataset.delphoto.split(":");res(id).photos.splice(+k,1);save();t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));return;}
+  if(t.dataset.verdict){S.verdict=t.dataset.verdict;save();render();return;}
+  if(t.dataset.act==="fresh"){S=blankState();save();render();toast("New inspection started");return;}
+  if(t.dataset.act==="copy"){const txt=reportText();const box=$("#copybox");box.value=txt;
+    const fallback=()=>{box.hidden=false;box.focus();box.select();toast("Text selected. Use your phone's Copy.");};
+    try{navigator.clipboard.writeText(txt).then(()=>toast("Report copied"),fallback);}catch(err){fallback();}
+    return;}
+  if(t.dataset.act==="confirmNew"){S=blankState();save();render();toast("New inspection started");return;}
+  if(t.dataset.act==="cancelNew"){$("#confirmArea").innerHTML="";return;}
+});
+$("#prevBtn").addEventListener("click",()=>go(S.step-1));
+$("#nextBtn").addEventListener("click",()=>{
+  if(S.step===STAGES.length-1){
+    $("#confirmArea").innerHTML=`<div class="confirm"><span>Clear this inspection and start a new one? Copy the report first if you need it.</span><button class="btn danger" type="button" data-act="confirmNew">Clear and start new</button><button class="btn" type="button" data-act="cancelNew">Keep it</button></div>`;
+    $("#confirmArea").scrollIntoView({behavior:"smooth",block:"center"});return;}
+  go(S.step+1);
+});
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset.info){S.info[t.dataset.info]=t.dataset.info==="vin"?t.value.toUpperCase():t.value;
+    if(t.dataset.info==="vin"){const vc=vinCheck(t.value);const m=$("#vinMsg");m.className="vinmsg "+vc.cls;m.textContent=vc.msg;}
+    $("#vehLabel").textContent=vehName()||"New inspection";save();}
+  if(t.dataset.note){res(t.dataset.note).note=t.value;save();}
+  if(t.dataset.val){res(t.dataset.val).val=t.value;save();}
+  if(t.dataset.corner){
+    const [id,k]=t.dataset.corner.split(":");const it=ALL_ITEMS.find(x=>x.id===id);const r=res(id);const v=cornerVals(r);v[k]=t.value;
+    t.closest(".corner").dataset.cr=cornerRate(it.corners,t.value);
+    if(!r.r||r.auto){
+      const rs=CORNERS.map(([c])=>cornerRate(it.corners,v[c])).filter(Boolean);
+      r.r=rs.includes("bad")?"bad":rs.includes("mon")?"mon":rs.length?"good":"";r.auto=true;
+      const el=t.closest(".item");el.dataset.r=r.r;el.querySelectorAll("[data-rate]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.rate===r.r)));
+      renderChrome();
+    }
+    save();
+  }
+});
+document.addEventListener("change",e=>{
+  const t=e.target;if(!t.dataset.photo)return;const id=t.dataset.photo;
+  const files=[...t.files];if(!files.length)return;
+  Promise.all(files.map(shrink)).then(urls=>{res(id).photos.push(...urls.filter(Boolean));save();
+    const el=document.querySelector(`[data-item="${id}"]`);if(el)el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));toast(urls.length>1?`${urls.length} photos added`:"Photo added");});
+});
+function shrink(file){
+  return new Promise(resolve=>{const fr=new FileReader();fr.onload=()=>{const img=new Image();img.onload=()=>{
+    const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
+    c.getContext("2d").drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL("image/jpeg",0.6));};img.onerror=()=>resolve(null);img.src=fr.result;};fr.onerror=()=>resolve(null);fr.readAsDataURL(file);});
+}
+render();
+</script>
+
+</body></html>

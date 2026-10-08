@@ -605,9 +605,11 @@ function renderSettings(){
     <p class="formh">Backup &amp; restore</p>
     <p class="help full" style="margin:0">Your data lives only in this app on this phone. Copy a backup and paste it into Notes or email it to yourself. ${APP.lastBackup?`Last backup: <strong>${esc(fmtDate(APP.lastBackup,{month:"short",day:"numeric",year:"numeric"}))}</strong>.`:"<strong>No backup yet.</strong>"}</p>
     <label class="check full"><input type="checkbox" id="bk-photos" ${APP.bkPhotos?"checked":""} data-bkphotos="1"> Include photos (makes the backup much larger)</label>
-    <div class="formacts"><button class="btn primary" type="button" data-act="backup">Copy backup</button></div>
+    <div class="formacts"><button class="btn primary" type="button" data-act="backupFile">Save backup file</button><button class="btn" type="button" data-act="backup">Copy backup text</button></div>
+    <p class="help full" style="margin:0">On iPhone, choose <strong>Save to Files</strong> and pick iCloud Drive so the backup is kept off the phone too.</p>
     <textarea class="copybox full" id="bkbox" hidden readonly></textarea>
-    <label class="full">Restore from a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
+    <div class="formacts"><label class="btn" for="restoreFile" style="display:inline-flex;align-items:center">Restore from file<input type="file" id="restoreFile" accept=".txt,.json,text/plain,application/json" data-restorefile="1" hidden></label></div>
+    <label class="full">Or paste a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
     <div class="formacts" id="restoreActs"><button class="btn" type="button" data-act="askRestore">Restore</button></div>
   </div>`;
 }
@@ -644,6 +646,14 @@ function parseBackup(txt){
   const a=rest.indexOf("{"),b=rest.lastIndexOf("}");
   if(a<0||b<a)return null;
   try{return valid(JSON.parse(rest.slice(a,b+1)));}catch(e){return null;}
+}
+async function saveBackupFile(){
+  let dl=null;try{dl=window.claude&&await window.claude.use("downloads");}catch(e){}
+  if(!dl){toast("Saving files isn't available here. Use Copy backup text instead.");return;}
+  const name=`honestech-ppi-backup-${TODAY}${APP.settings.biz?"-"+APP.settings.biz.replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40):""}.txt`;
+  try{const r=await dl.save({filename:name,data:backupText()});
+    if(r.status==="saved"){APP.lastBackup=TODAY;save();if(APP.view==="settings")render();toast("Backup saved");}}
+  catch(e){ if(e&&e.code==="declined")return; if(e&&e.code==="rate_limited"){toast("A save is already open. Finish that one first.");return;} toast("Couldn't save the file. Use Copy backup text instead."); }
 }
 function backupDue(){
   const real=APP.jobs.length&&!APP.sample;
@@ -1081,6 +1091,7 @@ document.addEventListener("click",e=>{
   if(d.act==="fresh"){APP=blankApp();save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
   if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
+  if(d.act==="backupFile"){saveBackupFile();return;}
   if(d.act==="backup"){const txt=backupText();const box=$("#bkbox");
     const done=()=>{APP.lastBackup=TODAY;save();toast("Backup copied. Paste it into Notes or an email.");};
     const fallback=()=>{box.value=txt;box.hidden=false;box.focus();box.select();APP.lastBackup=TODAY;save();toast("Backup selected. Use your phone's Copy.");};
@@ -1091,7 +1102,7 @@ document.addEventListener("click",e=>{
     $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
   if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
   if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;
-    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false};save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
+    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
   if(d.go!==undefined)return go(+d.go);
   if(d.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===d.rate?"":d.rate;r.auto=false;
     if(r.r==="bad"&&!r.note)r.open=true;
@@ -1148,6 +1159,13 @@ function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S)
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
+  if(d.restorefile){const f=t.files&&t.files[0];if(!f)return;
+    const fr=new FileReader();fr.onload=()=>{const o=parseBackup(String(fr.result||""));t.value="";
+      if(!o){toast("That file isn't a Honestech PPI backup.");return;}
+      $("#restoreIn").value=String(fr.result);
+      $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with <strong>${esc(f.name)}</strong> (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;
+      $("#restoreActs").scrollIntoView({block:"center"});};
+    fr.onerror=()=>toast("Couldn't open that file.");fr.readAsText(f);return;}
   if(d.logo){const f=t.files&&t.files[0];if(!f)return;
     loadLogo(f).then(r=>{if(!r){toast("Couldn't read that image. Try a PNG or JPG.");return;}
       Object.assign(APP.settings,r);save();render();toast("Logo saved");});return;}

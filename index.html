@@ -601,12 +601,35 @@ function backupText(){
   const copy=JSON.parse(JSON.stringify(APP));
   delete copy.adding;delete copy.draft;delete copy.editing;delete copy.confirmDel;
   if(!APP.bkPhotos)copy.jobs.forEach(j=>Object.values(j.results).forEach(r=>{r.photos=[]}));
-  return "HONESTECH-PPI-BACKUP:"+JSON.stringify(copy);
+  // Letters, digits, - and _ only, so Notes, email and texts can't scramble it.
+  const bytes=new TextEncoder().encode(JSON.stringify(copy));
+  let bin="";for(let k=0;k<bytes.length;k+=8192)bin+=String.fromCharCode.apply(null,bytes.subarray(k,k+8192));
+  return "HONESTECH-PPI-BACKUP-V2-"+btoa(bin).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 }
 function parseBackup(txt){
-  txt=(txt||"").trim();const i=txt.indexOf("HONESTECH-PPI-BACKUP:");
-  if(i<0)return null;
-  try{const o=JSON.parse(txt.slice(i+21));return o&&Array.isArray(o.jobs)&&o.settings?o:null;}catch(e){return null;}
+  txt=String(txt||"");
+  const valid=o=>o&&Array.isArray(o.jobs)&&o.settings?o:null;
+  const m=txt.match(/HONESTECH-PPI-BACKUP/i);
+  if(!m)return null;
+  let rest=txt.slice(m.index+m[0].length);
+  // New format: base64url after "-V2-"
+  const v2=rest.match(/^\s*-\s*V2\s*-/i);
+  if(v2){
+    try{
+      let s=rest.slice(v2[0].length).replace(/[^A-Za-z0-9\-_]/g,"").replace(/-/g,"+").replace(/_/g,"/");
+      while(s.length%4)s+="=";
+      const bin=atob(s);const bytes=new Uint8Array(bin.length);for(let k=0;k<bin.length;k++)bytes[k]=bin.charCodeAt(k);
+      return valid(JSON.parse(new TextDecoder().decode(bytes)));
+    }catch(e){return null;}
+  }
+  // Old format: raw JSON, possibly URL-encoded or with curly quotes from Notes
+  for(let pass=0;pass<3&&/%[0-9A-Fa-f]{2}/.test(rest);pass++){
+    try{rest=decodeURIComponent(rest.replace(/\+/g," "));}catch(e){break;}
+  }
+  rest=rest.replace(/[“”„‟″]/g,'"').replace(/[‘’‚‛′]/g,"'");
+  const a=rest.indexOf("{"),b=rest.lastIndexOf("}");
+  if(a<0||b<a)return null;
+  try{return valid(JSON.parse(rest.slice(a,b+1)));}catch(e){return null;}
 }
 function backupDue(){
   const real=APP.jobs.length&&!APP.sample;
@@ -835,7 +858,7 @@ document.addEventListener("click",e=>{
     try{navigator.clipboard.writeText(txt).then(done,fallback);}catch(err){fallback();}
     return;}
   if(d.act==="askRestore"){const o=parseBackup($("#restoreIn").value);
-    if(!o){toast("That doesn't look like a Honestech PPI backup. Paste the whole thing.");return;}
+    if(!o){toast("Couldn't read that backup. Make sure you pasted all of it, starting with HONESTECH-PPI-BACKUP.");return;}
     $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
   if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
   if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;

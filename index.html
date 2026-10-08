@@ -219,6 +219,7 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 </div></nav>
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ================= Inspection checklist, in field order ================= */
 const SECTIONS = [
@@ -723,7 +724,7 @@ function renderReport(){
     <div class="rep-sec"><h4>Monitor</h4>${mon.length?`<ul class="rep-list">${mon.map(line).join("")}</ul>`:`<p class="empty">Nothing to monitor.</p>`}</div>
     ${photos.length?`<div class="rep-sec"><h4>Photos</h4><div class="thumbs">${photos.map(x=>`<figure><img src="${x.p}" alt="${esc(x.l)}"></figure>`).join("")}</div></div>`:""}
     ${st.open?`<div class="rep-sec"><h4>Not checked</h4><p class="empty">${st.open} items have no rating yet. Go back to finish them or mark them N/A.</p></div>`:""}
-    <div class="copyrow"><button class="btn primary" type="button" data-act="copyReport">Copy report text</button></div>
+    <div class="copyrow"><button class="btn primary" type="button" data-act="pdfReport">Save report PDF</button><button class="btn" type="button" data-act="copyReport">Copy report text</button></div>
     <textarea class="copybox" id="copybox" hidden readonly></textarea>
     <div class="madewith">Prepared with Honestech PPI</div>
   </div>`;
@@ -782,7 +783,7 @@ function renderInvoice(){
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
       ${st.pay?`<div class="paybox">${esc(st.pay)}${st.terms?`\n${esc(st.terms)}`:""}</div>`:`<p class="empty">Add how customers pay you in Settings so it shows on the invoice.</p>`}
     </div>
-    <div class="copyrow"><button class="btn primary" type="button" data-act="copyInvoice">Copy invoice text</button><button class="btn" type="button" data-act="copyBoth">Copy report + invoice</button></div>
+    <div class="copyrow"><button class="btn primary" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>
     <div class="madewith">Prepared with Honestech PPI</div>
   </div>`;
@@ -807,6 +808,210 @@ function invoiceText(){
   if(inv.paid)L.push(`Paid by ${inv.paidVia}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
   else{ if(st.pay){L.push("");L.push("How to pay:");L.push(st.pay);} if(st.terms)L.push(st.terms); }
   return L.join("\n");
+}
+
+/* ================= PDF export ================= */
+const PC={ink:[21,32,43],muted:[91,104,118],line:[213,219,226],accent:[29,95,168],paper:[244,246,248],
+  good:[31,122,69],mon:[154,98,0],bad:[180,35,35],na:[107,116,128],
+  goodS:[225,242,232],monS:[251,240,217],badS:[251,228,228],naS:[236,239,242]};
+const PW=612,PH=792,PM=40;
+const pdfTxt=s=>String(s??"").replace(/[′]/g,"'").replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF–—‘’“”•…]/g,"");
+function pdfStart(){
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({unit:"pt",format:"letter",compress:true});
+  const P={doc,y:PM};
+  P.font=(size,style="normal",color=PC.ink)=>{doc.setFont("helvetica",style);doc.setFontSize(size);doc.setTextColor(...color);};
+  P.need=(h)=>{if(P.y+h>PH-PM-24){doc.addPage();P.y=PM;return true;}return false;};
+  P.text=(s,x,y,o)=>doc.text(Array.isArray(s)?s.map(pdfTxt):pdfTxt(s),x,y,o);
+  P.wrap=(s,w)=>doc.splitTextToSize(pdfTxt(s),w);
+  P.rule=(y,c=PC.line,w=0.75)=>{doc.setDrawColor(...c);doc.setLineWidth(w);doc.line(PM,y,PW-PM,y);};
+  return P;
+}
+function pdfHeader(P,title,rightLines){
+  const {doc}=P,s=APP.settings;
+  P.font(18,"bold");P.text(bizName(),PM,P.y+14);
+  P.font(9,"normal",PC.muted);
+  const contact=[s.owner,s.phone,s.email,s.web].filter(Boolean).join("  ·  ");
+  if(contact)P.text(contact,PM,P.y+30);
+  P.font(11,"bold",PC.accent);P.text(title.toUpperCase(),PW-PM,P.y+12,{align:"right"});
+  P.font(9,"normal",PC.muted);rightLines.forEach((l,k)=>P.text(l,PW-PM,P.y+26+k*12,{align:"right"}));
+  P.y+=Math.max(40,28+rightLines.length*12);
+  doc.setDrawColor(...PC.ink);doc.setLineWidth(1.5);doc.line(PM,P.y,PW-PM,P.y);
+  P.y+=16;
+}
+function pdfKV(P,pairs,cols=3){
+  const colW=(PW-2*PM)/cols;let maxH=0;
+  pairs.forEach(([k,v],i)=>{
+    const c=i%cols;if(c===0&&i){P.y+=maxH+8;maxH=0;}
+    const x=PM+c*colW;
+    P.font(7,"bold",PC.muted);P.text(k.toUpperCase(),x,P.y);
+    P.font(10,"bold");const lines=P.wrap(v||"—",colW-10);P.text(lines,x,P.y+13);
+    maxH=Math.max(maxH,13+lines.length*12);
+  });
+  P.y+=maxH+10;
+}
+function pdfFooters(P,label){
+  const {doc}=P,n=doc.internal.getNumberOfPages();
+  for(let i=1;i<=n;i++){doc.setPage(i);
+    doc.setDrawColor(...PC.line);doc.setLineWidth(0.5);doc.line(PM,PH-PM+4,PW-PM,PH-PM+4);
+    P.font(7.5,"normal",PC.muted);
+    P.text(`${bizName()}  ·  ${label}`,PM,PH-PM+16);
+    P.text(`Page ${i} of ${n}  ·  Prepared with Honestech PPI`,PW-PM,PH-PM+16,{align:"right"});}
+}
+function pdfPill(P,x,y,r){
+  const key=r||"na",col=PC[key]||PC.na,soft=PC[key+"S"]||PC.naS;
+  P.doc.setFillColor(...soft);P.doc.roundedRect(x,y-8.5,54,12,3,3,"F");
+  P.font(6.5,"bold",col);P.text((r?RLABEL[r]:"Not checked").toUpperCase(),x+27,y,{align:"center"});
+}
+function pdfHeading(P,t,sub){
+  P.need(40);P.y+=6;P.font(12,"bold");P.text(t.toUpperCase(),PM,P.y);
+  if(sub){P.font(8.5,"normal",PC.muted);P.text(sub,PW-PM,P.y,{align:"right"});}
+  P.y+=6;P.rule(P.y,PC.ink,0.75);P.y+=13;
+}
+function pdfItemRow(P,it,r,withSection){
+  const lx=PM+62,lw=210,dx=PM+282,dw=PW-PM-dx;
+  const label=P.wrap(it.label,lw);
+  const det=[measText(it,r||{}),r?.note].filter(Boolean).join(" — ")+(withSection?(r?.note||measText(it,r||{})?"  ·  ":"")+it.sec.title:"");
+  P.font(8.5);const dl=det?P.wrap(det,dw):[];
+  const h=Math.max(label.length,dl.length,1)*11;
+  P.need(h+6);
+  pdfPill(P,PM,P.y,r?.r);
+  P.font(9,"bold");P.text(label,lx,P.y);
+  if(dl.length){P.font(8.5,"normal",PC.muted);P.text(dl,dx,P.y);}
+  P.y+=h-2;P.doc.setDrawColor(...PC.line);P.doc.setLineWidth(0.4);P.doc.line(PM,P.y,PW-PM,P.y);P.y+=11;
+}
+function pdfCorners(P,x,y,title,it,r){
+  const v=(r&&typeof r.val==="object"&&r.val)||{},bw=78,bh=30,gap=6;
+  P.font(8,"bold",PC.muted);P.text(title.toUpperCase(),x,y);
+  P.font(6.5,"bold",PC.muted);P.text("FRONT",x+bw+gap/2,y+12,{align:"center"});
+  CORNERS.forEach(([k],i)=>{
+    const bx=x+(i%2)*(bw+gap),by=y+17+Math.floor(i/2)*(bh+gap);
+    const cr=cornerRate(it.corners,v[k]);const col=cr?PC[cr]:PC.line,soft=cr?PC[cr+"S"]:PC.paper;
+    P.doc.setFillColor(...soft);P.doc.roundedRect(bx,by,bw,bh,4,4,"F");
+    P.doc.setFillColor(...col);P.doc.rect(bx,by,3,bh,"F");
+    P.font(7,"bold",PC.muted);P.text(k,bx+9,by+12);
+    P.font(14,"bold",cr?col:PC.muted);P.text(v[k]!==undefined&&v[k]!==""?String(v[k]):"—",bx+bw-8,by+21,{align:"right"});
+    P.font(7,"normal",PC.muted);P.text(it.corners.unit,bx+9,by+23);
+  });
+  P.font(6.5,"bold",PC.muted);P.text("REAR",x+bw+gap/2,y+17+2*(bh+gap)+6,{align:"center"});
+  return 17+2*(bh+gap)+10;
+}
+function buildReportPdf(job){
+  const prev=S;S=job;
+  try{
+  const P=pdfStart(),{doc}=P,i=job.info,st=stats(job),v=job.verdict||suggestVerdict(st);
+  pdfHeader(P,"Pre-Purchase Inspection",[fmtDate(i.date,{month:"long",day:"numeric",year:"numeric"})+(i.time?"  "+fmtTime(i.time):"")]);
+  pdfKV(P,[["Vehicle",vehOf(i)],["VIN",i.vin],["Odometer",i.miles?num(i.miles).toLocaleString()+" mi":""],["Color",i.color],["Prepared for",i.customer],["Location",i.location]]);
+  // verdict banner
+  const vc=v==="buy"?PC.good:v==="buyfix"?PC.mon:PC.bad;
+  P.need(48);doc.setFillColor(...vc);doc.roundedRect(PM,P.y,PW-2*PM,40,5,5,"F");
+  P.font(7.5,"bold",[255,255,255]);P.text("VERDICT",PM+14,P.y+13);
+  P.font(14,"bold",[255,255,255]);P.text(VERDICTS.find(x=>x[0]===v)[1].toUpperCase(),PM+14,P.y+30);
+  P.font(9,"bold",[255,255,255]);P.text(`Good ${st.good}   Monitor ${st.mon}   Repair ${st.bad}${st.open?`   Not checked ${st.open}`:""}`,PW-PM-14,P.y+24,{align:"right"});
+  P.y+=56;
+  if(i.summary){P.font(8,"bold",PC.muted);P.text("SUMMARY",PM,P.y);P.y+=12;P.font(10);const l=P.wrap(i.summary,PW-2*PM);P.need(l.length*13);P.text(l,PM,P.y);P.y+=l.length*13+8;}
+  // tires & brakes
+  const tr=ALL_ITEMS.find(x=>x.id==="tread"),pd=ALL_ITEMS.find(x=>x.id==="pads");
+  const hasC=it=>{const r=job.results[it.id];return r&&typeof r.val==="object"&&Object.values(r.val).some(x=>x!=="");};
+  if(hasC(tr)||hasC(pd)){
+    pdfHeading(P,"Tires & Brakes","Green good · Amber monitor · Red repair");
+    P.need(110);const y0=P.y;let h=0;
+    if(hasC(tr))h=Math.max(h,pdfCorners(P,PM,y0,"Tread depth (/32 in)",tr,job.results.tread));
+    if(hasC(pd))h=Math.max(h,pdfCorners(P,PM+190,y0,"Brake pads (mm)",pd,job.results.pads));
+    P.font(8,"normal",PC.muted);
+    P.text(P.wrap("Tread: 2/32 or less needs replacement, 3–4/32 monitor. Pads: 3 mm or less needs replacement, 4–5 mm monitor.",PW-PM-(PM+385)),PM+385,y0+20);
+    P.y=y0+h+6;
+  }
+  const bad=ALL_ITEMS.filter(it=>job.results[it.id]?.r==="bad"),mon=ALL_ITEMS.filter(it=>job.results[it.id]?.r==="mon");
+  pdfHeading(P,"Needs repair",bad.length+" item"+(bad.length===1?"":"s"));
+  if(bad.length)bad.forEach(it=>pdfItemRow(P,it,job.results[it.id],true));else{P.font(9,"normal",PC.muted);P.text("Nothing flagged for repair.",PM,P.y);P.y+=16;}
+  pdfHeading(P,"Monitor",mon.length+" item"+(mon.length===1?"":"s"));
+  if(mon.length)mon.forEach(it=>pdfItemRow(P,it,job.results[it.id],true));else{P.font(9,"normal",PC.muted);P.text("Nothing to monitor.",PM,P.y);P.y+=16;}
+  // full checklist
+  doc.addPage();P.y=PM;
+  P.font(14,"bold");P.text("Full inspection checklist",PM,P.y+4);P.font(9,"normal",PC.muted);P.text(vehOf(i)+(i.vin?"  ·  VIN "+i.vin:""),PW-PM,P.y+4,{align:"right"});P.y+=22;
+  SECTIONS.forEach((sec,k)=>{
+    P.need(50);
+    doc.setFillColor(...PC.paper);doc.rect(PM,P.y-11,PW-2*PM,17,"F");
+    P.font(9,"bold");P.text(`${k+1}. ${sec.title}`,PM+6,P.y+1);P.y+=18;
+    sec.items.forEach(it=>pdfItemRow(P,{...it,sec},job.results[it.id],false));
+    P.y+=4;
+  });
+  // photos
+  const photos=ALL_ITEMS.flatMap(it=>(job.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
+  if(photos.length){
+    doc.addPage();P.y=PM;P.font(14,"bold");P.text("Photos",PM,P.y+4);P.y+=20;
+    const cw=(PW-2*PM-20)/3;let col=0,rowH=0;
+    photos.forEach(ph=>{
+      let w=cw,h=cw*0.75;
+      try{const pr=doc.getImageProperties(ph.p);h=Math.min(cw*1.2,cw*pr.height/pr.width);}catch(e){}
+      if(col===0&&P.need(h+26)){}
+      const x=PM+col*(cw+10);
+      try{doc.addImage(ph.p,"JPEG",x,P.y,w,h,undefined,"FAST");}catch(e){}
+      P.font(7.5,"normal",PC.muted);P.text(P.wrap(ph.l,cw).slice(0,2),x,P.y+h+10);
+      rowH=Math.max(rowH,h+28);col++;
+      if(col===3){col=0;P.y+=rowH;rowH=0;}
+    });
+    if(col)P.y+=rowH;
+  }
+  // disclaimer
+  P.need(50);P.y+=8;P.rule(P.y);P.y+=12;P.font(7.5,"normal",PC.muted);
+  P.text(P.wrap("This report describes the vehicle's condition at the time of inspection, based on a visual and operational check without disassembly. It is not a warranty or guarantee of future condition. Some problems may not be detectable during a single inspection.",PW-2*PM),PM,P.y);
+  pdfFooters(P,"Pre-Purchase Inspection  ·  "+(vehOf(i)||""));
+  return doc.output("blob");
+  }finally{S=prev;}
+}
+function buildInvoicePdf(job){
+  const prev=S;S=job;
+  try{
+  ensureInvoice();
+  const P=pdfStart(),{doc}=P,i=job.info,inv=job.invoice,t=totals(job),s=APP.settings;
+  pdfHeader(P,"Invoice",[inv.num,fmtDate(inv.date,{month:"long",day:"numeric",year:"numeric"})]);
+  pdfKV(P,[["Bill to",[i.customer,i.phone].filter(Boolean).join("\n")],["Vehicle",vehOf(i)],["VIN",i.vin],["Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],["Location",i.location]]);
+  P.y+=4;
+  doc.setFillColor(...PC.paper);doc.rect(PM,P.y,PW-2*PM,20,"F");
+  P.font(8,"bold",PC.muted);P.text("DESCRIPTION",PM+8,P.y+13);P.text("AMOUNT",PW-PM-8,P.y+13,{align:"right"});P.y+=36;
+  const line=(d,sub,a)=>{P.font(10,"bold");P.text(d,PM+8,P.y);P.font(10);P.text(money(a),PW-PM-8,P.y,{align:"right"});
+    if(sub){P.font(8.5,"normal",PC.muted);P.text(sub,PM+8,P.y+12);}P.y+=sub?20:12;P.rule(P.y);P.y+=18;};
+  line("Pre-purchase inspection",vehOf(i),t.fee);
+  if(t.travel.fee)line("Travel",i.dist?`${i.dist} mi one way${t.travel.auto?` · first ${s.freeMiles} mi free, then ${money(s.perMile)}/mi`:""}`:"",t.travel.fee);
+  inv.items.filter(x=>x.d||num(x.a)).forEach(x=>line(x.d||"Item","",num(x.a)));
+  const tx=PW-PM-200;
+  const tl=(k,v,big)=>{P.font(big?13:10,big?"bold":"normal",big?PC.ink:PC.muted);P.text(k,tx,P.y);P.font(big?13:10,"bold");P.text(v,PW-PM-8,P.y,{align:"right"});P.y+=big?22:16;};
+  if(t.taxOn){tl("Subtotal",money(t.sub));tl(`Sales tax ${s.taxRate}%`,money(t.tax));}
+  doc.setDrawColor(...PC.ink);doc.setLineWidth(1);doc.line(tx,P.y-8,PW-PM,P.y-8);P.y+=6;
+  tl(inv.paid?"Total paid":"Total due",money(t.total),true);
+  if(inv.paid){
+    P.y+=6;doc.setDrawColor(...PC.good);doc.setLineWidth(2);doc.roundedRect(PM,P.y-6,150,40,5,5,"S");
+    P.font(20,"bold",PC.good);P.text("PAID",PM+75,P.y+20,{align:"center"});
+    P.font(9,"normal",PC.muted);P.text(`${inv.paidVia}${inv.paidDate?"  ·  "+fmtDate(inv.paidDate,{month:"short",day:"numeric",year:"numeric"}):""}`,PM+165,P.y+12);
+    P.text("Thank you for your business.",PM+165,P.y+26);P.y+=50;
+  }else if(s.pay||s.terms){
+    P.y+=6;P.font(8,"bold",PC.muted);P.text("HOW TO PAY",PM,P.y);P.y+=14;
+    P.font(10);const l=P.wrap(s.pay||"",PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13+4;
+    if(s.terms){P.font(9,"normal",PC.muted);P.text(P.wrap(s.terms,PW-2*PM),PM,P.y);}
+  }
+  pdfFooters(P,"Invoice "+inv.num);
+  return doc.output("blob");
+  }finally{S=prev;}
+}
+async function savePdf(kind){
+  if(!window.jspdf){toast("The PDF tool didn't load. Check your connection and try again.");return;}
+  let dl=null;try{dl=window.claude&&await window.claude.use("downloads");}catch(e){}
+  if(!dl){toast("Saving PDFs isn't available in this view.");return;}
+  if(!APP.settings.biz.trim()){toast("Add your business name in Settings first. It goes at the top of the PDF.");return;}
+  const i=S.info,slug=s=>String(s||"").replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"");
+  let blob,filename;
+  try{
+    if(kind==="report"){blob=buildReportPdf(S);filename=`PPI-${slug(vehOf(i))||"Report"}-${i.date||TODAY}.pdf`;}
+    else{blob=buildInvoicePdf(S);save();filename=`Invoice-${slug(S.invoice.num)}${i.customer?"-"+slug(i.customer):""}.pdf`;}
+  }catch(e){console.error(e);toast("Couldn't build the PDF.");return;}
+  try{const r=await dl.save({filename,data:blob});if(r.status==="saved")toast("PDF ready");}
+  catch(e){
+    if(e&&e.code==="declined")return;
+    if(e&&e.code==="rate_limited"){toast("A save is already open. Finish that one first.");return;}
+    toast("Couldn't save the PDF here.");
+  }
 }
 
 /* ================= render & navigation ================= */
@@ -872,6 +1077,8 @@ document.addEventListener("click",e=>{
   if(d.addnote){const id=d.addnote;res(id).open=true;t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));document.getElementById("n-"+id).focus();return;}
   if(d.delphoto){const [id,k]=d.delphoto.split(":");res(id).photos.splice(+k,1);save();t.closest(".item").outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));return;}
   if(d.verdict){S.verdict=d.verdict;save();render();return;}
+  if(d.act==="pdfReport"){savePdf("report");return;}
+  if(d.act==="pdfInvoice"){savePdf("invoice");return;}
   if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
   if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
   if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}

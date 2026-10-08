@@ -196,6 +196,14 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 .chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:600}
 .chips button[aria-pressed="true"]{background:var(--good);border-color:var(--good);color:var(--surface)}
 .paidstamp{display:inline-block;border:2px solid var(--good);color:var(--good);font-family:var(--f-display);font-weight:700;font-size:18px;letter-spacing:.1em;padding:2px 10px;border-radius:6px;transform:rotate(-4deg)}
+.logo-row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.logo-box{width:120px;height:72px;border:1px dashed var(--line);border-radius:10px;background:#ffffff;display:grid;place-items:center;overflow:hidden;flex:0 0 auto}
+.logo-box img{max-width:108px;max-height:60px;object-fit:contain}
+.logo-box span{font-size:12px;color:#6b7480}
+.logo-acts{flex:1;min-width:180px;display:flex;flex-direction:column;gap:8px}
+.mini input[type=file]{display:none}
+.rep-id{display:flex;gap:12px;align-items:center;min-width:0}
+.rep-logo{max-height:52px;max-width:120px;object-fit:contain;border-radius:6px;background:#ffffff;padding:4px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -565,6 +573,11 @@ function renderSettings(){
   <div class="stage-head"><div class="eyebrow">Your business</div><h2>Settings</h2><p class="when">This information appears on your reports, invoices, and booking confirmations.</p></div>
   <div class="form">
     <p class="formh">Business</p>
+    <div class="full logo-row">
+      <div class="logo-box">${s.logo?`<img src="${s.logo}" alt="Business logo">`:`<span>No logo</span>`}</div>
+      <div class="logo-acts"><span class="help">Logo appears at the top of your reports and invoices. PNG or JPG, ideally on a white or clear background.</span>
+        <div class="formacts"><label class="mini" for="s-logo">${s.logo?"Change logo":"Upload logo"}<input type="file" id="s-logo" accept="image/*" data-logo="1"></label>${s.logo?`<button class="mini del" type="button" data-act="rmlogo">Remove</button>`:""}</div></div>
+    </div>
     ${f("biz","Business name","","full")}
     ${f("owner","Your name")}
     ${f("phone","Phone",'inputmode="tel"')}
@@ -690,7 +703,8 @@ function renderCorners(it,r){
   return `<div class="corners"><div class="axle">Front</div>${CORNERS.slice(0,2).map(cell).join("")}${CORNERS.slice(2).map(cell).join("")}<div class="axle">Rear</div></div>`;
 }
 function bizHead(title,right){
-  return `<div class="rep-head"><div><h3>${title}</h3><div class="biz"><strong>${esc(bizName())}</strong>${bizContact()?"<br>"+esc(bizContact()):""}</div></div><div class="biz" style="text-align:right">${right}</div></div>`;
+  const lg=APP.settings.logo?`<img class="rep-logo" src="${APP.settings.logo}" alt="">`:"";
+  return `<div class="rep-head"><div class="rep-id">${lg}<div><h3>${title}</h3><div class="biz"><strong>${esc(bizName())}</strong>${bizContact()?"<br>"+esc(bizContact()):""}</div></div></div><div class="biz" style="text-align:right">${right}</div></div>`;
 }
 function renderReport(){
   const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
@@ -829,13 +843,22 @@ function pdfStart(){
 }
 function pdfHeader(P,title,rightLines){
   const {doc}=P,s=APP.settings;
-  P.font(18,"bold");P.text(bizName(),PM,P.y+14);
+  let tx=PM,logoH=0;
+  if(s.logo&&s.logoW&&s.logoH){
+    const maxH=48,maxW=150,sc=Math.min(maxH/s.logoH,maxW/s.logoW);
+    const w=s.logoW*sc,h=s.logoH*sc;
+    try{doc.addImage(s.logo,"JPEG",PM,P.y,w,h,"biz-logo","FAST");tx=PM+w+14;logoH=h;}catch(e){}
+  }
+  let cy=logoH?P.y+Math.max(0,(logoH-34)/2):P.y;
+  const room=PW-PM-190-tx;P.font(18,"bold");let nm=P.wrap(bizName(),room);
+  if(nm.length>1){P.font(14,"bold");nm=P.wrap(bizName(),room).slice(0,2);}
+  P.text(nm[0],tx,cy+14);if(nm[1]){P.text(nm[1],tx,cy+30);cy+=16;}
   P.font(9,"normal",PC.muted);
   const contact=[s.owner,s.phone,s.email,s.web].filter(Boolean).join("  ·  ");
-  if(contact)P.text(contact,PM,P.y+30);
+  if(contact)P.text(contact,tx,cy+30);
   P.font(11,"bold",PC.accent);P.text(title.toUpperCase(),PW-PM,P.y+12,{align:"right"});
   P.font(9,"normal",PC.muted);rightLines.forEach((l,k)=>P.text(l,PW-PM,P.y+26+k*12,{align:"right"}));
-  P.y+=Math.max(40,28+rightLines.length*12);
+  P.y+=Math.max(40,28+rightLines.length*12,logoH+8,(cy-P.y)+(contact?40:24));
   doc.setDrawColor(...PC.ink);doc.setLineWidth(1.5);doc.line(PM,P.y,PW-PM,P.y);
   P.y+=16;
 }
@@ -1056,6 +1079,7 @@ document.addEventListener("click",e=>{
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
   if(d.act==="cancelAdd"){APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
+  if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
   if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
   if(d.act==="backup"){const txt=backupText();const box=$("#bkbox");
     const done=()=>{APP.lastBackup=TODAY;save();toast("Backup copied. Paste it into Notes or an email.");};
@@ -1124,6 +1148,9 @@ function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S)
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
+  if(d.logo){const f=t.files&&t.files[0];if(!f)return;
+    loadLogo(f).then(r=>{if(!r){toast("Couldn't read that image. Try a PNG or JPG.");return;}
+      Object.assign(APP.settings,r);save();render();toast("Logo saved");});return;}
   if(d.bkphotos){APP.bkPhotos=t.checked;save();return;}
   if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
   if(d.set&&APP.view==="settings"){render();return;}
@@ -1132,6 +1159,13 @@ document.addEventListener("change",e=>{
   Promise.all(files.map(shrink)).then(urls=>{res(id).photos.push(...urls.filter(Boolean));save();
     const el=document.querySelector(`[data-item="${id}"]`);if(el)el.outerHTML=renderItem(ALL_ITEMS.find(x=>x.id===id));toast(urls.length>1?`${urls.length} photos added`:"Photo added");});
 });
+function loadLogo(file){
+  return new Promise(resolve=>{const fr=new FileReader();fr.onload=()=>{const img=new Image();img.onload=()=>{
+    const sc=Math.min(1,600/img.width,300/img.height);const w=Math.max(1,Math.round(img.width*sc)),h=Math.max(1,Math.round(img.height*sc));
+    const c=document.createElement("canvas");c.width=w;c.height=h;const g=c.getContext("2d");
+    g.fillStyle="#ffffff";g.fillRect(0,0,w,h);g.drawImage(img,0,0,w,h);
+    resolve({logo:c.toDataURL("image/jpeg",0.9),logoW:w,logoH:h});};img.onerror=()=>resolve(null);img.src=fr.result;};fr.onerror=()=>resolve(null);fr.readAsDataURL(file);});
+}
 function shrink(file){
   return new Promise(resolve=>{const fr=new FileReader();fr.onload=()=>{const img=new Image();img.onload=()=>{
     const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);

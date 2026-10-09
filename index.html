@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Honestech PPI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -204,6 +204,9 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 .mini input[type=file]{display:none}
 .rep-id{display:flex;gap:12px;align-items:center;min-width:0}
 .rep-logo{max-height:52px;max-width:120px;object-fit:contain;border-radius:6px;background:#ffffff;padding:4px}
+.dl-note{display:none}
+.no-dl .dl-note{display:block}
+.no-dl .dl-only{display:none!important}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -605,10 +608,11 @@ function renderSettings(){
     <p class="formh">Backup &amp; restore</p>
     <p class="help full" style="margin:0">Your data lives only in this app on this phone. Copy a backup and paste it into Notes or email it to yourself. ${APP.lastBackup?`Last backup: <strong>${esc(fmtDate(APP.lastBackup,{month:"short",day:"numeric",year:"numeric"}))}</strong>.`:"<strong>No backup yet.</strong>"}</p>
     <label class="check full"><input type="checkbox" id="bk-photos" ${APP.bkPhotos?"checked":""} data-bkphotos="1"> Include photos (makes the backup much larger)</label>
-    <div class="formacts"><button class="btn primary" type="button" data-act="backupFile">Save backup file</button><button class="btn" type="button" data-act="backup">Copy backup text</button></div>
-    <p class="help full" style="margin:0">On iPhone, choose <strong>Save to Files</strong> and pick iCloud Drive so the backup is kept off the phone too.</p>
+    <div class="formacts"><button class="btn primary dl-only" type="button" data-act="backupFile">Save backup file</button><button class="btn" type="button" data-act="backup">Copy backup text</button></div>
+    <p class="help full dl-note" style="margin:0">Saving files isn't available in this view of the Claude app. Use <strong>Copy backup text</strong> and paste it into Notes, or email it to yourself. Updating the Claude app may turn file saving on.</p>
+    <p class="help full dl-only" style="margin:0">On iPhone, choose <strong>Save to Files</strong> and pick iCloud Drive so the backup is kept off the phone too.</p>
     <textarea class="copybox full" id="bkbox" hidden readonly></textarea>
-    <div class="formacts"><label class="btn" for="restoreFile" style="display:inline-flex;align-items:center">Restore from file<input type="file" id="restoreFile" accept=".txt,.json,text/plain,application/json" data-restorefile="1" hidden></label></div>
+    <div class="formacts"><button class="btn" type="button" data-act="pickRestore">Restore from file</button><input type="file" id="restoreFile" accept=".txt,.json,text/plain,application/json" data-restorefile="1" hidden></div>
     <label class="full">Or paste a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
     <div class="formacts" id="restoreActs"><button class="btn" type="button" data-act="askRestore">Restore</button></div>
   </div>`;
@@ -748,7 +752,8 @@ function renderReport(){
     <div class="rep-sec"><h4>Monitor</h4>${mon.length?`<ul class="rep-list">${mon.map(line).join("")}</ul>`:`<p class="empty">Nothing to monitor.</p>`}</div>
     ${photos.length?`<div class="rep-sec"><h4>Photos</h4><div class="thumbs">${photos.map(x=>`<figure><img src="${x.p}" alt="${esc(x.l)}"></figure>`).join("")}</div></div>`:""}
     ${st.open?`<div class="rep-sec"><h4>Not checked</h4><p class="empty">${st.open} items have no rating yet. Go back to finish them or mark them N/A.</p></div>`:""}
-    <div class="copyrow"><button class="btn primary" type="button" data-act="pdfReport">Save report PDF</button><button class="btn" type="button" data-act="copyReport">Copy report text</button></div>
+    <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfReport">Save report PDF</button><button class="btn" type="button" data-act="copyReport">Copy report text</button></div>
+    <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the report text instead, or update the Claude app.</p>
     <textarea class="copybox" id="copybox" hidden readonly></textarea>
     <div class="madewith">Prepared with Honestech PPI</div>
   </div>`;
@@ -807,7 +812,8 @@ function renderInvoice(){
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
       ${st.pay?`<div class="paybox">${esc(st.pay)}${st.terms?`\n${esc(st.terms)}`:""}</div>`:`<p class="empty">Add how customers pay you in Settings so it shows on the invoice.</p>`}
     </div>
-    <div class="copyrow"><button class="btn primary" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
+    <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
+    <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the invoice text instead, or update the Claude app.</p>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>
     <div class="madewith">Prepared with Honestech PPI</div>
   </div>`;
@@ -1091,6 +1097,7 @@ document.addEventListener("click",e=>{
   if(d.act==="fresh"){APP=blankApp();save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
   if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
+  if(d.act==="pickRestore"){$("#restoreFile").click();return;}
   if(d.act==="backupFile"){saveBackupFile();return;}
   if(d.act==="backup"){const txt=backupText();const box=$("#bkbox");
     const done=()=>{APP.lastBackup=TODAY;save();toast("Backup copied. Paste it into Notes or an email.");};
@@ -1190,6 +1197,10 @@ function shrink(file){
     c.getContext("2d").drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL("image/jpeg",0.6));};img.onerror=()=>resolve(null);img.src=fr.result;};fr.onerror=()=>resolve(null);fr.readAsDataURL(file);});
 }
 render();
+/* Show save buttons only where this view can save files */
+document.body.classList.add("dl-checking");
+(async()=>{let dl=null;try{dl=window.claude&&typeof window.claude.use==="function"?await window.claude.use("downloads"):null;}catch(e){}
+  document.body.classList.remove("dl-checking");document.body.classList.toggle("no-dl",!dl);})();
 </script>
 
 </body></html>

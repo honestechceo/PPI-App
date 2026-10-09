@@ -207,6 +207,24 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 .dl-note{display:none}
 .no-dl .dl-note{display:block}
 .no-dl .dl-only{display:none!important}
+.ck-sec{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.ck-sec summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;cursor:pointer;font-weight:600;font-size:15px;color:var(--ink);text-transform:none;letter-spacing:0;list-style:none}
+.ck-sec summary::-webkit-details-marker{display:none}
+.ck-sec summary::after{content:"＋";color:var(--muted);font-weight:400}
+.ck-sec[open] summary::after{content:"−"}
+.ck-sec summary small{margin-left:auto;font-weight:400;color:var(--muted);font-size:12px;white-space:nowrap}
+.ck-list{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.ck-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.ck-row.off .ck-label{color:var(--muted);text-decoration:line-through}
+.ck-label{min-width:0;font-size:14px;color:var(--ink)}
+.ck-label small{display:block;color:var(--muted);font-size:12px;text-decoration:none}
+.tag{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:1px 7px;vertical-align:middle}
+.ck-tog{min-width:76px;justify-content:center}
+.ck-tog[aria-pressed="true"]{background:var(--good-soft);border-color:var(--good);color:var(--good)}
+.ck-addwrap{border:0;border-radius:0;margin:0;background:transparent;padding:12px}
+.ck-add{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ck-add .full{grid-column:1/-1}
+.ck-stage{margin-top:12px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -233,7 +251,7 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 /* ================= Inspection checklist, in field order ================= */
-const SECTIONS = [
+const BASE_SECTIONS = [
   {id:"arrive", title:"Arrival & Documents", when:"<strong>Before anyone starts the car.</strong> Touch the hood and upper radiator hose to confirm the engine is cold, then match paperwork to the vehicle.",
    items:[
     {id:"cold",label:"Engine is cold on arrival",hint:"A warm engine can hide cold-start noises, smoke, and hard starting"},
@@ -338,8 +356,29 @@ const VERDICTS = [["buy","Recommend"],["buyfix","Recommend with repairs"],["pass
 const PAYMETHODS = ["Cash","Card","Zelle","Cash App","Venmo","Check"];
 const CORNERS=[["LF","Left front"],["RF","Right front"],["LR","Left rear"],["RR","Right rear"]];
 const KEY = "honestech-ppi-v3";
-const STAGES = [{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"},{id:"invoice",title:"Invoice"}];
-const ALL_ITEMS = SECTIONS.flatMap(s=>s.items.map(i=>({...i,sec:s})));
+/* Checklist = built-in items + the mechanic's own items, minus the ones they hide.
+   A hidden or removed item still shows on a job that already has a rating for it. */
+let SECTIONS,STAGES,ALL_ITEMS;
+function customToItem(c){
+  const it={id:c.id,label:c.label,hint:c.hint||"",custom:true,removed:!!c.removed};
+  if(c.meas==="one")it.measure={unit:c.unit||"",ph:""};
+  if(c.meas==="wheels")it.corners={unit:c.unit||"",ph:""};
+  return it;
+}
+function rebuildChecklist(settings){
+  const hidden=new Set((settings&&settings.hidden)||[]),custom=(settings&&settings.custom)||[];
+  SECTIONS=BASE_SECTIONS.map(b=>{
+    const sec={...b};
+    sec.items=[...b.items.map(i=>({...i,hidden:hidden.has(i.id)})),...custom.filter(c=>c.sec===b.id).map(customToItem)];
+    return sec;
+  });
+  STAGES=[{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"},{id:"invoice",title:"Invoice"}];
+  ALL_ITEMS=SECTIONS.flatMap(sec=>sec.items.map(i=>Object.assign(i,{sec})));
+}
+rebuildChecklist(null);
+const itemOn=(it,job)=>!(it.hidden||it.removed)||!!(job&&job.results[it.id]&&job.results[it.id].r);
+const secItems=(sec,job=S)=>sec.items.filter(it=>itemOn(it,job));
+const jobItems=(job=S)=>ALL_ITEMS.filter(it=>itemOn(it,job));
 
 /* ================= dates & money ================= */
 const isoDay=(d)=>{const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezoneOffset());return x.toISOString().slice(0,10)};
@@ -397,6 +436,7 @@ try{
   }
 }catch(e){ APP=sampleApp(); }
 APP.adding=false;
+rebuildChecklist(APP.settings);
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
 syncActive();
@@ -421,7 +461,7 @@ function copyText(txt,boxId){
   try{navigator.clipboard.writeText(txt).then(()=>toast("Copied"),fallback);}catch(err){fallback();}
 }
 function cornerVals(r){ if(!r.val||typeof r.val!=="object") r.val={}; return r.val; }
-function cornerRate(c,v){ if(v===""||v==null||isNaN(+v)) return ""; v=+v; return v<=c.repair?"bad":v<=c.monitor?"mon":"good"; }
+function cornerRate(c,v){ if(c.repair==null||v===""||v==null||isNaN(+v)) return ""; v=+v; return v<=c.repair?"bad":v<=c.monitor?"mon":"good"; }
 function measText(it,r){
   if(!r) return "";
   if(it.corners){const v=(r.val&&typeof r.val==="object")?r.val:{};const parts=CORNERS.filter(([k])=>v[k]!==undefined&&v[k]!=="").map(([k])=>`${k} ${v[k]}`);
@@ -441,9 +481,10 @@ function vinCheck(v){
 }
 function stats(job=S){
   let good=0,mon=0,bad=0,na=0;
-  ALL_ITEMS.forEach(i=>{const r=job.results[i.id]?.r;if(r==="good")good++;else if(r==="mon")mon++;else if(r==="bad")bad++;else if(r==="na")na++;});
+  const its=jobItems(job);
+  its.forEach(i=>{const r=job.results[i.id]?.r;if(r==="good")good++;else if(r==="mon")mon++;else if(r==="bad")bad++;else if(r==="na")na++;});
   const done=good+mon+bad+na;
-  return {good,mon,bad,na,done,open:ALL_ITEMS.length-done,total:ALL_ITEMS.length};
+  return {good,mon,bad,na,done,open:its.length-done,total:its.length};
 }
 function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfix"; return"buy"; }
 
@@ -486,7 +527,7 @@ function renderChrome(){
   $("#steps").innerHTML=STAGES.map((s,i)=>{
     let cls="step";
     if(i===S.step)cls+=" on";
-    if(s.items){const rs=s.items.map(it=>S.results[it.id]?.r);
+    if(s.items){const rs=secItems(s).map(it=>S.results[it.id]?.r);
       if(rs.includes("bad"))cls+=" flag"; else if(rs.every(Boolean))cls+=" done";}
     if(s.id==="invoice"&&S.invoice.paid)cls+=" done";
     const n=s.id==="report"?"R":s.id==="invoice"?"$":i;
@@ -604,6 +645,7 @@ function renderSettings(){
     <label class="full">How customers pay you<textarea id="s-pay" data-set="pay" rows="3" placeholder="Zelle: your phone or email&#10;Cash App: $yourtag&#10;Card payment link">${esc(s.pay)}</textarea></label>
     ${f("terms","Payment terms","","full")}
   </div>
+  ${renderChecklistSettings()}
   <div class="form" id="backup">
     <p class="formh">Backup &amp; restore</p>
     <p class="help full" style="margin:0">Your data lives only in this app on this phone. Copy a backup and paste it into Notes or email it to yourself. ${APP.lastBackup?`Last backup: <strong>${esc(fmtDate(APP.lastBackup,{month:"short",day:"numeric",year:"numeric"}))}</strong>.`:"<strong>No backup yet.</strong>"}</p>
@@ -616,6 +658,47 @@ function renderSettings(){
     <label class="full">Or paste a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
     <div class="formacts" id="restoreActs"><button class="btn" type="button" data-act="askRestore">Restore</button></div>
   </div>`;
+}
+/* ---------- Checklist editor ---------- */
+let OPEN_ADD=null;            // section id whose add form is open on an inspection stage
+const OPEN_CK=new Set();      // sections expanded in Settings
+function measLabel(it){return it.corners?`Reading at each wheel${it.corners.unit?" ("+it.corners.unit+")":""}`:it.measure?`One reading${it.measure.unit?" ("+it.measure.unit+")":""}`:"";}
+function addItemForm(sec,pfx){
+  return `<div class="ck-add full">
+    <label class="full">New item<input id="${pfx}-n-${sec}" placeholder="e.g. Tire pressure, Hybrid battery health"></label>
+    <label class="full">What to look for (optional)<input id="${pfx}-h-${sec}" placeholder="Shows under the item name"></label>
+    <label>Reading<select id="${pfx}-m-${sec}"><option value="none">No reading</option><option value="one">One reading</option><option value="wheels">Reading at each wheel</option></select></label>
+    <label>Unit (optional)<input id="${pfx}-u-${sec}" placeholder="psi, V, %, mm"></label>
+    <div class="formacts"><button class="btn primary" type="button" data-ckadd="${sec}" data-pfx="${pfx}">Add item</button>${pfx==="sk"?`<button class="btn" type="button" data-closeadd="1">Cancel</button>`:""}</div>
+  </div>`;
+}
+function renderChecklistSettings(){
+  const st=APP.settings,hidden=new Set(st.hidden||[]);
+  const nHidden=hidden.size,nCustom=(st.custom||[]).filter(c=>!c.removed).length;
+  return `<div class="form" id="checklist">
+    <p class="formh">Checklist</p>
+    <p class="help full" style="margin:0">Hide items you don't check, or add your own. Changes apply to your inspections from now on. Finished reports keep every item that was rated.${nHidden||nCustom?` <strong>${nCustom} added · ${nHidden} hidden.</strong>`:""}</p>
+    ${SECTIONS.map((sec,k)=>{
+      const its=sec.items.filter(i=>!i.removed),off=its.filter(i=>i.hidden).length;
+      return `<details class="full ck-sec" data-ck="${sec.id}" ${OPEN_CK.has(sec.id)?"open":""}>
+        <summary><span>${k+1}. ${esc(sec.title)}</span><small>${its.length-off} items${off?` · ${off} hidden`:""}</small></summary>
+        <div class="ck-list">${its.map(it=>`<div class="ck-row${it.hidden?" off":""}">
+          <div class="ck-label">${esc(it.label)}${it.custom?` <span class="tag">Added</span>`:""}${measLabel(it)?`<small>${esc(measLabel(it))}</small>`:""}</div>
+          ${it.custom?`<button class="mini del" type="button" data-ckrm="${it.id}">Remove</button>`
+            :`<button class="mini ck-tog" type="button" data-ckhide="${it.id}" aria-pressed="${!it.hidden}">${it.hidden?"Hidden":"Shown"}</button>`}
+        </div>`).join("")}</div>
+        <div class="form ck-addwrap">${addItemForm(sec.id,"ck")}</div>
+      </details>`;}).join("")}
+    ${nHidden?`<div class="formacts"><button class="btn" type="button" data-act="ckshowall">Show all built-in items</button></div>`:""}
+  </div>`;
+}
+function addCustomItem(sec,pfx){
+  const g=k=>document.getElementById(`${pfx}-${k}-${sec}`);
+  const label=(g("n").value||"").trim();
+  if(!label){toast("Give the new item a name");g("n").focus();return false;}
+  const st=APP.settings;st.custom=st.custom||[];
+  st.custom.push({id:"c_"+uid(),sec,label,hint:(g("h").value||"").trim(),meas:g("m").value,unit:(g("u").value||"").trim()});
+  rebuildChecklist(st);save();return label;
 }
 function backupText(){
   const copy=JSON.parse(JSON.stringify(APP));
@@ -714,7 +797,8 @@ function renderIntake(){
 function renderSection(sec,idx){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Stage ${idx} of ${SECTIONS.length}</div><h2>${esc(sec.title)}</h2><p class="when">${sec.when}</p></div>
-  <div class="items">${sec.items.map(renderItem).join("")}</div>`;
+  <div class="items">${secItems(sec).map(renderItem).join("")||`<div class="emptybox">Every item in this section is hidden. Turn items back on in Settings → Checklist.</div>`}</div>
+  <div class="ck-stage">${OPEN_ADD===sec.id?`<div class="form" style="margin:0">${addItemForm(sec.id,"sk")}</div>`:`<button class="mini" type="button" data-openadd="${sec.id}">＋ Add an item to this section</button>`}</div>`;
 }
 function renderItem(it){
   const r=res(it.id);
@@ -745,9 +829,9 @@ function renderReport(){
   const st=stats(), i=S.info, v=S.verdict||suggestVerdict(st);
   const line=(it)=>{const r=S.results[it.id];const extra=[measText(it,r),r.note].filter(Boolean).join(" — ");
     return `<li><span class="pill p-${r.r}">${RLABEL[r.r]}</span><span class="txt">${esc(it.label)}${extra?`<small>${esc(extra)}</small>`:""}<small>${esc(it.sec.title)}</small></span></li>`;};
-  const bad=ALL_ITEMS.filter(it=>S.results[it.id]?.r==="bad");
-  const mon=ALL_ITEMS.filter(it=>S.results[it.id]?.r==="mon");
-  const photos=ALL_ITEMS.flatMap(it=>(S.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
+  const bad=jobItems().filter(it=>S.results[it.id]?.r==="bad");
+  const mon=jobItems().filter(it=>S.results[it.id]?.r==="mon");
+  const photos=jobItems().flatMap(it=>(S.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Report</div><h2>Inspection Report</h2><p class="when">Review with the buyer, then copy the text into a text message or email.</p></div>
   <div class="report">
@@ -792,11 +876,11 @@ function reportText(){
   L.push(`VERDICT: ${VERDICTS.find(x=>x[0]===v)[1].toUpperCase()}`);
   L.push(`Good ${st.good} · Monitor ${st.mon} · Repair ${st.bad} · Not checked ${st.open}`);
   if(i.summary){L.push("");L.push(i.summary);}
-  const grp=(r,title)=>{const its=ALL_ITEMS.filter(it=>S.results[it.id]?.r===r);if(!its.length)return;L.push("");L.push(title);
+  const grp=(r,title)=>{const its=jobItems().filter(it=>S.results[it.id]?.r===r);if(!its.length)return;L.push("");L.push(title);
     its.forEach(it=>{const x=S.results[it.id];const extra=[measText(it,x),x.note].filter(Boolean).join(" — ");L.push(`- ${it.label}${extra?": "+extra:""}`)});};
   grp("bad","NEEDS REPAIR");grp("mon","MONITOR");
   L.push("");L.push("FULL CHECKLIST");
-  SECTIONS.forEach(sec=>{L.push(`[${sec.title}]`);sec.items.forEach(it=>{const x=S.results[it.id];const m=measText(it,x);L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${m?` (${m})`:""}`)})});
+  SECTIONS.forEach(sec=>{const si=secItems(sec);if(!si.length)return;L.push(`[${sec.title}]`);si.forEach(it=>{const x=S.results[it.id];const m=measText(it,x);L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${m?` (${m})`:""}`)})});
   L.push("");L.push("Prepared with Honestech PPI");
   return L.join("\n");
 }
@@ -982,7 +1066,7 @@ function buildReportPdf(job){
     P.text(P.wrap("Tread: 2/32 or less needs replacement, 3–4/32 monitor. Pads: 3 mm or less needs replacement, 4–5 mm monitor.",PW-PM-(PM+385)),PM+385,y0+20);
     P.y=y0+h+6;
   }
-  const bad=ALL_ITEMS.filter(it=>job.results[it.id]?.r==="bad"),mon=ALL_ITEMS.filter(it=>job.results[it.id]?.r==="mon");
+  const bad=jobItems(job).filter(it=>job.results[it.id]?.r==="bad"),mon=jobItems(job).filter(it=>job.results[it.id]?.r==="mon");
   pdfHeading(P,"Needs repair",bad.length+" item"+(bad.length===1?"":"s"));
   if(bad.length)bad.forEach(it=>pdfItemRow(P,it,job.results[it.id],true));else{P.font(9,"normal",PC.muted);P.text("Nothing flagged for repair.",PM,P.y);P.y+=16;}
   pdfHeading(P,"Monitor",mon.length+" item"+(mon.length===1?"":"s"));
@@ -991,14 +1075,15 @@ function buildReportPdf(job){
   doc.addPage();P.y=PM;
   P.font(14,"bold");P.text("Full inspection checklist",PM,P.y+4);P.font(9,"normal",PC.muted);P.text(vehOf(i)+(i.vin?"  ·  VIN "+i.vin:""),PW-PM,P.y+4,{align:"right"});P.y+=22;
   SECTIONS.forEach((sec,k)=>{
+    const si=secItems(sec,job);if(!si.length)return;
     P.need(50);
     doc.setFillColor(...PC.paper);doc.rect(PM,P.y-11,PW-2*PM,17,"F");
     P.font(9,"bold");P.text(`${k+1}. ${sec.title}`,PM+6,P.y+1);P.y+=18;
-    sec.items.forEach(it=>pdfItemRow(P,{...it,sec},job.results[it.id],false));
+    si.forEach(it=>pdfItemRow(P,it,job.results[it.id],false));
     P.y+=4;
   });
   // photos
-  const photos=ALL_ITEMS.flatMap(it=>(job.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
+  const photos=jobItems(job).flatMap(it=>(job.results[it.id]?.photos||[]).map(p=>({p,l:it.label})));
   if(photos.length){
     doc.addPage();P.y=PM;P.font(14,"bold");P.text("Photos",PM,P.y+4);P.y+=20;
     const cw=(PW-2*PM-20)/3;let col=0,rowH=0;
@@ -1115,7 +1200,13 @@ document.addEventListener("click",e=>{
   if(d.del){APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
   if(d.act==="cancelAdd"){APP.adding=false;APP.editing=null;render();return;}
-  if(d.act==="fresh"){APP=blankApp();save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
+  if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
+  if(d.ckadd){const lbl=addCustomItem(d.ckadd,d.pfx);if(lbl){OPEN_CK.add(d.ckadd);if(d.pfx==="sk")OPEN_ADD=null;render();toast(`Added "${lbl}"`);}return;}
+  if(d.ckhide){const st=APP.settings;const h=new Set(st.hidden||[]);h.has(d.ckhide)?h.delete(d.ckhide):h.add(d.ckhide);st.hidden=[...h];rebuildChecklist(st);save();render();return;}
+  if(d.ckrm){const c=(APP.settings.custom||[]).find(x=>x.id===d.ckrm);if(c){c.removed=true;rebuildChecklist(APP.settings);save();render();toast(`Removed "${c.label}"`);}return;}
+  if(d.act==="ckshowall"){APP.settings.hidden=[];rebuildChecklist(APP.settings);save();render();toast("All built-in items shown");return;}
+  if(d.openadd){OPEN_ADD=d.openadd;render();setTimeout(()=>document.getElementById(`sk-n-${d.openadd}`)?.focus(),30);return;}
+  if(d.closeadd){OPEN_ADD=null;render();return;}
   if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
   if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
   if(d.act==="pickRestore"){$("#restoreFile").click();return;}
@@ -1130,7 +1221,7 @@ document.addEventListener("click",e=>{
     $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
   if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
   if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;
-    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
+    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
   if(d.go!==undefined)return go(+d.go);
   if(d.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===d.rate?"":d.rate;r.auto=false;
     if(r.r==="bad"&&!r.note)r.open=true;
@@ -1155,6 +1246,7 @@ $("#nextBtn").addEventListener("click",()=>{
   if(STAGES[S.step].id==="invoice"){S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);
 });
+document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ck){el.open?OPEN_CK.add(el.dataset.ck):OPEN_CK.delete(el.dataset.ck);}},true);
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();});
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;

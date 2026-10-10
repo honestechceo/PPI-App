@@ -340,6 +340,34 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .payk{min-width:76px;font-weight:700;font-size:13px}
 .payrow a{color:var(--accent);font-weight:600;overflow-wrap:anywhere}
 .paynote{color:var(--muted);font-size:13px;white-space:pre-line}
+.sched-seg{margin:0 0 12px}
+.cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.cal-nav strong{font-family:var(--f-display);font-size:20px}
+.cal-nav .mini{min-width:44px;font-size:20px;justify-content:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-head span{text-align:center;font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;padding:2px 0}
+.cal-blank{aspect-ratio:1/1}
+.cal-day{position:relative;aspect-ratio:1/1;max-width:100%;border:1px solid transparent;border-radius:10px;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0;color:var(--ink)}
+.cal-day.past{opacity:.6}
+.cal-day.today{border-color:var(--accent)}
+.cal-day.today .cd-n{color:var(--accent);font-weight:800}
+.cal-day.sel{background:var(--accent);border-color:var(--accent);opacity:1}
+.cal-day.sel .cd-n{color:var(--accent-ink)}
+.cd-n{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+.cd-dots{display:flex;gap:3px;height:6px}
+.cd-dots i,.cal-legend i{display:inline-block;width:6px;height:6px;border-radius:50%}
+.dot-b{background:var(--accent)}
+.dot-d{background:var(--good)}
+.dot-f{background:var(--mon)}
+.cal-day.sel .cd-dots i{box-shadow:0 0 0 1.5px var(--accent-ink)}
+.cd-c{position:absolute;top:3px;right:5px;font-size:10px;font-weight:700;color:var(--muted)}
+.cal-day.sel .cd-c{color:var(--accent-ink)}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-top:10px;font-size:12px;color:var(--muted)}
+.cal-legend span{display:inline-flex;align-items:center;gap:5px}
+.cal-sum{margin-left:auto}
+.cal-dayhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 10px;flex-wrap:wrap}
+.cal-dayhead strong{font-family:var(--f-display);font-size:20px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -857,6 +885,33 @@ function sampleBanner(){
 }
 
 /* ================= schedule ================= */
+function renderMonthCal(){
+  const ym=APP.calMonth||TODAY.slice(0,7),[y,m]=ym.split("-").map(Number);
+  const first=new Date(y,m-1,1,12),offset=first.getDay(),nDays=new Date(y,m,0).getDate();
+  const sel=APP.calDay||TODAY;
+  const byDay={};APP.jobs.forEach(j=>{const d=j.info.date;if(!d)return;(byDay[d]=byDay[d]||{b:0,d:0,f:0});j.status==="done"?byDay[d].d++:byDay[d].b++;});
+  APP.jobs.filter(fuOpen).forEach(j=>{const d=j.followup.date;(byDay[d]=byDay[d]||{b:0,d:0,f:0});byDay[d].f++;});
+  let cells="";for(let k=0;k<offset;k++)cells+=`<span class="cal-blank"></span>`;
+  for(let d=1;d<=nDays;d++){const iso=`${ym}-${String(d).padStart(2,"0")}`,c=byDay[iso],past=iso<TODAY;
+    cells+=`<button type="button" class="cal-day${iso===TODAY?" today":""}${iso===sel?" sel":""}${past?" past":""}" data-calday="${iso}" aria-pressed="${iso===sel}" aria-label="${esc(fmtDate(iso,{weekday:"long",month:"long",day:"numeric"}))}${c?`, ${c.b+c.d} job${c.b+c.d===1?"":"s"}`:""}">
+      <span class="cd-n">${d}</span><span class="cd-dots">${c&&c.b?`<i class="dot-b"></i>`:""}${c&&c.d?`<i class="dot-d"></i>`:""}${c&&c.f?`<i class="dot-f"></i>`:""}</span>${c&&(c.b+c.d)>1?`<span class="cd-c">${c.b+c.d}</span>`:""}</button>`;}
+  const dayJobs=APP.jobs.filter(j=>j.info.date===sel).sort((a,b)=>(a.info.time||"99")<(b.info.time||"99")?-1:1);
+  const dayFu=APP.jobs.filter(j=>fuOpen(j)&&j.followup.date===sel);
+  const monthJobs=APP.jobs.filter(j=>(j.info.date||"").slice(0,7)===ym);
+  return `<div class="cal">
+    <div class="cal-nav"><button type="button" class="mini" data-calnav="-1" aria-label="Previous month">‹</button>
+      <strong>${esc(first.toLocaleDateString(undefined,{month:"long",year:"numeric"}))}</strong>
+      <button type="button" class="mini" data-calnav="1" aria-label="Next month">›</button></div>
+    <div class="cal-grid cal-head">${["S","M","T","W","T","F","S"].map(x=>`<span>${x}</span>`).join("")}</div>
+    <div class="cal-grid">${cells}</div>
+    <div class="cal-legend"><span><i class="dot-b"></i>Booked</span><span><i class="dot-d"></i>Done</span><span><i class="dot-f"></i>Reminder</span>
+      <span class="cal-sum">${monthJobs.length} job${monthJobs.length===1?"":"s"} this month</span>${ym!==TODAY.slice(0,7)||sel!==TODAY?`<button type="button" class="mini" data-caltoday="1">Today</button>`:""}</div>
+  </div>
+  <div class="cal-dayhead"><div><div class="group-h" style="margin:0">${esc(sel===TODAY?"Today":fmtDate(sel,{weekday:"long"}))}</div><strong>${esc(fmtDate(sel,{month:"long",day:"numeric",year:"numeric"}))}</strong></div>
+    <button class="btn primary" type="button" data-bookday="${sel}">+ Book this day</button></div>
+  ${dayJobs.length?`<div class="jobs">${dayJobs.map(jobCard).join("")}</div>`:`<div class="emptybox">${sel<TODAY?"No jobs on this day.":"Nothing booked yet. This day is open."}</div>`}
+  ${dayFu.length?`<div class="group-h">Service reminders due</div><div class="jobs">${dayFu.map(j=>`<div class="job fu"><div class="when-col"><div class="t" style="font-size:16px">Due</div></div><div class="who">${esc(j.info.customer||"Customer")} <span class="st st-active">${esc(j.followup.what||"Service")}</span></div><div class="meta">${esc(vehOf(j.info))}</div><div class="acts"><button class="mini go" type="button" data-fubook="${j.id}">Book it</button></div></div>`).join("")}</div>`:""}`;
+}
 function renderJobs(){
   const days=[...Array(14)].map((_,k)=>addDays(TODAY,k));
   const counts={};APP.jobs.forEach(j=>{counts[j.info.date]=(counts[j.info.date]||0)+1});
@@ -873,11 +928,12 @@ function renderJobs(){
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p></div>
   ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
-  ${renderFollowups()}
+  <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
+  ${APP.schedMode==="month"?renderMonthCal():`${renderFollowups()}
   ${strip}
   ${upcoming.length?Object.entries(groups).map(([k,js])=>`<div class="group-h">${esc(k)}</div><div class="jobs">${js.map(jobCard).join("")}</div>`).join("")
     :`<div class="emptybox">${APP.day?"Nothing booked this day.":"No upcoming jobs."} Tap <strong>+ Book a job</strong> to add one.</div>`}
-  ${done.length?`<div class="group-h">Completed</div><div class="jobs">${done.map(jobCard).join("")}</div>`:""}
+  ${done.length?`<div class="group-h">Completed</div><div class="jobs">${done.map(jobCard).join("")}</div>`:""}`}
   <textarea class="copybox" id="jobCopy" hidden readonly></textarea>`;
 }
 function jobCard(j){
@@ -1856,7 +1912,7 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){
@@ -1931,6 +1987,11 @@ document.addEventListener("click",e=>{
   if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
   if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
   if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}
+  if(d.schedmode){APP.schedMode=d.schedmode;if(d.schedmode==="month"){APP.day="";}save();render();return;}
+  if(d.calnav){const [y,m]=(APP.calMonth||TODAY.slice(0,7)).split("-").map(Number);const dt=new Date(y,m-1+ +d.calnav,1,12);APP.calMonth=isoDay(dt).slice(0,7);render();return;}
+  if(d.caltoday){APP.calMonth=TODAY.slice(0,7);APP.calDay=TODAY;render();return;}
+  if(d.calday){APP.calDay=d.calday;const y=window.scrollY;render();window.scrollTo(0,y);return;}
+  if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.dashp){APP.dashP=d.dashp;render();return;}
   if(d.act==="dashbook"){APP.view="jobs";render();startAdd();return;}
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}

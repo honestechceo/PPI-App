@@ -303,6 +303,9 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .snaps{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .snap-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:500}
 .snap-row:last-child{border-bottom:0}
+.ln-flat{display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:8px}
+.ln-flat span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:5px 10px;align-self:flex-start}
+.ln-top select{max-width:46%}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -471,8 +474,8 @@ const uid=()=>Math.random().toString(36).slice(2,9);
 /* ================= state ================= */
 function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001};}
 const isSvc=j=>!!j&&j.type==="service";
-const LINE_KINDS=[["labor","Labor"],["part","Part"],["fee","Fee"]];
-const RK={labor:"Labor",part:"Part",fee:"Fee"};
+const LINE_KINDS=[["labor","Labor (hourly)"],["flat","Flat fee"],["part","Part"],["fee","Fee"]];
+const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
 const lineAmt=x=>Math.round(num(x.q===""||x.q==null?1:x.q)*num(x.p)*100)/100;
 function newJob(info={},type="ppi"){
   return {id:uid(),type,status:"sched",step:0,verdict:"",results:{},
@@ -690,7 +693,7 @@ function totals(job){
   const inv=job.invoice, st=APP.settings;
   if(isSvc(job)){
     const ls=inv.lines||[],sum=k=>ls.filter(x=>x.k===k).reduce((a,x)=>a+lineAmt(x),0);
-    const labor=sum("labor"),parts=sum("part"),fees=sum("fee"),tr=travelCalc(job);
+    const labor=sum("labor")+sum("flat"),parts=sum("part"),fees=sum("fee"),tr=travelCalc(job);
     const sub=labor+parts+fees+tr.fee;
     const taxOn=inv.tax==null?!!st.taxOn:inv.tax;
     const tax=taxOn?Math.round(sub*num(st.taxRate))/100:0;
@@ -1349,7 +1352,7 @@ function renderService(){
   <div class="report">
     ${bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
-    <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
+    <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor (hourly)</button><button class="mini" type="button" data-addline="flat">＋ Flat fee</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
     <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span></div>
       <label class="ln-amt">Amount<input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}"></label></div>
     <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
@@ -1364,13 +1367,13 @@ function renderService(){
   </div>`;
 }
 function lineRow(x,k){
-  const lab=x.k==="labor";
-  return `<div class="ln" data-ln="${k}">
+  const lab=x.k==="labor",flat=x.k==="flat";
+  return `<div class="ln${flat?" flat":""}" data-ln="${k}">
     <div class="ln-top"><select id="ln-k-${k}" data-lnk="${k}" aria-label="Line type">${LINE_KINDS.map(([v,l])=>`<option value="${v}" ${x.k===v?"selected":""}>${l}</option>`).join("")}</select>
-      <input id="ln-d-${k}" data-lnd="${k}" value="${esc(x.d)}" placeholder="${lab?"Labor description":x.k==="part"?"Part name or number":"Fee description"}" aria-label="Description">
+      <input id="ln-d-${k}" data-lnd="${k}" value="${esc(x.d)}" placeholder="${lab?"Labor description":flat?"Job, e.g. Front brakes – pads & rotors":x.k==="part"?"Part name or number":"Fee description"}" aria-label="Description">
       <button class="xbtn" type="button" data-delline="${k}" aria-label="Remove line">×</button></div>
-    <div class="ln-nums"><label>${lab?"Hours":"Qty"}<input id="ln-q-${k}" data-lnq="${k}" inputmode="decimal" value="${esc(x.q)}" placeholder="1"></label>
-      <label>${lab?"Rate":"Price"}<input id="ln-p-${k}" data-lnp="${k}" inputmode="decimal" value="${esc(x.p)}" placeholder="0.00"></label>
+    <div class="ln-nums">${flat?`<div class="ln-flat"><span>Flat fee</span></div>`:`<label>${lab?"Hours":"Qty"}<input id="ln-q-${k}" data-lnq="${k}" inputmode="decimal" value="${esc(x.q)}" placeholder="1"></label>`}
+      <label>${lab?"Rate":flat?"Fee":"Price"}<input id="ln-p-${k}" data-lnp="${k}" inputmode="decimal" value="${esc(x.p)}" placeholder="0.00"></label>
       <div class="ln-total"><span>Amount</span><strong id="ln-a-${k}">${money(lineAmt(x))}</strong></div></div>
   </div>`;
 }
@@ -1430,7 +1433,7 @@ function invoiceText(){
   if(t.svc){
     if(i.miles)L.splice(L.length-1,0,`Mileage: ${num(i.miles).toLocaleString()}`);
     if(i.performed){L.push("WORK PERFORMED");L.push(i.performed);L.push("");}
-    (inv.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q);row(`${x.d||RK[x.k]}${q!==1||x.k==="labor"?` (${q}${x.k==="labor"?" hr":""} × ${money(num(x.p))})`:""}`,lineAmt(x));});
+    (inv.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q);row(x.k==="flat"?`${x.d||"Labor"} (flat fee)`:`${x.d||RK[x.k]}${q!==1||x.k==="labor"?` (${q}${x.k==="labor"?" hr":""} × ${money(num(x.p))})`:""}`,lineAmt(x));});
   }else row("Pre-purchase inspection",t.fee);
   if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
   if(!t.svc)inv.items.filter(x=>x.d||num(x.a)).forEach(x=>row(x.d||"Item",num(x.a)));
@@ -1628,8 +1631,8 @@ function buildInvoicePdf(job){
     (inv.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{
       const q=num(x.q===""||x.q==null?1:x.q),dl=P.wrap(x.d||RK[x.k],PW-2*PM-230);P.need(dl.length*12+30);
       P.font(10,"bold");P.text(dl,PM+8,P.y);
-      P.font(10);P.text(`${q}${x.k==="labor"?" hr":""}`,PW-PM-190,P.y,{align:"right"});P.text(money(num(x.p)),PW-PM-100,P.y,{align:"right"});P.text(money(lineAmt(x)),PW-PM-8,P.y,{align:"right"});
-      P.font(7.5,"bold",PC.muted);P.text(RK[x.k].toUpperCase(),PM+8,P.y+12+(dl.length-1)*12);
+      P.font(10);if(x.k==="flat"){P.text("Flat",PW-PM-190,P.y,{align:"right"});}else{P.text(`${q}${x.k==="labor"?" hr":""}`,PW-PM-190,P.y,{align:"right"});P.text(money(num(x.p)),PW-PM-100,P.y,{align:"right"});}P.text(money(lineAmt(x)),PW-PM-8,P.y,{align:"right"});
+      P.font(7.5,"bold",PC.muted);P.text(x.k==="flat"?"FLAT FEE":RK[x.k].toUpperCase(),PM+8,P.y+12+(dl.length-1)*12);
       P.y+=20+(dl.length-1)*12;P.rule(P.y);P.y+=18;});
   }else line("Pre-purchase inspection",vehOf(i),t.fee);
   if(t.travel.fee)line("Travel",i.dist?`${i.dist} mi one way${t.travel.auto?` · first ${s.freeMiles} mi free, then ${money(s.perMile)}/mi`:""}`:"",t.travel.fee);
@@ -1886,7 +1889,7 @@ document.addEventListener("change",e=>{
       Object.assign(APP.settings,r);save();render();toast("Logo saved");});return;}
   if(d.bkphotos){APP.bkPhotos=t.checked;save();return;}
   if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
-  if(d.lnk!==undefined){const k=+d.lnk,x=S.invoice.lines[k];x.k=t.value;if(x.k==="labor"&&!x.p&&APP.settings.laborRate)x.p=APP.settings.laborRate;save();render();refreshTotals();return;}
+  if(d.lnk!==undefined){const k=+d.lnk,x=S.invoice.lines[k];x.k=t.value;if(x.k==="flat")x.q="1";if(x.k==="labor"&&!x.p&&APP.settings.laborRate)x.p=APP.settings.laborRate;save();render();refreshTotals();return;}
   if(d.set&&APP.view==="settings"){render();return;}
   if(d.media){const files=[...t.files];t.value="";if(!files.length)return;const job=S;
     addMediaFiles(job,files,d.media).then(({n,fail})=>{if(S===job){const y=window.scrollY;render();window.scrollTo(0,y);}

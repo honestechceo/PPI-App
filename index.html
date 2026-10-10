@@ -244,6 +244,11 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 .travel-ln .ln-top{flex-direction:column;align-items:flex-start;gap:4px}
 .travel-ln input.dist{width:64px;display:inline-block;padding:4px 6px}
 .ln-amt{width:120px}
+.no-cal .cal-only{display:none!important}
+a.mini{text-decoration:none;color:inherit}
+a.mini.go{color:var(--accent-ink)}
+.job.fu{border-left:4px solid var(--mon)}
+.job.fu.od{border-left-color:var(--bad)}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -410,7 +415,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",part:"Part",fee:"Fee"};
@@ -601,6 +606,7 @@ function renderJobs(){
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p></div>
   ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span><button class="mini" type="button" data-act="gobackup">Back up now</button></div>`:""}
   ${APP.adding?renderJobForm():""}
+  ${renderFollowups()}
   ${strip}
   ${upcoming.length?Object.entries(groups).map(([k,js])=>`<div class="group-h">${esc(k)}</div><div class="jobs">${js.map(jobCard).join("")}</div>`).join("")
     :`<div class="emptybox">${APP.day?"Nothing booked this day.":"No upcoming jobs."} Tap <strong>+ Book a job</strong> to add one.</div>`}
@@ -621,6 +627,7 @@ function jobCard(j){
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
       <button class="mini" type="button" data-edit="${j.id}">Edit</button>
       <button class="mini del" type="button" data-askdel="${j.id}">Delete</button>`}
     </div></div>`;
@@ -689,6 +696,12 @@ function renderSettings(){
     ${f("next","Next invoice number",'inputmode="numeric"')}
     <label class="full">How customers pay you<textarea id="s-pay" data-set="pay" rows="3" placeholder="Zelle: your phone or email&#10;Cash App: $yourtag&#10;Card payment link">${esc(s.pay)}</textarea></label>
     ${f("terms","Payment terms","","full")}
+  </div>
+  <div class="form">
+    <p class="formh">Reminders</p>
+    <label>Job alert in Calendar<select id="s-jobAlert" data-set="jobAlert">${[["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]].map(([v,l])=>`<option value="${v}" ${String(s.jobAlert||"60")===v?"selected":""}>${l}</option>`).join("")}</select></label>
+    <label>Default next service<select id="s-fuMonths" data-set="fuMonths">${["3","6","12"].map(v=>`<option value="${v}" ${String(s.fuMonths||"3")===v?"selected":""}>${v} months</option>`).join("")}</select></label>
+    <p class="help full" style="margin:0">Calendar alerts come from your iPhone's Calendar app. Tap <strong>Add to Calendar</strong> on a booked job, or on a service reminder. This works in the home-screen app (Safari), not inside Claude.</p>
   </div>
   ${renderChecklistSettings()}
   <div class="form" id="backup">
@@ -930,6 +943,83 @@ function reportText(){
   return L.join("\n");
 }
 
+/* ================= reminders ================= */
+const CAN_CAL=!IN_CLAUDE;   // calendar files work in Safari / the home-screen app, not inside the Claude app
+const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function icsEsc(t){return String(t||"").replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/([,;])/g,"\\$1");}
+function icsStamp(d=new Date()){return d.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");}
+function buildIcs({uid,date,time,mins=60,title,location,desc,alarmMin}){
+  const D=date.replace(/-/g,"");const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Honestech PPI//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VEVENT",
+    `UID:${uid}@honestech-ppi`,`DTSTAMP:${icsStamp()}`];
+  if(time){const [h,m]=time.split(":").map(Number);const st=new Date(`${date}T${time}:00`);const en=new Date(st.getTime()+mins*60000);
+    const f=d=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}00`;
+    L.push(`DTSTART:${f(st)}`,`DTEND:${f(en)}`);}
+  else{L.push(`DTSTART;VALUE=DATE:${D}`,`DTEND;VALUE=DATE:${addDays(date,1).replace(/-/g,"")}`);}
+  L.push(`SUMMARY:${icsEsc(title)}`);if(location)L.push(`LOCATION:${icsEsc(location)}`);if(desc)L.push(`DESCRIPTION:${icsEsc(desc)}`);
+  if(alarmMin!=null){L.push("BEGIN:VALARM","ACTION:DISPLAY",`DESCRIPTION:${icsEsc(title)}`,`TRIGGER:${alarmMin>=0?"-":""}PT${Math.abs(alarmMin)}M`,"END:VALARM");}
+  L.push("END:VEVENT","END:VCALENDAR");
+  return L.join("\r\n")+"\r\n";
+}
+function openIcs(filename,text){
+  if(!CAN_CAL){toast("Calendar reminders work in the home-screen app, not inside Claude.");return;}
+  const blob=new Blob([text],{type:"text/calendar;charset=utf-8"});
+  const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;
+  if(!IS_IOS)a.download=filename;
+  a.rel="noopener";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+  toast(IS_IOS?"Tap Add to Calendar":"Calendar file ready. Open it to add the event.");
+}
+function jobIcs(j){
+  const i=j.info,svc=isSvc(j),am=num(APP.settings.jobAlert||60);
+  const title=`${svc?(i.work||"Service"):"PPI"} · ${i.customer||"Customer"}${vehOf(i)?" · "+vehOf(i):""}`;
+  const desc=[i.phone&&"Phone: "+i.phone,vehOf(i)&&"Vehicle: "+vehOf(i),svc&&i.work&&"Work: "+i.work,i.notes&&"Notes: "+i.notes].filter(Boolean).join("\n");
+  return buildIcs({uid:"job-"+j.id,date:i.date||TODAY,time:i.time,mins:svc?120:90,title,location:i.location,desc,alarmMin:i.time?am:-(9*60)});
+}
+function fuIcs(j){
+  const f=j.followup,i=j.info;
+  const title=`Remind ${i.customer||"customer"}: ${f.what||"service"} due`;
+  const desc=[vehOf(i)&&"Vehicle: "+vehOf(i),f.miles&&"Due at: "+num(f.miles).toLocaleString()+" mi",i.phone&&"Phone: "+i.phone].filter(Boolean).join("\n");
+  return buildIcs({uid:"fu-"+j.id,date:f.date,title,desc,alarmMin:-(9*60)});
+}
+const fuOpen=j=>j.followup&&j.followup.date&&j.followup.status!=="done";
+function dueLabel(date){const n=Math.round((new Date(date+"T12:00:00")-new Date(TODAY+"T12:00:00"))/864e5);
+  return n<0?`${-n} day${n===-1?"":"s"} overdue`:n===0?"due today":`due in ${n} day${n===1?"":"s"}`;}
+function fuText(j){
+  const i=j.info,f=j.followup,st=APP.settings,first=(i.customer||"").split(" ")[0];
+  const due=[f.date&&"around "+fmtDate(f.date,{month:"short",day:"numeric"}),f.miles&&num(f.miles).toLocaleString()+" mi"].filter(Boolean).join(" or ");
+  return `Hi${first?" "+first:""}, this is ${st.owner?st.owner+" from ":""}${bizName()}. Your ${vehOf(i)||"vehicle"} is due for ${(f.what||"service").toLowerCase()}${due?" ("+due+")":""}. Want me to book a time? Just reply here${st.phone?" or call "+st.phone:""}.`;
+}
+function smsHref(phone,body){const n=String(phone||"").replace(/[^0-9+]/g,"");return `sms:${n}${IS_IOS?"&":"?"}body=${encodeURIComponent(body)}`;}
+function nextServiceLine(j){const f=j.followup;if(!f||!f.date)return "";
+  const due=[fmtDate(f.date,{month:"short",day:"numeric",year:"numeric"}),f.miles&&num(f.miles).toLocaleString()+" mi"].filter(Boolean).join(" or ");
+  return `${f.what||"Next service"} due ${due}${f.miles?", whichever comes first":""}.`;}
+function renderFollowups(){
+  const all=APP.jobs.filter(fuOpen).sort((a,b)=>a.followup.date<b.followup.date?-1:1);
+  if(!all.length)return "";
+  const soon=all.filter(j=>j.followup.date<=addDays(TODAY,30)),list=APP.showAllFu?all:soon,later=all.length-soon.length;
+  if(!list.length&&!later)return "";
+  return `<div class="group-h">Service reminders</div><div class="jobs">${list.map(j=>{const i=j.info,f=j.followup,od=f.date<TODAY;
+    return `<div class="job fu${od?" od":""}"><div class="when-col"><div class="t" style="font-size:18px">${esc(fmtDate(f.date,{month:"short",day:"numeric"}))}</div><div class="d">${esc(dueLabel(f.date))}</div></div>
+      <div class="who">${esc(i.customer||"Customer")} <span class="st ${od?"st-unpaid":"st-active"}">${esc(f.what||"Service")}</span></div>
+      <div class="meta">${esc(vehOf(i)||"Vehicle")}${f.miles?` · at ${esc(num(f.miles).toLocaleString())} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}</div>
+      <div class="acts">${i.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(i.phone,fuText(j)))}">Text reminder</a>`:`<button class="mini go" type="button" data-futext="${j.id}">Copy reminder text</button>`}
+        <button class="mini" type="button" data-fubook="${j.id}">Book it</button>
+        <button class="mini" type="button" data-fudone="${j.id}">Done</button></div></div>`;}).join("")}</div>
+    ${later&&!APP.showAllFu?`<button class="mini" type="button" data-act="fuall" style="margin-top:8px">Show ${later} later reminder${later===1?"":"s"}</button>`:""}${APP.showAllFu&&later?`<button class="mini" type="button" data-act="fuall" style="margin-top:8px">Show only the next 30 days</button>`:""}`;
+}
+function renderFollowupForm(){
+  const f=S.followup||{},m=num(APP.settings.fuMonths||3);
+  const chip=n=>`<button type="button" class="mini" data-fumonths="${n}">${n} mo</button>`;
+  return `<div class="form" id="fuForm">
+    <p class="formh">Next service reminder</p>
+    <p class="help full" style="margin:0">Set when this customer is due again. It shows on the invoice and in Service reminders on your schedule.</p>
+    <label class="full">Service due<input id="fu-what" data-fu="what" value="${esc(f.what||"")}" placeholder="e.g. Oil change, brake inspection"></label>
+    <label>Due date<input id="fu-date" type="date" data-fu="date" value="${esc(f.date||"")}"></label>
+    <label>Or at mileage<input id="fu-miles" data-fu="miles" inputmode="numeric" value="${esc(f.miles||"")}" placeholder="${S.info.miles?String(num(S.info.miles)+5000):"e.g. 90000"}"></label>
+    <div class="formacts">${[3,6,12].map(chip).join("")}${f.date?`<button type="button" class="mini del" data-act="fuclear">Clear</button>`:""}</div>
+    ${f.date?`<div class="formacts"><button class="btn cal-only" type="button" data-fucal="${S.id}">Add reminder to my Calendar</button></div>`:""}
+  </div>`;
+}
+
 /* ================= service / repair job ================= */
 function renderService(){
   ensureInvoice();
@@ -959,6 +1049,7 @@ function renderService(){
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
   </div>
+  ${renderFollowupForm()}
   <div class="report">
     ${bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
@@ -1050,6 +1141,7 @@ function invoiceText(){
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row(inv.paid?"PAID":"TOTAL DUE",t.total);
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
+  if(t.svc&&nextServiceLine(S)){L.push("");L.push("NEXT SERVICE: "+nextServiceLine(S));}
   if(inv.paid)L.push(`Paid by ${inv.paidVia}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
   else{ if(st.pay){L.push("");L.push("How to pay:");L.push(st.pay);} if(st.terms)L.push(st.terms); }
   return L.join("\n");
@@ -1263,6 +1355,8 @@ function buildInvoicePdf(job){
     if(s.terms){P.font(9,"normal",PC.muted);const tl2=P.wrap(s.terms,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}
   }
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
+  if(svc&&nextServiceLine(job)){P.y+=12;P.need(46);doc.setFillColor(...PC.paper);const nl=P.wrap(nextServiceLine(job),PW-2*PM-24);doc.roundedRect(PM,P.y-4,PW-2*PM,22+nl.length*13,5,5,"F");
+    P.font(8,"bold",PC.accent);P.text("NEXT SERVICE",PM+12,P.y+9);P.font(10,"bold");P.text(nl,PM+12,P.y+23);P.y+=26+nl.length*13;}
   pdfFooters(P,"Invoice "+inv.num);
   return doc.output("blob");
   }finally{S=prev;}
@@ -1312,7 +1406,9 @@ function saveDraft(){
   const {type,...info}=d;
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
-  else APP.jobs.push(newJob(info,type));
+  else{APP.jobs.push(newJob(info,type));
+    if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
+  APP.fuFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
 
@@ -1329,7 +1425,7 @@ document.addEventListener("click",e=>{
   if(d.askdel){APP.confirmDel=d.askdel;render();return;}
   if(d.del){APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
-  if(d.act==="cancelAdd"){APP.adding=false;APP.editing=null;render();return;}
+  if(d.act==="cancelAdd"){APP.fuFrom=null;APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.ckadd){const lbl=addCustomItem(d.ckadd,d.pfx);if(lbl){OPEN_CK.add(d.ckadd);if(d.pfx==="sk")OPEN_ADD=null;render();toast(`Added "${lbl}"`);}return;}
   if(d.ckhide){const st=APP.settings;const h=new Set(st.hidden||[]);h.has(d.ckhide)?h.delete(d.ckhide):h.add(d.ckhide);st.hidden=[...h];rebuildChecklist(st);save();render();return;}
@@ -1366,6 +1462,19 @@ document.addEventListener("click",e=>{
   if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
   if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
   if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}
+  if(d.jobcal){const j=APP.jobs.find(x=>x.id===d.jobcal);openIcs(`job-${(j.info.customer||"job").replace(/[^A-Za-z0-9]+/g,"-")}.ics`,jobIcs(j));return;}
+  if(d.fucal){const j=APP.jobs.find(x=>x.id===d.fucal);openIcs(`reminder-${(j.info.customer||"customer").replace(/[^A-Za-z0-9]+/g,"-")}.ics`,fuIcs(j));return;}
+  if(d.fumonths){const f=S.followup||(S.followup={what:"",date:"",miles:"",status:"open"});
+    const base=S.info.date||TODAY,dt=new Date(base+"T12:00:00");dt.setMonth(dt.getMonth()+ +d.fumonths);f.date=isoDay(dt);f.status="open";
+    if(!f.what)f.what=/brake/i.test(S.info.work||"")?"Brake inspection":/oil/i.test(S.info.work||"")?"Oil change":"Service check";
+    save();const y=window.scrollY;render();window.scrollTo(0,y);refreshTotals();return;}
+  if(d.act==="fuclear"){S.followup=null;save();const y=window.scrollY;render();window.scrollTo(0,y);return;}
+  if(d.futext){copyText(fuText(APP.jobs.find(x=>x.id===d.futext)),"jobCopy");return;}
+  if(d.fudone){const j=APP.jobs.find(x=>x.id===d.fudone);j.followup.status="done";save();render();toast("Reminder cleared");return;}
+  if(d.fubook){const j=APP.jobs.find(x=>x.id===d.fubook),i=j.info;
+    startAdd(null);Object.assign(APP.draft,{type:"service",work:j.followup.what||"",customer:i.customer,phone:i.phone,location:i.location,dist:i.dist,year:i.year,make:i.make,model:i.model,trim:i.trim});
+    APP.fuFrom=j.id;render();window.scrollTo(0,0);return;}
+  if(d.act==="fuall"){APP.showAllFu=!APP.showAllFu;render();return;}
   if(d.jtype){APP.draft.type=d.jtype;render();return;}
   if(d.addline){const ls=S.invoice.lines||(S.invoice.lines=[]);ls.push({k:d.addline,d:"",q:d.addline==="labor"?"1":"1",p:d.addline==="labor"?(APP.settings.laborRate||""):""});save();render();
     const k=ls.length-1;document.getElementById("ln-d-"+k)?.focus();return;}
@@ -1394,6 +1503,8 @@ document.addEventListener("input",e=>{
     if(d.info==="dist")refreshTotals();
     save();return;}
   if(d.inv){S.invoice[d.inv]=t.value;save();refreshTotals();return;}
+  if(d.fu){const f=S.followup||(S.followup={what:"",date:"",miles:"",status:"open"});f[d.fu]=t.value;f.status="open";save();
+    if(d.fu==="date"){const y=window.scrollY;render();window.scrollTo(0,y);}return;}
   if(d.lnd!==undefined){S.invoice.lines[+d.lnd].d=t.value;save();return;}
   if(d.lnq!==undefined||d.lnp!==undefined){const k=+(d.lnq??d.lnp),x=S.invoice.lines[k];if(d.lnq!==undefined)x.q=t.value;else x.p=t.value;
     const a=document.getElementById("ln-a-"+k);if(a)a.textContent=money(lineAmt(x));save();refreshTotals();return;}
@@ -1451,6 +1562,7 @@ function shrink(file){
 render();
 /* Show save buttons only where this view can save files */
 document.body.classList.add("dl-checking");
+document.body.classList.toggle("no-cal",!CAN_CAL);
 (async()=>{let ok=false;try{ok=!!(await getSaver());}catch(e){}
   document.body.classList.remove("dl-checking");document.body.classList.toggle("no-dl",!ok);})();
 /* Installed web app: work offline */

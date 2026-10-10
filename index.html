@@ -277,12 +277,33 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .vbox{display:flex;flex-direction:column;gap:10px;align-items:center;max-width:100%;max-height:100%}
 .vbox img,.vbox video{max-width:100%;max-height:75vh;border-radius:8px;background:#000}
 .vcap{color:#fff;font-size:14px;text-align:center}
+.sug-wrap{position:relative;display:flex;flex-direction:column;gap:4px;min-width:0}
+.sug-wrap label{min-width:0}
+.sug{display:flex;flex-direction:column;border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.18)}
+.sug:empty{display:none}
+.sug-row{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--surface);padding:10px 12px;text-transform:none;letter-spacing:0}
+.sug-row:last-child{border-bottom:0}
+.sug-row strong{font-size:15px;color:var(--ink)}
+.sug-row span{font-size:12px;color:var(--muted)}
+.search input{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;font-size:16px;margin-bottom:12px}
+.job.cust{display:block;padding:0}
+.cust-head{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;text-align:left;background:transparent;border:0;padding:12px 14px}
+.cust-head .who{font-weight:600;font-size:16px}
+.cust-body{padding:0 14px 14px;border-top:1px solid var(--line)}
+.cust-body .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.veh-row{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-bottom:1px solid var(--line)}
+.veh-row .meta{display:block;font-size:12px}
+.veh-row .acts{margin-top:0!important}
+.hist-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 0;font-size:13px}
+.hist-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.hist-amt{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+@media (max-width:400px){.navbtn{padding:6px 7px;font-size:12px}.brand-r{gap:4px}}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
   <div class="top-inner">
     <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1>
-      <div class="brand-r"><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></div>
+      <div class="brand-r"><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></div>
     </div>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -501,8 +522,110 @@ syncActive();
 
 let saveWarned=false;
 function save(){
+  try{syncCustomers();}catch(e){console.error(e);}
   try{ localStorage.setItem(KEY,JSON.stringify(APP)); }
   catch(e){ if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
+}
+
+/* ================= customers ================= */
+/* Built automatically from jobs; kept even after a job is deleted. */
+const digits=s=>String(s||"").replace(/\D/g,"");
+const normName=s=>String(s||"").trim().toLowerCase().replace(/\s+/g," ");
+const vehKey=v=>(v.vin&&v.vin.length>=11)?"vin:"+v.vin.toUpperCase():"ymm:"+[v.year,v.make,v.model].map(x=>normName(x)).join("|");
+const vehName=v=>[v.year,v.make,v.model,v.trim].filter(Boolean).join(" ");
+function findCustomer(info){
+  const cs=APP.customers||[],ph=digits(info.phone),nm=normName(info.customer);
+  return (ph.length>=7&&cs.find(c=>!c.hidden&&digits(c.phone)===ph))||(nm&&cs.find(c=>!c.hidden&&normName(c.name)===nm))||null;
+}
+function syncCustomers(){
+  if(!APP||!APP.jobs)return;
+  const cs=APP.customers||(APP.customers=[]);
+  const byId=Object.fromEntries(cs.map(c=>[c.id,c]));
+  const jobs=[...APP.jobs].sort((a,b)=>((a.info.date||"")<(b.info.date||"")?-1:1));
+  for(const j of jobs){
+    const i=j.info;if(!normName(i.customer))continue;
+    let c=j.custId&&byId[j.custId];
+    if(!c){c=findCustomer(i);if(!c){c={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:""};cs.push(c);}byId[c.id]=c;j.custId=c.id;}
+    if(!c.last||(i.date||"")>=c.last){
+      c.name=i.customer.trim();if(i.phone)c.phone=i.phone;if(i.location)c.location=i.location;if(i.dist)c.dist=i.dist;c.last=i.date||c.last;
+    }
+    if(i.make||i.model||i.vin){
+      const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||""},k=vehKey(v);
+      let ex=c.vehicles.find(x=>x.key===k)||(v.vin&&c.vehicles.find(x=>!x.vin&&x.key===vehKey({...v,vin:""})));
+      if(ex){for(const f of ["year","make","model","trim","vin","color"])if(v[f])ex[f]=v[f];if(v.miles&&num(v.miles)>=num(ex.miles))ex.miles=v.miles;ex.key=vehKey(ex);}
+      else c.vehicles.push({...v,key:k});
+    }
+  }
+}
+const custJobs=c=>APP.jobs.filter(j=>j.custId===c.id).sort((a,b)=>((a.info.date||"")>(b.info.date||"")?-1:1));
+function custMatches(q,limit=6){
+  q=String(q||"").trim();if(q.length<2)return [];
+  const nq=normName(q),dq=digits(q),rows=[];
+  for(const c of (APP.customers||[])){
+    if(c.hidden)continue;
+    const hit=normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq));
+    if(!hit)continue;
+    if(c.vehicles.length)c.vehicles.forEach(v=>rows.push({c,v}));
+    rows.push({c,v:null});
+    if(rows.length>=limit)break;
+  }
+  return rows.slice(0,limit);
+}
+function sugHTML(target,q){
+  const rows=custMatches(q);if(!rows.length)return "";
+  return rows.map(({c,v})=>`<button type="button" class="sug-row" data-sugpick="${c.id}|${v?v.key:""}|${target}">
+    <strong>${esc(c.name)}</strong><span>${esc(v?vehName(v):(c.vehicles.length?"Another vehicle":"No vehicle saved"))}${c.phone?" · "+esc(c.phone):""}</span></button>`).join("");
+}
+function fillFromCustomer(obj,c,v,withVehicle=true){
+  Object.assign(obj,{customer:c.name,phone:c.phone||"",location:c.location||"",dist:c.dist||""});
+  if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color}:{});}
+}
+let CUST_OPEN=null,CUST_DEL=null;
+function renderCustomers(){
+  const q=APP.custQ||"";
+  return `${sampleBanner()}
+  <div class="stage-head"><div class="eyebrow">Your customers</div><h2>Customers</h2>
+  <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p></div>
+  <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
+  <div class="jobs" id="custList">${custListHTML(q)}</div>`;
+}
+function custListHTML(q){
+  const nq=normName(q),dq=digits(q);
+  const list=(APP.customers||[]).filter(c=>!c.hidden&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
+    .sort((a,b)=>((a.last||"")>(b.last||"")?-1:1));
+  if(!list.length)return `<div class="emptybox">${q?"No customers match.":"No customers yet. They're added automatically when you book a job."}</div>`;
+  return list.map(c=>{
+    const js=custJobs(c),billed=js.filter(j=>j.status==="done").reduce((a,j)=>a+jobTotal(j),0),open=CUST_OPEN===c.id;
+    return `<div class="job cust${open?" open":""}">
+      <button type="button" class="cust-head" data-copen="${c.id}" aria-expanded="${open}">
+        <span class="who">${esc(c.name)}</span>
+        <span class="meta">${esc([c.phone,c.vehicles.map(vehName).filter(Boolean).join(", ")].filter(Boolean).join(" · ")||"No details yet")}</span>
+        <span class="meta">${js.length} job${js.length===1?"":"s"}${c.last?" · last "+esc(fmtDate(c.last,{month:"short",day:"numeric",year:"numeric"})):""}${billed?" · "+money(billed)+" billed":""}</span>
+      </button>
+      ${open?custDetailHTML(c,js):""}
+    </div>`;}).join("");
+}
+function custDetailHTML(c,js){
+  const f=(k,label,extra="")=>`<label>${label}<input id="cf-${k}" data-cf="${k}" data-cid="${c.id}" value="${esc(c[k]||"")}" ${extra}></label>`;
+  return `<div class="cust-body">
+    <div class="acts">${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.location?dirLink(c.location):""}</div>
+    <div class="group-h" style="margin-top:10px">Vehicles</div>
+    ${c.vehicles.length?c.vehicles.map(v=>`<div class="veh-row"><div><strong>${esc(vehName(v)||"Vehicle")}</strong><span class="meta">${[v.vin&&"VIN "+v.vin,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")}</span></div>
+      <div class="acts"><button class="mini go" type="button" data-cbook="${c.id}|${v.key}|service">Book service</button><button class="mini" type="button" data-cbook="${c.id}|${v.key}|ppi">Book PPI</button></div></div>`).join("")
+      :`<p class="empty">No vehicles saved yet.</p>`}
+    <div class="acts" style="margin-top:6px"><button class="mini" type="button" data-cbook="${c.id}||service">Book service, other vehicle</button></div>
+    ${js.length?`<div class="group-h" style="margin-top:12px">Past jobs</div>${js.map(j=>`<button type="button" class="hist-row" data-open="${j.id}">
+      <span>${esc(fmtDate(j.info.date,{month:"short",day:"numeric",year:"numeric"}))}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span>
+      <span class="hist-what">${esc(isSvc(j)?(j.info.work||vehOf(j.info)):vehOf(j.info))}</span><span class="hist-amt">${j.status==="done"?money(jobTotal(j)):esc(j.status==="active"?"In progress":"Booked")}</span></button>`).join("")}`:""}
+    <div class="form" style="margin:12px 0 0">
+      <p class="formh">Details</p>
+      ${f("name","Name")}${f("phone","Phone",'inputmode="tel"')}
+      ${f("email","Email",'inputmode="email"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
+      <label class="full">Address<input id="cf-location" data-cf="location" data-cid="${c.id}" value="${esc(c.location||"")}"></label>
+      <label class="full">Notes<textarea id="cf-notes" data-cf="notes" data-cid="${c.id}" rows="2" placeholder="Gate code, preferred times, fleet account">${esc(c.notes||"")}</textarea></label>
+      <div class="formacts"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>
+    </div>
+  </div>`;
 }
 
 /* ================= helpers ================= */
@@ -579,8 +702,9 @@ function renderChrome(){
   $("#jobChrome").hidden=!inJob; $("#plainPad").hidden=!!inJob;
   $("#navJobs").setAttribute("aria-current",APP.view==="jobs"?"page":"false");
   $("#navSettings").setAttribute("aria-current",APP.view==="settings"?"page":"false");
+  $("#navCust").setAttribute("aria-current",APP.view==="customers"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -670,7 +794,7 @@ function renderJobForm(){
     ${svc?`<label class="full">Work requested<textarea id="d-work" data-draft="work" rows="2" placeholder="e.g. Front brake pads and rotors, grinding noise">${esc(d.work)}</textarea></label>`:""}
     ${f("date","Date",'type="date" required')}
     ${f("time","Time",'type="time"')}
-    ${f("customer","Customer name",'required')}
+    <div class="sug-wrap">${f("customer","Customer name",'required autocomplete="off"')}<div class="sug" id="sug-draft"></div></div>
     ${f("phone","Customer phone",'inputmode="tel"')}
     ${f("location",svc?"Service address":"Inspection address","","full")}
     ${f("dist","Distance (miles, one way)",'inputmode="decimal"')}
@@ -866,7 +990,7 @@ function renderIntake(){
   <div class="stage-head"><div class="eyebrow">Stage 0 · Intake</div><h2>Vehicle &amp; Customer</h2>
   <p class="when">Booking details carry over. Add the VIN and mileage at the car; the VIN check catches misread characters.</p></div>
   <div class="form">
-    ${f("customer","Customer / buyer")}
+    <div class="sug-wrap">${f("customer","Customer / buyer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     ${f("time","Time",'type="time"')}
@@ -1169,7 +1293,7 @@ function renderService(){
   <p class="when">Fill in the vehicle and the work, add labor and parts, then send the invoice.</p></div>
   <div class="form">
     <p class="formh">Customer &amp; vehicle</p>
-    ${f("customer","Customer")}
+    <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
@@ -1543,6 +1667,7 @@ function render(){
   syncActive();
   let html;
   if(APP.view==="settings")html=renderSettings();
+  else if(APP.view==="customers")html=renderCustomers();
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>preloadMedia(S),0);}
   else{const s=STAGES[S.step];
@@ -1555,16 +1680,16 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",date:b.date||APP.day||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){
   const d=APP.draft;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
-  const {type,...info}=d;
+  const {type,custId,...info}=d;
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
-  else{APP.jobs.push(newJob(info,type));
+  else{const nj=newJob(info,type);if(custId)nj.custId=custId;APP.jobs.push(nj);
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
   APP.fuFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
@@ -1574,7 +1699,7 @@ function saveDraft(){
 document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
-  if(d.nav){APP.view=d.nav;APP.adding=false;save();render();window.scrollTo(0,0);return;}
+  if(d.nav){APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
@@ -1605,7 +1730,7 @@ document.addEventListener("click",e=>{
     $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
   if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
   if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;
-    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
+    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};rebuildChecklist(APP.settings);syncCustomers();save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
   if(d.go!==undefined)return go(+d.go);
   if(d.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===d.rate?"":d.rate;r.auto=false;
     if(r.r==="bad"&&!r.note)r.open=true;
@@ -1620,6 +1745,15 @@ document.addEventListener("click",e=>{
   if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
   if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
   if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}
+  if(d.sugpick){const [cid,vk,target]=d.sugpick.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
+    if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);}
+    else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);}
+    return;}
+  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.cbook){const [cid,vk,type]=d.cbook.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
+    APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
+  if(d.cdel){if(CUST_DEL!==d.cdel){CUST_DEL=d.cdel;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+    const c=APP.customers.find(x=>x.id===d.cdel);c.hidden=true;CUST_DEL=null;CUST_OPEN=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer removed");return;}
   if(d.pick){document.getElementById(d.pick)?.click();return;}
   if(d.act==="mshare"){shareMedia();return;}
   if(d.mview){openViewer(d.mview);return;}
@@ -1654,9 +1788,14 @@ $("#nextBtn").addEventListener("click",()=>{
   go(S.step+1);
 });
 document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ck){el.open?OPEN_CK.add(el.dataset.ck):OPEN_CK.delete(el.dataset.ck);}},true);
+document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer"||e.target.id==="f-customer"))setTimeout(()=>{const a=document.activeElement;if(!a||!a.closest||!a.closest(".sug"))document.querySelectorAll(".sug").forEach(x=>x.innerHTML="");},250);});
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();});
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
+  if(d.custq){APP.custQ=t.value;const l=$("#custList");if(l)l.innerHTML=custListHTML(t.value);return;}
+  if(d.cf){const c=(APP.customers||[]).find(x=>x.id===d.cid);if(c){c[d.cf]=t.value;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}return;}
+  if(d.draft==="customer"){const b=$("#sug-draft");if(b)b.innerHTML=sugHTML("draft",t.value);}
+  if(d.info==="customer"){const b=$("#sug-info");if(b)b.innerHTML=sugHTML("info",t.value);}
   if(d.draft){APP.draft[d.draft]=t.value;
     if(d.draft==="dist"){const tr=Math.round(Math.max(0,num(t.value)-num(APP.settings.freeMiles))*num(APP.settings.perMile));const est=document.getElementById("d-est");
       if(est){if(APP.draft.type==="service")est.value=money(tr);else{est.value=money(num(APP.settings.fee)+tr);est.nextElementSibling.textContent=`${money(APP.settings.fee)} PPI${tr?` + ${money(tr)} travel`:""}`;}}}
@@ -1728,6 +1867,7 @@ function shrink(file){
     const max=900,sc=Math.min(1,max/Math.max(img.width,img.height));const c=document.createElement("canvas");c.width=Math.round(img.width*sc);c.height=Math.round(img.height*sc);
     c.getContext("2d").drawImage(img,0,0,c.width,c.height);resolve(c.toDataURL("image/jpeg",0.6));};img.onerror=()=>resolve(null);img.src=fr.result;};fr.onerror=()=>resolve(null);fr.readAsDataURL(file);});
 }
+try{syncCustomers();}catch(e){console.error(e);}
 render();
 /* Show save buttons only where this view can save files */
 document.body.classList.add("dl-checking");

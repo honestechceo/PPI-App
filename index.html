@@ -249,6 +249,10 @@ a.mini{text-decoration:none;color:inherit}
 a.mini.go{color:var(--accent-ink)}
 .job.fu{border-left:4px solid var(--mon)}
 .job.fu.od{border-left-color:var(--bad)}
+.addr-row{display:flex;gap:8px;align-items:flex-end}
+.addr-row label{flex:1;min-width:0}
+.addr-row .dir{min-height:44px;margin-bottom:1px}
+a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
@@ -415,7 +419,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",part:"Part",fee:"Fee"};
@@ -627,6 +631,7 @@ function jobCard(j){
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${j.status!=="done"&&i.location?dirLink(i.location):""}
       ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
       <button class="mini" type="button" data-edit="${j.id}">Edit</button>
       <button class="mini del" type="button" data-askdel="${j.id}">Delete</button>`}
@@ -698,8 +703,9 @@ function renderSettings(){
     ${f("terms","Payment terms","","full")}
   </div>
   <div class="form">
-    <p class="formh">Reminders</p>
+    <p class="formh">Reminders &amp; directions</p>
     <label>Job alert in Calendar<select id="s-jobAlert" data-set="jobAlert">${[["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]].map(([v,l])=>`<option value="${v}" ${String(s.jobAlert||"60")===v?"selected":""}>${l}</option>`).join("")}</select></label>
+    <label>Directions open in<select id="s-mapsApp" data-set="mapsApp">${MAPS.map(([v,l])=>`<option value="${v}" ${(s.mapsApp||"apple")===v?"selected":""}>${l}</option>`).join("")}</select></label>
     <label>Default next service<select id="s-fuMonths" data-set="fuMonths">${["3","6","12"].map(v=>`<option value="${v}" ${String(s.fuMonths||"3")===v?"selected":""}>${v} months</option>`).join("")}</select></label>
     <p class="help full" style="margin:0">Calendar alerts come from your iPhone's Calendar app. Tap <strong>Add to Calendar</strong> on a booked job, or on a service reminder. This works in the home-screen app (Safari), not inside Claude.</p>
   </div>
@@ -840,7 +846,7 @@ function renderIntake(){
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     ${f("time","Time",'type="time"')}
-    ${f("location","Inspection address","","full")}
+    <div class="full addr-row">${f("location","Inspection address")}${dirLink(i.location,"dirLink")}</div>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -943,6 +949,16 @@ function reportText(){
   return L.join("\n");
 }
 
+/* ================= directions ================= */
+const MAPS=[["apple","Apple Maps"],["google","Google Maps"],["waze","Waze"]];
+function mapsHref(addr){
+  const q=encodeURIComponent(String(addr||"").trim()),app=APP.settings.mapsApp||"apple";
+  if(app==="google")return `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`;
+  if(app==="waze")return `https://waze.com/ul?q=${q}&navigate=yes`;
+  return `https://maps.apple.com/?daddr=${q}&dirflg=d`;
+}
+const dirLink=(addr,id)=>`<a class="mini dir" ${id?`id="${id}"`:""} href="${esc(mapsHref(addr))}" target="_blank" rel="noopener" ${String(addr||"").trim()?"":"hidden"}>Directions</a>`;
+
 /* ================= reminders ================= */
 const CAN_CAL=!IN_CLAUDE;   // calendar files work in Safari / the home-screen app, not inside the Claude app
 const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
@@ -1034,7 +1050,7 @@ function renderService(){
     ${f("customer","Customer")}
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
-    ${f("location","Service address")}
+    <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -1499,6 +1515,7 @@ document.addEventListener("input",e=>{
     return;}
   if(d.set){APP.settings[d.set]=t.value;save();return;}
   if(d.info){S.info[d.info]=d.info==="vin"?t.value.toUpperCase():t.value;
+    if(d.info==="location"){const a=document.getElementById("dirLink");if(a){a.href=mapsHref(t.value);a.hidden=!t.value.trim();}}
     if(d.info==="vin"){const vc=vinCheck(t.value);const m=$("#vinMsg");m.className="vinmsg "+vc.cls;m.textContent=vc.msg;}
     if(d.info==="dist")refreshTotals();
     save();return;}

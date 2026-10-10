@@ -29,7 +29,9 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 
 header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--surface);border-bottom:1px solid var(--line)}
-.top-inner{max-width:760px;margin:0 auto;padding:10px 16px 0}
+.top-inner{max-width:760px;margin:0 auto;padding:10px 16px 0;position:relative}
+.saved{position:absolute;right:16px;bottom:3px;font-size:11px;color:var(--muted);opacity:.85;transition:color .3s}
+.saved.flash{color:var(--good)}
 .brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.02em;margin:0;text-transform:uppercase}
 .brand{align-items:center}
@@ -298,10 +300,13 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .hist-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .hist-amt{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 @media (max-width:400px){.navbtn{padding:6px 7px;font-size:12px}.brand-r{gap:4px}}
+.snaps{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.snap-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:500}
+.snap-row:last-child{border-bottom:0}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 </style>
 <header class="top">
-  <div class="top-inner">
+  <div class="top-inner"><span class="saved" id="savedLbl" aria-live="polite"></span>
     <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1>
       <div class="brand-r"><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></div>
     </div>
@@ -514,17 +519,22 @@ try{
       APP=blankApp(defaultSettings());APP.jobs=[j];APP.view="jobs"; }
   }
 }catch(e){ APP=sampleApp(); }
-APP.adding=false;
+const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
+if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 rebuildChecklist(APP.settings);
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
 syncActive();
 
 let saveWarned=false;
+let savedT=null;
+function markSaved(ok){const el=document.getElementById("savedLbl");if(!el)return;
+  if(!ok){el.textContent="Not saved: storage full";el.classList.remove("flash");return;}
+  el.textContent="✓ Saved "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});el.classList.add("flash");clearTimeout(savedT);savedT=setTimeout(()=>el.classList.remove("flash"),900);}
 function save(){
   try{syncCustomers();}catch(e){console.error(e);}
-  try{ localStorage.setItem(KEY,JSON.stringify(APP)); }
-  catch(e){ if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
+  try{ localStorage.setItem(KEY,JSON.stringify(APP)); markSaved(true); }
+  catch(e){ markSaved(false); if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
 }
 
 /* ================= customers ================= */
@@ -756,7 +766,7 @@ function renderJobs(){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p></div>
-  ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span><button class="mini" type="button" data-act="gobackup">Back up now</button></div>`:""}
+  ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   ${renderFollowups()}
   ${strip}
@@ -869,6 +879,9 @@ function renderSettings(){
     <div class="formacts"><button class="btn" type="button" data-act="pickRestore">Restore from file</button><input type="file" id="restoreFile" accept=".txt,.json,text/plain,application/json" data-restorefile="1" hidden></div>
     <label class="full">Or paste a backup<textarea id="restoreIn" rows="3" placeholder="Paste a backup here"></textarea></label>
     <div class="formacts" id="restoreActs"><button class="btn" type="button" data-act="askRestore">Restore</button></div>
+    <p class="formh" style="margin-top:8px">Automatic daily copies</p>
+    <p class="help full" style="margin:0">The app keeps a copy of everything on this phone each day for ${SNAP_KEEP} days. Roll back if something was deleted by mistake. These don't protect against losing the phone, so keep saving backup files to iCloud too.</p>
+    ${renderSnaps()}
   </div>`;
 }
 /* ---------- Checklist editor ---------- */
@@ -914,7 +927,7 @@ function addCustomItem(sec,pfx){
 }
 function backupText(){
   const copy=JSON.parse(JSON.stringify(APP));
-  delete copy.adding;delete copy.draft;delete copy.editing;delete copy.confirmDel;
+  delete copy.adding;delete copy.draft;delete copy.editing;delete copy.confirmDel;delete copy.snaps;delete copy.snapAt;
   if(!APP.bkPhotos)copy.jobs.forEach(j=>Object.values(j.results).forEach(r=>{r.photos=[]}));
   // Letters, digits, - and _ only, so Notes, email and texts can't scramble it.
   const bytes=new TextEncoder().encode(JSON.stringify(copy));
@@ -967,6 +980,26 @@ async function getSaver(){
     setTimeout(()=>URL.revokeObjectURL(url),60000);return "saved";
   }};
 }
+/* ---------- automatic daily copies (kept on this phone, last 14 days) ---------- */
+const SNAP_KEEP=14;
+async function autoSnapshot(force){
+  if(APP.sample||!APP.jobs.length)return;
+  const day=TODAY;APP.snaps=APP.snaps||[];
+  if(!force&&APP.snaps.includes(day)&&APP.snapAt&&Date.now()-APP.snapAt<15*60000)return;
+  try{
+    await MDB.put("snap:"+day,{text:backupText(),at:Date.now(),jobs:APP.jobs.length});
+    if(!APP.snaps.includes(day))APP.snaps.push(day);APP.snaps.sort();APP.snapAt=Date.now();
+    while(APP.snaps.length>SNAP_KEEP){const old=APP.snaps.shift();MDB.del("snap:"+old).catch(()=>{});}
+    try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
+  }catch(e){console.error("snapshot failed",e);}
+}
+function renderSnaps(){
+  const list=[...(APP.snaps||[])].reverse();
+  if(!list.length)return `<p class="help full" style="margin:0">Automatic daily copies start after your first real job.</p>`;
+  return `<div class="full snaps">${list.map(d=>`<div class="snap-row"><span>${esc(fmtDate(d,{weekday:"short",month:"short",day:"numeric"}))}${d===TODAY?" · today":""}</span>
+    ${SNAP_ASK===d?`<button class="mini del" type="button" data-snapgo="${d}">Replace current data</button><button class="mini" type="button" data-snapno="1">Cancel</button>`:`<button class="mini" type="button" data-snapask="${d}">Roll back</button>`}</div>`).join("")}</div>`;
+}
+let SNAP_ASK=null;
 async function saveBackupFile(){
   const dl=await getSaver();
   if(!dl){toast("Saving files isn't available here. Use Copy backup text instead.");return;}
@@ -1717,6 +1750,14 @@ document.addEventListener("click",e=>{
   if(d.openadd){OPEN_ADD=d.openadd;render();setTimeout(()=>document.getElementById(`sk-n-${d.openadd}`)?.focus(),30);return;}
   if(d.closeadd){OPEN_ADD=null;render();return;}
   if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
+  if(d.act==="bknow"){saveBackupFile();return;}
+  if(d.snapask){SNAP_ASK=d.snapask;const y=window.scrollY;render();window.scrollTo(0,y);return;}
+  if(d.snapno){SNAP_ASK=null;const y=window.scrollY;render();window.scrollTo(0,y);return;}
+  if(d.snapgo){const day=d.snapgo;SNAP_ASK=null;
+    MDB.get("snap:"+day).then(rec=>{const o=rec&&parseBackup(rec.text);if(!o){toast("That copy couldn't be read.");return;}
+      const keepSnaps=APP.snaps;autoSnapshot(true).then(()=>{APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,snaps:APP.snaps||keepSnaps,snapAt:APP.snapAt,lastBackup:o.lastBackup};
+        rebuildChecklist(APP.settings);syncCustomers();save();render();window.scrollTo(0,0);toast(`Rolled back to ${fmtDate(day,{month:"short",day:"numeric"})}`);});});
+    return;}
   if(d.act==="gobackup"){APP.view="settings";render();document.getElementById("backup")?.scrollIntoView({block:"start"});return;}
   if(d.act==="pickRestore"){$("#restoreFile").click();return;}
   if(d.act==="backupFile"){saveBackupFile();return;}
@@ -1730,7 +1771,7 @@ document.addEventListener("click",e=>{
     $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with this backup (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;return;}
   if(d.act==="cancelRestore"){$("#restoreActs").innerHTML=`<button class="btn" type="button" data-act="askRestore">Restore</button>`;return;}
   if(d.act==="doRestore"){const o=parseBackup($("#restoreIn").value);if(!o)return;
-    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY};rebuildChecklist(APP.settings);syncCustomers();save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
+    APP={...o,view:"jobs",adding:false,draft:null,editing:null,confirmDel:null,sample:false,lastBackup:o.lastBackup||TODAY,snaps:APP.snaps,snapAt:APP.snapAt};rebuildChecklist(APP.settings);syncCustomers();save();render();window.scrollTo(0,0);toast(`Restored ${o.jobs.length} job${o.jobs.length===1?"":"s"}`);return;}
   if(d.go!==undefined)return go(+d.go);
   if(d.rate){const id=t.closest("[data-item]").dataset.item;const r=res(id);r.r=r.r===d.rate?"":d.rate;r.auto=false;
     if(r.r==="bad"&&!r.note)r.open=true;
@@ -1796,7 +1837,7 @@ document.addEventListener("input",e=>{
   if(d.cf){const c=(APP.customers||[]).find(x=>x.id===d.cid);if(c){c[d.cf]=t.value;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}return;}
   if(d.draft==="customer"){const b=$("#sug-draft");if(b)b.innerHTML=sugHTML("draft",t.value);}
   if(d.info==="customer"){const b=$("#sug-info");if(b)b.innerHTML=sugHTML("info",t.value);}
-  if(d.draft){APP.draft[d.draft]=t.value;
+  if(d.draft){APP.draft[d.draft]=t.value;clearTimeout(window.__dsv);window.__dsv=setTimeout(save,400);
     if(d.draft==="dist"){const tr=Math.round(Math.max(0,num(t.value)-num(APP.settings.freeMiles))*num(APP.settings.perMile));const est=document.getElementById("d-est");
       if(est){if(APP.draft.type==="service")est.value=money(tr);else{est.value=money(num(APP.settings.fee)+tr);est.nextElementSibling.textContent=`${money(APP.settings.fee)} PPI${tr?` + ${money(tr)} travel`:""}`;}}}
     return;}
@@ -1869,6 +1910,9 @@ function shrink(file){
 }
 try{syncCustomers();}catch(e){console.error(e);}
 render();
+if(RESUMED_DRAFT)setTimeout(()=>toast("Your unfinished booking was restored"),400);
+setTimeout(()=>autoSnapshot(),1500);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")autoSnapshot();});
 /* Show save buttons only where this view can save files */
 document.body.classList.add("dl-checking");
 document.body.classList.toggle("no-cal",!CAN_CAL);

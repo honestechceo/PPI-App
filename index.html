@@ -1,5 +1,5 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Honestech PPI"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#15202b"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>Honestech PPI</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Honestech"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#15202b"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Honestech Mobile Mechanic App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -32,7 +32,13 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;backgroun
 .top-inner{max-width:760px;margin:0 auto;padding:10px 16px 0}
 .brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.02em;margin:0;text-transform:uppercase}
-.brand h1 span{color:var(--accent)}
+.brand{align-items:center}
+.brand h1{flex:1;min-width:0}
+.brand h1 .b2{color:var(--accent);white-space:nowrap}
+.brand h1 small{font-size:.6em;letter-spacing:.12em;margin-left:2px;color:var(--muted);vertical-align:middle}
+.brand-r{flex:0 0 auto}
+@media (max-width:560px){.brand h1{font-size:18px;line-height:1.05}.brand h1 .b1,.brand h1 .b2{display:block}}
+@media (max-width:400px){.brand h1 .b2{white-space:normal}.navbtn{padding:6px 8px;font-size:12px}}
 .brand .veh{font-size:13px;color:var(--muted);text-align:right;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
@@ -275,7 +281,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1>Honestech <span>PPI</span></h1>
+    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1>
       <div class="brand-r"><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></div>
     </div>
     <div id="jobChrome">
@@ -840,7 +846,7 @@ async function getSaver(){
 async function saveBackupFile(){
   const dl=await getSaver();
   if(!dl){toast("Saving files isn't available here. Use Copy backup text instead.");return;}
-  const name=`honestech-ppi-backup-${TODAY}${APP.settings.biz?"-"+APP.settings.biz.replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40):""}.txt`;
+  const name=`honestech-backup-${TODAY}${APP.settings.biz?"-"+APP.settings.biz.replace(/[^A-Za-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,40):""}.txt`;
   try{const st=await dl.save(name,backupText());
     if(st==="saved"){APP.lastBackup=TODAY;save();if(APP.view==="settings")render();toast("Backup saved");}}
   catch(e){ if(e&&e.code==="declined")return; if(e&&e.code==="rate_limited"){toast("A save is already open. Finish that one first.");return;} toast("Couldn't save the file. Use Copy backup text instead."); }
@@ -942,7 +948,7 @@ function renderReport(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfReport">Save report PDF</button><button class="btn" type="button" data-act="copyReport">Copy report text</button></div>
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the report text instead, or update the Claude app.</p>
     <textarea class="copybox" id="copybox" hidden readonly></textarea>
-    <div class="madewith">Prepared with Honestech PPI</div>
+    <div class="madewith">Prepared with Honestech Mobile Mechanic App</div>
   </div>`;
 }
 function reportText(){
@@ -963,7 +969,7 @@ function reportText(){
   grp("bad","NEEDS REPAIR");grp("mon","MONITOR");
   L.push("");L.push("FULL CHECKLIST");
   SECTIONS.forEach(sec=>{const si=secItems(sec);if(!si.length)return;L.push(`[${sec.title}]`);si.forEach(it=>{const x=S.results[it.id];const m=measText(it,x);L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${m?` (${m})`:""}`)})});
-  L.push("");L.push("Prepared with Honestech PPI");
+  L.push("");L.push("Prepared with Honestech Mobile Mechanic App");
   return L.join("\n");
 }
 
@@ -983,7 +989,7 @@ const IS_IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="
 function icsEsc(t){return String(t||"").replace(/\\/g,"\\\\").replace(/\r?\n/g,"\\n").replace(/([,;])/g,"\\$1");}
 function icsStamp(d=new Date()){return d.toISOString().replace(/[-:]/g,"").replace(/\.\d{3}/,"");}
 function buildIcs({uid,date,time,mins=60,title,location,desc,alarmMin}){
-  const D=date.replace(/-/g,"");const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Honestech PPI//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VEVENT",
+  const D=date.replace(/-/g,"");const L=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Honestech Mobile Mechanic App//EN","CALSCALE:GREGORIAN","METHOD:PUBLISH","BEGIN:VEVENT",
     `UID:${uid}@honestech-ppi`,`DTSTAMP:${icsStamp()}`];
   if(time){const [h,m]=time.split(":").map(Number);const st=new Date(`${date}T${time}:00`);const en=new Date(st.getTime()+mins*60000);
     const f=d=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}T${String(d.getHours()).padStart(2,"0")}${String(d.getMinutes()).padStart(2,"0")}00`;
@@ -1248,7 +1254,7 @@ function renderInvoice(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the invoice text instead, or update the Claude app.</p>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>
-    <div class="madewith">Prepared with Honestech PPI</div>
+    <div class="madewith">Prepared with Honestech Mobile Mechanic App</div>
   </div>`;
 }
 function totalsHTML(t){
@@ -1336,7 +1342,7 @@ function pdfFooters(P,label){
     doc.setDrawColor(...PC.line);doc.setLineWidth(0.5);doc.line(PM,PH-PM+4,PW-PM,PH-PM+4);
     P.font(7.5,"normal",PC.muted);
     P.text(`${bizName()}  ·  ${label}`,PM,PH-PM+16);
-    P.text(`Page ${i} of ${n}  ·  Prepared with Honestech PPI`,PW-PM,PH-PM+16,{align:"right"});}
+    P.text(`Page ${i} of ${n}  ·  Prepared with Honestech Mobile Mechanic App`,PW-PM,PH-PM+16,{align:"right"});}
 }
 function pdfPill(P,x,y,r){
   const key=r||"na",col=PC[key]||PC.na,soft=PC[key+"S"]||PC.naS;
@@ -1690,7 +1696,7 @@ document.addEventListener("change",e=>{
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
   if(d.restorefile){const f=t.files&&t.files[0];if(!f)return;
     const fr=new FileReader();fr.onload=()=>{const o=parseBackup(String(fr.result||""));t.value="";
-      if(!o){toast("That file isn't a Honestech PPI backup.");return;}
+      if(!o){toast("That file isn't a Honestech app backup.");return;}
       $("#restoreIn").value=String(fr.result);
       $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with <strong>${esc(f.name)}</strong> (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;
       $("#restoreActs").scrollIntoView({block:"center"});};

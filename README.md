@@ -1,4 +1,4 @@
-# Honestech PPI
+# Honestech Mobile Mechanic App
 
 Pre-purchase inspection app for mobile mechanics: job schedule, a 70-point inspection checklist in field order, per-wheel tread and brake pad readings, buyer report, invoice with travel fees, PDF export, and backup/restore.
 

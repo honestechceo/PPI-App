@@ -1,7 +1,7 @@
-// Offline support for Honestech PPI.
+// Offline support for the Honestech Mobile Mechanic App.
 // The app page is fetched fresh when online (so updates arrive) and served from cache when offline.
 // The PDF library and fonts are cached the first time they load.
-const VERSION = "ppi-v2";
+const VERSION = "ppi-v4";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {

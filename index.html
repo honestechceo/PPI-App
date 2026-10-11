@@ -341,6 +341,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .payk{min-width:76px;font-weight:700;font-size:13px}
 .payrow a{color:var(--accent);font-weight:600;overflow-wrap:anywhere}
 .paynote{color:var(--muted);font-size:13px;white-space:pre-line}
+.dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
 .cal-nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
@@ -778,6 +779,64 @@ const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
 const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
 function bizName(){return APP.settings.biz||"Your business name";}
+/* ---- distance from home base (address is private: used only here, never printed) ---- */
+const hasHQ=()=>!!(APP.settings.hq&&APP.settings.hqLat!=null&&APP.settings.hqFor===APP.settings.hq.trim());
+async function geocode(addr){
+  const q=String(addr||"").trim();if(!q)return null;
+  const key=q.toLowerCase().replace(/\s+/g," ");APP.geo=APP.geo||{};
+  if(APP.geo[key])return APP.geo[key];
+  const cc=APP.settings.hqCC&&key!==String(APP.settings.hq||"").trim().toLowerCase().replace(/\s+/g," ")?"&countrycodes="+APP.settings.hqCC:"";
+  let hit=null;
+  try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1${cc}&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"en"}});
+    const a=await r.json();if(a&&a[0])hit={lat:+a[0].lat,lon:+a[0].lon,cc:(a[0].address&&a[0].address.country_code)||"",name:a[0].display_name||""};}catch(e){}
+  if(!hit){try{const bias=APP.settings.hqLat!=null?`&lat=${APP.settings.hqLat}&lon=${APP.settings.hqLon}`:"";
+    const r=await fetch(`https://photon.komoot.io/api/?limit=1&lang=en${bias}&q=${encodeURIComponent(q)}`);const a=await r.json();const f=a&&a.features&&a.features[0];
+    if(f){const pr=f.properties||{};hit={lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],cc:(pr.countrycode||"").toLowerCase(),name:[pr.name,pr.street,pr.city,pr.state].filter(Boolean).join(", ")};}}catch(e){}}
+  if(hit){const ks=Object.keys(APP.geo);if(ks.length>300)delete APP.geo[ks[0]];APP.geo[key]=hit;}
+  return hit;
+}
+function crowMiles(a,b){const R=3958.8,t=x=>x*Math.PI/180,dl=t(b.lat-a.lat),dn=t(b.lon-a.lon);
+  const h=Math.sin(dl/2)**2+Math.cos(t(a.lat))*Math.cos(t(b.lat))*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(h));}
+async function distFromHQ(addr){
+  if(!hasHQ())return {err:"nohq"};
+  const to=await geocode(addr);if(!to)return {err:"notfound"};
+  const from={lat:APP.settings.hqLat,lon:APP.settings.hqLon};
+  try{const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`);
+    const j=await r.json();const rt=j&&j.routes&&j.routes[0];
+    if(rt)return {mi:Math.round(rt.distance/160.9344)/10,min:Math.round(rt.duration/60),road:true};}catch(e){}
+  return {mi:Math.round(crowMiles(from,to)*1.25*10)/10,road:false};
+}
+const fmtMin=m=>m>=60?`${Math.floor(m/60)} hr ${m%60} min`:`${m} min`;
+let DIST_SEQ=0;
+async function calcDist(target,quiet){
+  const job=target==="draft"?null:S, obj=target==="draft"?APP.draft:(job&&job.info);if(!obj)return;
+  const addr=(obj.location||"").trim(), msg=()=>document.getElementById(target==="draft"?"distMsg":"distMsgI");
+  const say=(t,cls="")=>{const m=msg();if(m){m.textContent=t;m.className="help dist-msg "+cls;}else if(cls)toast(t);};
+  if(!hasHQ()){if(!quiet)toast("Add your home base address in Settings first");return;}
+  if(!addr){if(!quiet)toast("Add the job address first");return;}
+  const seq=++DIST_SEQ;say("Calculating distance…");
+  const r=await distFromHQ(addr);if(seq!==DIST_SEQ)return;
+  if(r.err){say(r.err==="notfound"?"Couldn't find that address on the map. Check it, or type the miles yourself.":"","bad");return;}
+  if(target==="draft"){if(APP.draft!==obj)return;}else if(S!==job)return;
+  obj.dist=String(r.mi);save();
+  ["d-dist","inv-dist","inv-dist2"].forEach(id=>{const el=document.getElementById(id);if(el&&el.dataset[target==="draft"?"draft":"info"]==="dist"){el.value=obj.dist;el.dispatchEvent(new Event("input",{bubbles:true}));}});
+  say(r.road?`${r.mi} mi, about ${fmtMin(r.min)} drive from your home base`:`About ${r.mi} mi from your home base (estimated, road route unavailable)`,"ok");
+}
+async function checkHQ(){
+  const st=APP.settings,addr=(st.hq||"").trim(),m=()=>document.getElementById("hqMsg");
+  const say=(t,c="")=>{const el=m();if(el){el.textContent=t;el.className="help dist-msg "+c;}};
+  if(!addr){delete st.hqLat;delete st.hqLon;delete st.hqFor;delete st.hqCC;save();say("");return;}
+  if(hasHQ()){say("✓ Home base found on the map","ok");return;}
+  say("Finding your home base on the map…");
+  const g=await geocode(addr);if((st.hq||"").trim()!==addr)return;
+  if(!g){say("Couldn't find that address. Try adding the city, state and ZIP code.","bad");return;}
+  Object.assign(st,{hqLat:g.lat,hqLon:g.lon,hqFor:addr,hqCC:g.cc||""});save();
+  say("✓ Home base found on the map. Job distances will be calculated from here.","ok");
+}
+function distHelp(target){
+  return hasHQ()?`<span class="help dist-msg" id="${target==="draft"?"distMsg":"distMsgI"}"></span><button class="mini dist-btn" type="button" data-calcdist="${target}">📍 Calculate from home base</button>`
+    :`<span class="help">Add your home base in Settings → Pricing to calculate this automatically</span>`;
+}
 function techNames(){const seen=new Map();const add=n=>{n=String(n||"").trim();if(n&&!seen.has(n.toLowerCase()))seen.set(n.toLowerCase(),n);};
   add(APP.settings.owner);[...APP.jobs].sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||"")).forEach(j=>add(j.info&&j.info.tech));return [...seen.values()];}
 function techDL(){return `<datalist id="techList">${techNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`;}
@@ -973,7 +1032,7 @@ function renderJobForm(){
     <div class="sug-wrap">${f("customer","Customer name",'required autocomplete="off"')}<div class="sug" id="sug-draft"></div></div>
     ${f("phone","Customer phone",'inputmode="tel"')}
     ${f("location",svc?"Service address":"Inspection address","","full")}
-    ${f("dist","Distance (miles, one way)",'inputmode="decimal"')}
+    <label class="full">Distance (miles, one way)<input id="d-dist" data-draft="dist" value="${esc(d.dist)}" inputmode="decimal">${distHelp("draft")}</label>
     ${svc?`<label>Travel fee<input id="d-est" value="${esc(money(Math.round(tr)))}" readonly tabindex="-1"><span class="help">Parts and labor go on the invoice</span></label>`
       :`<label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>`}
     ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
@@ -1014,6 +1073,7 @@ function renderSettings(){
     <p class="formh">Pricing</p>
     ${f("fee","PPI fee ($)",'inputmode="decimal"')}
     ${f("laborRate","Labor rate ($ per hour)",'inputmode="decimal" placeholder="e.g. 100"',"","Filled in when you add a labor line")}
+    <label class="full">Home base address<input id="s-hq" data-set="hq" value="${esc(s.hq||"")}" autocomplete="off" placeholder="Where you drive from"><span class="help">🔒 Private. Only used to work out travel distance to each job. Never shown on invoices, reports, PDFs or messages.</span><span class="help dist-msg ${hasHQ()?"ok":""}" id="hqMsg">${hasHQ()?"✓ Home base found on the map":s.hq?"Not found yet. Tap out of the box to check it.":""}</span></label>
     ${f("freeMiles","Free travel miles",'inputmode="decimal"',"","No travel fee within this distance")}
     ${f("perMile","Travel rate ($ per mile)",'inputmode="decimal"',"","Charged on miles past the free distance")}
     <p class="help full" style="margin:0" id="priceEx">${priceExample()}</p>
@@ -1529,7 +1589,7 @@ function renderService(){
     ${i.tech?`<p class="help" style="margin:0 0 6px"><strong>Technician:</strong> ${esc(i.tech)}</p>`:""}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
     <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor (hourly)</button><button class="mini" type="button" data-addline="flat">＋ Flat fee</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
-    <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span></div>
+    <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</div>
       <label class="ln-amt">Amount<input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}"></label></div>
     <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl>
@@ -1605,7 +1665,7 @@ function renderInvoice(){
       <thead><tr><th>Description</th><th>Amount</th></tr></thead>
       <tbody>
         <tr><td>Pre-purchase inspection<span class="sub">${esc(vehOf(i))}</span></td><td class="amt"><input id="inv-fee" data-inv="fee" inputmode="decimal" value="${esc(inv.fee)}" aria-label="Inspection fee"></td></tr>
-        <tr><td>Travel<span class="sub rowx">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span></td>
+        <tr><td>Travel<span class="sub rowx">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</td>
           <td class="amt"><input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}" aria-label="Travel fee"></td></tr>
         ${inv.items.map((x,k)=>`<tr><td><div class="rowx"><input id="it-d-${k}" data-itd="${k}" value="${esc(x.d)}" placeholder="Description"><button class="xbtn" type="button" data-delitem="${k}" aria-label="Remove line">×</button></div></td><td class="amt"><input id="it-a-${k}" data-ita="${k}" inputmode="decimal" value="${esc(x.a)}" placeholder="0"></td></tr>`).join("")}
       </tbody></table></div>
@@ -2005,13 +2065,14 @@ document.addEventListener("click",e=>{
   if(d.caltoday){APP.calMonth=TODAY.slice(0,7);APP.calDay=TODAY;render();return;}
   if(d.calday){APP.calDay=d.calday;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
+  if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.dashp){APP.dashP=d.dashp;render();return;}
   if(d.act==="dashbook"){APP.view="jobs";render();startAdd();return;}
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}
   if(d.gocust){APP.view="customers";CUST_OPEN=d.gocust;render();window.scrollTo(0,0);return;}
   if(d.sugpick){const [cid,vk,target]=d.sugpick.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
-    if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);}
-    else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);}
+    if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);if(APP.draft.location&&!APP.draft.dist)calcDist("draft",true);}
+    else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);if(S.info.location&&!S.info.dist)calcDist("info",true);}
     return;}
   if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
   if(d.cbook){const [cid,vk,type]=d.cbook.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
@@ -2110,6 +2171,9 @@ document.addEventListener("change",e=>{
   if(d.bkphotos){APP.bkPhotos=t.checked;save();return;}
   if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
   if(d.lnk!==undefined){const k=+d.lnk,x=S.invoice.lines[k];x.k=t.value;if(x.k==="flat")x.q="1";if(x.k==="labor"&&!x.p&&APP.settings.laborRate)x.p=APP.settings.laborRate;save();render();refreshTotals();return;}
+  if(d.set==="hq"){checkHQ();return;}
+  if(d.draft==="location"&&hasHQ()&&t.value.trim()){calcDist("draft",true);return;}
+  if(d.info==="location"&&hasHQ()&&t.value.trim()&&S){calcDist("info",true);return;}
   if(d.set&&APP.view==="settings")return;
   if(d.media){const files=[...t.files];t.value="";if(!files.length)return;const job=S;
     addMediaFiles(job,files,d.media).then(({n,fail})=>{if(S===job){const y=window.scrollY;render();window.scrollTo(0,y);}

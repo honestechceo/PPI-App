@@ -540,7 +540,7 @@ const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
 const lineAmt=x=>Math.round(num(x.q===""||x.q==null?1:x.q)*num(x.p)*100)/100;
 function newJob(info={},type="ppi"){
   return {id:uid(),type,status:"sched",step:0,verdict:"",results:{},
-    info:{customer:"",phone:"",date:TODAY,time:"",location:"",dist:"",notes:"",year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",summary:"",...info},
+    info:{customer:"",phone:"",tech:"",date:TODAY,time:"",location:"",dist:"",notes:"",year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",summary:"",...info},
     invoice:{num:"",date:"",fee:type==="service"?0:null,travelOverride:"",items:[],lines:[],tax:null,paid:false,paidVia:"",paidDate:""}};
 }
 function sampleApp(){
@@ -777,6 +777,10 @@ const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
 const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
 function bizName(){return APP.settings.biz||"Your business name";}
+function techNames(){const seen=new Map();const add=n=>{n=String(n||"").trim();if(n&&!seen.has(n.toLowerCase()))seen.set(n.toLowerCase(),n);};
+  add(APP.settings.owner);[...APP.jobs].sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||"")).forEach(j=>add(j.info&&j.info.tech));return [...seen.values()];}
+function techDL(){return `<datalist id="techList">${techNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`;}
+const TECH_ATTR='list="techList" autocomplete="off" placeholder="Optional"';
 function bizContact(){const s=APP.settings;return [s.phone,s.email,s.web].filter(Boolean).join(" · ");}
 function copyText(txt,boxId){
   const box=boxId&&document.getElementById(boxId);
@@ -944,7 +948,7 @@ function jobCard(j){
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status}</div>
-    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}</div>
+    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · Tech: ${esc(i.tech)}`:""}</div>
     <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
@@ -971,6 +975,7 @@ function renderJobForm(){
     ${f("dist","Distance (miles, one way)",'inputmode="decimal"')}
     ${svc?`<label>Travel fee<input id="d-est" value="${esc(money(Math.round(tr)))}" readonly tabindex="-1"><span class="help">Parts and labor go on the invoice</span></label>`
       :`<label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>`}
+    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -1196,6 +1201,7 @@ function renderIntake(){
     ${f("date","Date",'type="date"')}
     ${f("time","Time",'type="time"')}
     <div class="full addr-row">${f("location","Inspection address")}${dirLink(i.location,"dirLink")}</div>
+    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -1256,6 +1262,7 @@ function renderReport(){
       <div><dt>Color</dt><dd>${esc(i.color||"—")}</dd></div>
       <div><dt>Customer</dt><dd>${esc(i.customer||"—")}</dd></div>
       <div><dt>Location</dt><dd>${esc(i.location||"—")}</dd></div>
+      ${i.tech?`<div><dt>Technician</dt><dd>${esc(i.tech)}</dd></div>`:""}
     </dl>
     <div class="tally">
       <div class="t-good"><strong>${st.good}</strong><span>Good</span></div>
@@ -1285,6 +1292,7 @@ function reportText(){
   L.push(`Vehicle: ${vehOf(i)}${i.color?" ("+i.color+")":""}`);
   if(i.vin)L.push(`VIN: ${i.vin}`);
   if(i.miles)L.push(`Odometer: ${num(i.miles).toLocaleString()} mi`);
+  if(i.tech)L.push(`Technician: ${i.tech}`);
   L.push("");
   L.push(`VERDICT: ${VERDICTS.find(x=>x[0]===v)[1].toUpperCase()}`);
   L.push(`Good ${st.good} · Monitor ${st.mon} · Repair ${st.bad} · Not checked ${st.open}`);
@@ -1498,6 +1506,7 @@ function renderService(){
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
+    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -1516,6 +1525,7 @@ function renderService(){
   ${renderFollowupForm()}
   <div class="report">
     ${bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
+    ${i.tech?`<p class="help" style="margin:0 0 6px"><strong>Technician:</strong> ${esc(i.tech)}</p>`:""}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
     <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor (hourly)</button><button class="mini" type="button" data-addline="flat">＋ Flat fee</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
     <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span></div>
@@ -1588,6 +1598,7 @@ function renderInvoice(){
       <div><dt>Bill to</dt><dd>${esc(i.customer||"—")}${i.phone?`<br><span style="font-weight:400">${esc(i.phone)}</span>`:""}</dd></div>
       <div><dt>Vehicle</dt><dd>${esc(vehOf(i)||"—")}</dd></div>
       <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
+      ${i.tech?`<div><dt>Technician</dt><dd>${esc(i.tech)}</dd></div>`:""}
     </dl>
     <div style="overflow-x:auto"><table class="inv-table">
       <thead><tr><th>Description</th><th>Amount</th></tr></thead>
@@ -1621,6 +1632,7 @@ function invoiceText(){
   L.push(`Date: ${fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"})}`);
   L.push(`Bill to: ${i.customer||"—"}`);
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
+  if(i.tech)L.push(`Technician: ${i.tech}`);
   L.push("");
   const row=(d,a)=>L.push(`${d.padEnd(30," ")} ${money(a).padStart(10," ")}`);
   if(t.svc){
@@ -1740,7 +1752,7 @@ function buildReportPdf(job){
   try{
   const P=pdfStart(),{doc}=P,i=job.info,st=stats(job),v=job.verdict||suggestVerdict(st);
   pdfHeader(P,"Pre-Purchase Inspection",[fmtDate(i.date,{month:"long",day:"numeric",year:"numeric"})+(i.time?"  "+fmtTime(i.time):"")]);
-  pdfKV(P,[["Vehicle",vehOf(i)],["VIN",i.vin],["Odometer",i.miles?num(i.miles).toLocaleString()+" mi":""],["Color",i.color],["Prepared for",i.customer],["Location",i.location]]);
+  pdfKV(P,[["Vehicle",vehOf(i)],["VIN",i.vin],["Odometer",i.miles?num(i.miles).toLocaleString()+" mi":""],["Color",i.color],["Prepared for",i.customer],["Location",i.location],...(i.tech?[["Technician",i.tech]]:[])]);
   // verdict banner
   const vc=v==="buy"?PC.good:v==="buyfix"?PC.mon:PC.bad;
   P.need(48);doc.setFillColor(...vc);doc.roundedRect(PM,P.y,PW-2*PM,40,5,5,"F");
@@ -1808,7 +1820,7 @@ function buildInvoicePdf(job){
   const P=pdfStart(),{doc}=P,i=job.info,inv=job.invoice,t=totals(job),s=APP.settings;
   const svc=t.svc;
   pdfHeader(P,svc?"Service Invoice":"Invoice",[inv.num,fmtDate(inv.date,{month:"long",day:"numeric",year:"numeric"})]);
-  pdfKV(P,[["Bill to",[i.customer,i.phone].filter(Boolean).join("\n")],["Vehicle",vehOf(i)],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[])]);
+  pdfKV(P,[["Bill to",[i.customer,i.phone].filter(Boolean).join("\n")],["Vehicle",vehOf(i)],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[]),...(i.tech?[["Technician",i.tech]]:[])]);
   if(svc&&(i.work||i.performed)){
     const para=(h,txt)=>{if(!txt)return;P.need(40);P.font(8,"bold",PC.muted);P.text(h,PM,P.y);P.y+=13;P.font(10);const l=P.wrap(txt,PW-2*PM);P.need(l.length*13);P.text(l,PM,P.y);P.y+=l.length*13+8;};
     para("WORK REQUESTED",i.work);para("WORK PERFORMED",i.performed);
@@ -1912,7 +1924,7 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||""};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||""};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){

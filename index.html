@@ -356,6 +356,10 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .bg-prev{position:relative;height:42px;border-radius:6px;display:block;overflow:hidden}
 .bg-prev i{position:absolute;left:8px;right:8px;top:8px;bottom:-4px;border:1px solid;border-radius:5px}
 .bg-prev b{position:absolute;left:14px;top:14px;width:26px;height:6px;border-radius:3px}
+.omw{grid-column:1/-1;margin-top:10px;padding:10px 12px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;display:flex;flex-direction:column;gap:8px}
+.omw-eta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}.omw-eta strong{font-size:22px;font-family:var(--f-display)}
+.omw-adj{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.omw-adj .mini{padding-left:4px;padding-right:4px;justify-content:center}.omw .note{margin:0}
+.omw-sent{grid-column:1/-1;color:var(--good)}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -1016,6 +1020,52 @@ function renderJobs(){
   ${done.length?`<div class="group-h">Completed</div><div class="jobs">${done.map(jobCard).join("")}</div>`:""}`}
   <textarea class="copybox" id="jobCopy" hidden readonly></textarea>`;
 }
+/* ---- "On my way" text with ETA ---- */
+const OMW_DEFAULT="Hi {first}, this is {tech} from {business}. I'm on my way and should arrive around {eta} (about {minutes} min). See you soon!";
+let OMW=null; // {id, state:"loading"|"ready", mins, src, text, edited}
+function omwText(j,mins){
+  const i=j.info,st=APP.settings,first=(i.customer||"").trim().split(/\s+/)[0]||"there";
+  const eta=new Date(Date.now()+mins*60000);
+  const etaS=eta.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  const who=(i.tech||st.owner||"").trim();
+  let t=(st.omwTpl||OMW_DEFAULT).replace(/\{first\}/g,first).replace(/\{tech\}/g,who||"your mechanic").replace(/\{business\}/g,bizName())
+    .replace(/\{eta\}/g,etaS).replace(/\{minutes\}/g,String(mins)).replace(/\{vehicle\}/g,vehOf(i)||"vehicle");
+  if(!who)t=t.replace(/this is your mechanic from /,"this is ");
+  return t;
+}
+function herePos(){return new Promise(res=>{if(!navigator.geolocation)return res(null);
+  navigator.geolocation.getCurrentPosition(p=>res({lat:p.coords.latitude,lon:p.coords.longitude}),()=>res(null),{enableHighAccuracy:false,timeout:9000,maximumAge:120000});});}
+async function driveMins(from,addr){
+  const to=await geocode(addr);if(!to)return null;
+  try{const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`);
+    const j=await r.json();const rt=j&&j.routes&&j.routes[0];if(rt)return Math.max(5,Math.round(rt.duration/60*1.1));}catch(e){}
+  return Math.max(5,Math.round(crowMiles(from,to)*1.3/35*60)); // rough: 35 mph average
+}
+async function startOMW(id){
+  const j=APP.jobs.find(x=>x.id===id);if(!j)return;
+  OMW={id,state:"loading",mins:30,src:"",text:""};rerenderKeep();
+  let mins=null,src="";
+  if(j.info.location){const here=await herePos();
+    if(here){mins=await driveMins(here,j.info.location);if(mins)src="drive from where you are (traffic not included)";}
+    if(!mins&&hasHQ()){mins=await driveMins({lat:APP.settings.hqLat,lon:APP.settings.hqLon},j.info.location);if(mins)src="drive from your home base (couldn't get your location)";}}
+  if(!OMW||OMW.id!==id)return;
+  if(!mins){mins=30;src=j.info.location?"couldn't work out the drive, so it's a guess. Adjust it below":"no job address, so it's a guess. Adjust it below";}
+  mins=Math.ceil(mins/5)*5;
+  Object.assign(OMW,{state:"ready",mins,src,text:omwText(j,mins)});rerenderKeep();
+}
+function rerenderKeep(){const y=window.scrollY;render();window.scrollTo(0,y);}
+function omwPanel(j){
+  if(!OMW||OMW.id!==j.id)return "";
+  if(OMW.state==="loading")return `<div class="omw"><p class="help" style="margin:0">📍 Working out your ETA…</p></div>`;
+  const i=j.info,can=i.phone&&CAN_CAL;
+  return `<div class="omw">
+    <div class="omw-eta"><span class="lbl" style="margin:0">ETA</span><strong>${esc(new Date(Date.now()+OMW.mins*60000).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</strong><span class="help">${OMW.mins} min · ${esc(OMW.src)}</span></div>
+    <div class="omw-adj">${[-10,-5,5,10].map(d=>`<button class="mini" type="button" data-omwadj="${d}">${d>0?"+":"−"}${Math.abs(d)} min</button>`).join("")}</div>
+    <textarea class="note" id="omwText" data-omwtext="1" rows="4" aria-label="Message to the customer">${esc(OMW.text)}</textarea>
+    <div class="acts">${can?`<a class="mini go" id="omwSend" href="${esc(smsHref(i.phone,OMW.text))}" data-omwsent="${j.id}">💬 Open in Messages</a>`:""}<button class="mini${can?"":" go"}" type="button" data-omwcopy="1">Copy text</button><button class="mini" type="button" data-omwclose="1">Close</button></div>
+    ${!i.phone?`<p class="help" style="margin:4px 0 0">No phone number on this job. Tap Edit to add one, or copy the text.</p>`:!CAN_CAL?`<p class="help" style="margin:4px 0 0">Opening Messages works in the home-screen app. Here, copy the text instead.</p>`:""}
+  </div>`;
+}
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
   const status=j.status==="done"?`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`
@@ -1030,11 +1080,12 @@ function jobCard(j){
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
       ${j.status!=="done"&&i.location?dirLink(i.location):""}
       ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
       <button class="mini" type="button" data-edit="${j.id}">Edit</button>
       <button class="mini del" type="button" data-askdel="${j.id}">Delete</button>`}
-    </div></div>`;
+    </div>${omwPanel(j)}${j.omwAt&&j.status!=="done"&&(Date.now()-j.omwAt)<6*3600000?`<div class="meta omw-sent">✓ "On my way" sent ${esc(new Date(j.omwAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</div>`:""}</div>`;
 }
 function renderJobForm(){
   const d=APP.draft, svc=d.type==="service", tr=Math.max(0,num(d.dist)-num(APP.settings.freeMiles))*num(APP.settings.perMile);
@@ -1172,6 +1223,7 @@ function renderSettings(){
   </div>
   <div class="form">
     <p class="formh">Reminders &amp; directions</p>
+    <label class="full">"On my way" text<textarea id="s-omwTpl" data-set="omwTpl" rows="3" placeholder="${esc(OMW_DEFAULT)}">${esc(s.omwTpl||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first} customer's first name, {tech}, {business}, {eta} arrival time, {minutes}, {vehicle}.</span></label>
     <label>Job alert in Calendar<select id="s-jobAlert" data-set="jobAlert">${[["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]].map(([v,l])=>`<option value="${v}" ${String(s.jobAlert||"60")===v?"selected":""}>${l}</option>`).join("")}</select></label>
     <label>Directions open in<select id="s-mapsApp" data-set="mapsApp">${MAPS.map(([v,l])=>`<option value="${v}" ${(s.mapsApp||"apple")===v?"selected":""}>${l}</option>`).join("")}</select></label>
     <label>Default next service<select id="s-fuMonths" data-set="fuMonths">${["3","6","12"].map(v=>`<option value="${v}" ${String(s.fuMonths||"3")===v?"selected":""}>${v} months</option>`).join("")}</select></label>
@@ -2082,6 +2134,8 @@ function saveDraft(){
 document.addEventListener("click",e=>{
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
+  const sent=e.target.closest&&e.target.closest("a[data-omwsent]");
+  if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
   if(d.nav){APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
@@ -2144,6 +2198,10 @@ document.addEventListener("click",e=>{
   if(d.calday){APP.calDay=d.calday;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
+  if(d.omw){startOMW(d.omw);return;}
+  if(d.omwadj&&OMW){const j=APP.jobs.find(x=>x.id===OMW.id);OMW.mins=Math.max(5,OMW.mins+ +d.omwadj);if(!OMW.edited)OMW.text=omwText(j,OMW.mins);else toast("You edited the text, so update the time in it yourself");rerenderKeep();return;}
+  if(d.omwcopy&&OMW){copyText(OMW.text,"omwText");return;}
+  if(d.omwclose){OMW=null;rerenderKeep();return;}
   if(d.thememode||d.themeacc||d.themebg){const st=APP.settings;if(d.thememode)st.themeMode=d.thememode==="auto"?"":d.thememode;if(d.themeacc)st.themeAccent=d.themeacc===ACCENTS[0][1]?"":d.themeacc;if(d.themebg)st.themeBg=d.themebg==="steel"?"":d.themebg;
     save();const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.act==="themereset"){const st=APP.settings;st.themeMode="";st.themeAccent="";st.themeBg="";st.pdfAccent=false;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Original look restored");return;}
@@ -2198,6 +2256,7 @@ document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();});
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
+  if(d.omwtext&&OMW){OMW.text=t.value;OMW.edited=true;const a=document.getElementById("omwSend");const j=APP.jobs.find(x=>x.id===OMW.id);if(a&&j)a.href=smsHref(j.info.phone,t.value);return;}
   if(d.themecustom){APP.settings.themeAccent=t.value.toLowerCase();applyTheme();const l=t.closest(".acc-custom");if(l)l.style.setProperty("--c",t.value);clearTimeout(window.__thm);window.__thm=setTimeout(save,300);return;}
   if(d.custq){APP.custQ=t.value;const l=$("#custList");if(l)l.innerHTML=custListHTML(t.value);return;}
   if(d.cf){const c=(APP.customers||[]).find(x=>x.id===d.cid);if(c){c[d.cf]=t.value;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}return;}

@@ -416,6 +416,11 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .cb-row span:last-child{font-family:var(--f-mono)}
 .cb-sum{display:flex;justify-content:space-between;font-size:14px}.cb-sum strong{font-family:var(--f-mono)}
 .neg{color:var(--bad)!important}
+.mi-sum{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}.mi-sum div{display:flex;flex-direction:column}.mi-sum strong{font-size:22px;font-family:var(--f-display)}
+.trip-form{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 10px;padding:10px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-soft)}
+.trip-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.trip-form input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px;min-height:44px;width:100%;font:inherit;text-transform:none;letter-spacing:0;color:var(--ink)}
+.trip-form .full{grid-column:1/-1}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -610,7 +615,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[]};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor (hourly)"],["flat","Flat fee"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
@@ -664,7 +669,7 @@ const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
 rebuildChecklist(APP.settings);
-APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
+APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
@@ -720,7 +725,7 @@ function renderExpenses(){
       <span class="er-w">${esc(e.desc||EXP_NAME[e.cat])}${e.vendor?` <small>· ${esc(e.vendor)}</small>`:""}${j?`<small class="er-j">For ${esc(j.info.customer||"job")}</small>`:""}</span>
       <span class="er-a">${money(e.amt)}${e.rc?" 📎":""}</span></button>`;};
   return `${sampleBanner()}
-  <div class="stage-head dash-head"><div><div class="eyebrow">Business costs</div><h2>Expenses</h2></div>
+  <div class="stage-head dash-head"><div><div class="eyebrow">Business costs &amp; miles</div><h2>Expenses</h2></div>
     ${EXP_DRAFT?"":`<button class="btn primary" type="button" data-act="expadd">+ Add expense</button>`}</div>
   ${EXP_DRAFT?expFormHTML():""}
   <div class="seg exp-seg" role="group" aria-label="Period">${[["week","Week"],["month","Month"],["year","Year"],["all","All"]].map(([k,l])=>`<button type="button" data-expp="${k}" aria-pressed="${P===k}">${l}</button>`).join("")}</div>
@@ -729,6 +734,7 @@ function renderExpenses(){
     <div class="tile"><span class="tl">Parts · tools</span><strong>${money(expSum(inP.filter(e=>e.cat==="parts")))}</strong><span class="ts">${money(expSum(inP.filter(e=>e.cat==="tools")))} on tools</span></div>
   </div>
   ${byCat.length>1?`<div class="dash-card"><div class="dc-h"><h3>By type</h3><span class="ts">${esc(label)}</span></div>${byCat.map(([k,l,v])=>hb(l,v)).join("")}</div>`:""}
+  ${mileageHTML(P,label)}
   <div class="dash-card">
     <div class="dc-h"><h3>${F?esc(EXP_NAME[F]):"All expenses"}</h3><span class="ts">${money(expSum(list))}</span></div>
     <div class="chips exp-filter" role="group" aria-label="Filter">${[["","All"],...EXP_CATS].map(([k,l])=>`<button type="button" data-expf="${k}" aria-pressed="${F===k}">${l}</button>`).join("")}</div>
@@ -760,6 +766,35 @@ async function saveExpDraft(){
   if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";EXP_RET=null;render();toast(`Saved ${money(rec.amt)} to this job's costs`);document.getElementById("costBox")?.scrollIntoView({block:"center"});return;}
   EXP_RET=null;render();window.scrollTo(0,0);toast(isNew?`Saved ${money(rec.amt)} ${EXP_NAME[rec.cat].toLowerCase()} expense`:"Expense updated");
 }
+/* ---- business mileage log ---- */
+let TRIP_DRAFT=null;
+function tripsIn(p){const start=p==="all"?"":p==="year"?TODAY.slice(0,4)+"-01-01":p==="week"?periodStart("week"):TODAY.slice(0,7)+"-01";
+  const rt=APP.settings.roundTrip!==false?2:1,inR=d=>d&&(!start||d>=start)&&d<=TODAY;
+  const jobs=APP.jobs.filter(j=>!APP.sample||true).filter(j=>(j.status==="done"||j.status==="active"||(j.info.date||"")<TODAY)&&inR(j.info.date))
+    .map(j=>({id:"j_"+j.id,jobId:j.id,date:j.info.date,miles:Math.round(num(j.info.dist)*rt*10)/10,purpose:`${isSvc(j)?"Service":"PPI"} – ${j.info.customer||"customer"}`,auto:true,missing:!num(j.info.dist)}));
+  const man=(APP.trips||[]).filter(t=>inR(t.date)).map(t=>({...t,miles:num(t.miles)}));
+  return [...jobs,...man].sort((a,b)=>b.date.localeCompare(a.date));
+}
+function mileageHTML(P,label){
+  const all=tripsIn(P),ts=all.filter(t=>!t.missing),miss=all.filter(t=>t.missing).length;
+  const mi=Math.round(ts.reduce((a,t)=>a+t.miles,0)*10)/10,rate=num(APP.settings.mileRate)||0.725;
+  return `<div class="dash-card" id="mileCard"><div class="dc-h"><h3>Business miles</h3><span class="ts">${esc(label)}</span></div>
+    <div class="mi-sum"><div><strong>${mi.toLocaleString()} mi</strong><span class="ts">${ts.length} trip${ts.length===1?"":"s"}</span></div><div><strong>${money(mi*rate)}</strong><span class="ts">tax deduction at ${(rate*100).toFixed(1).replace(/\.0$/,"")}¢/mi</span></div></div>
+    ${TRIP_DRAFT?`<form class="trip-form" id="tripForm" autocomplete="off">
+      <label>Date<input type="date" data-trip="date" value="${esc(TRIP_DRAFT.date)}"></label>
+      <label>Miles<input id="t-miles" data-trip="miles" inputmode="decimal" value="${esc(TRIP_DRAFT.miles)}" placeholder="e.g. 18"></label>
+      <label class="full">What for<input data-trip="purpose" value="${esc(TRIP_DRAFT.purpose)}" placeholder="e.g. Parts run to AutoZone"></label>
+      <div class="formacts full"><button class="btn primary" type="submit">${TRIP_DRAFT.id?"Save":"Add trip"}</button><button class="btn" type="button" data-act="tripcancel">Cancel</button>${TRIP_DRAFT.id?`<button class="btn danger" type="button" data-act="tripdel">Delete</button>`:""}</div></form>`
+      :`<button class="mini" type="button" data-act="tripadd">＋ Add a trip (parts run, supply store…)</button>`}
+    ${all.length?`<div class="exp-list">${all.slice(0,40).map(t=>`<button type="button" class="exp-row" ${t.auto?`data-open="${t.jobId}"`:`data-tripedit="${t.id}"`}><span class="er-d">${esc(fmtDate(t.date,{month:"short",day:"numeric"}))}</span><span class="tag ${t.auto?"":"exp-fuel"}">${t.auto?"Job":"Trip"}</span><span class="er-w">${esc(t.purpose||"Trip")}${t.missing?` <small class="vin-warn">no distance entered</small>`:""}</span><span class="er-a">${t.missing?"—":t.miles+" mi"}</span></button>`).join("")}</div>`:`<p class="empty">No trips ${esc(label.toLowerCase())}.</p>`}
+    <p class="help" style="margin:8px 0 0">Job miles come from each job's distance${APP.settings.roundTrip!==false?", counted there and back":""}.${miss?` ${miss} job${miss===1?" has":"s have"} no distance; open ${miss===1?"it":"them"} to add it.`:""} Change the rate in Settings → Pricing.</p>
+    ${all.length?`<div class="copyrow"><button class="mini dl-only" type="button" data-act="milecsv">Save mileage log (CSV)</button><button class="mini" type="button" data-act="milecopy">Copy log</button></div><textarea class="copybox" id="milebox" hidden readonly></textarea>`:""}
+  </div>`;
+}
+function mileCSV(rows){const q=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;};
+  const rate=num(APP.settings.mileRate)||0.725,L=[["Date","Purpose","Miles","Deduction"].join(",")];
+  rows.filter(t=>!t.missing).sort((a,b)=>a.date.localeCompare(b.date)).forEach(t=>L.push([t.date,t.purpose,t.miles,(t.miles*rate).toFixed(2)].map(q).join(",")));
+  const tot=rows.filter(t=>!t.missing).reduce((a,t)=>a+t.miles,0);L.push(["","TOTAL",Math.round(tot*10)/10,(tot*rate).toFixed(2)].map(q).join(","));return L.join("\n");}
 function jobCostHTML(){
   const c=jobCost(S.id),t=totals(S),list=(APP.expenses||[]).filter(e=>e.jobId===S.id);
   const prof=t.total-t.tax-c;
@@ -1425,6 +1460,8 @@ function renderSettings(){
     <label class="full">Home base address<input id="s-hq" data-set="hq" value="${esc(s.hq||"")}" autocomplete="off" placeholder="Where you drive from"><span class="help">🔒 Private. Only used to work out travel distance to each job. Never shown on invoices, reports, PDFs or messages.</span><span class="help dist-msg ${hasHQ()?"ok":""}" id="hqMsg">${hasHQ()?"✓ Home base found on the map":s.hq?"Not found yet. Tap out of the box to check it.":""}</span></label>
     ${f("freeMiles","Free travel miles",'inputmode="decimal"',"","No travel fee within this distance")}
     ${f("perMile","Travel rate ($ per mile)",'inputmode="decimal"',"","Charged on miles past the free distance")}
+    ${f("mileRate","Mileage deduction rate ($ per mile)",'inputmode="decimal"',"","For your mileage log. The IRS rate for 2026 is $0.725. Check irs.gov each January.")}
+    <label class="check full"><input type="checkbox" data-setc="roundTrip" ${s.roundTrip!==false?"checked":""}> Count job miles there and back (round trip) in the mileage log</label>
     <p class="help full" style="margin:0" id="priceEx">${priceExample()}</p>
     <label class="check full"><input type="checkbox" id="s-taxOn" data-setc="taxOn" ${s.taxOn?"checked":""}> Charge sales tax by default</label>
     ${f("taxRate","Tax rate (%)",'inputmode="decimal"',"","Check with your accountant whether inspections are taxable in your state")}
@@ -2552,6 +2589,13 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="tripadd"){TRIP_DRAFT={id:null,date:TODAY,miles:"",purpose:""};rerenderKeep();setTimeout(()=>document.getElementById("t-miles")?.focus(),30);return;}
+  if(d.act==="tripcancel"){TRIP_DRAFT=null;rerenderKeep();return;}
+  if(d.act==="tripdel"){APP.trips=APP.trips.filter(t=>t.id!==TRIP_DRAFT.id);TRIP_DRAFT=null;save();rerenderKeep();toast("Trip deleted");return;}
+  if(d.tripedit){const t=APP.trips.find(x=>x.id===d.tripedit);if(t){TRIP_DRAFT={...t};rerenderKeep();document.getElementById("mileCard")?.scrollIntoView({block:"start"});}return;}
+  if(d.act==="milecsv"){(async()=>{const dl=await getSaver();if(!dl){toast("Saving files isn't available here. Use Copy log.");return;}const P=APP.expP||"month";
+    try{const st=await dl.save(`mileage-${P==="all"?"all":P==="year"?TODAY.slice(0,4):TODAY.slice(0,7)}.csv`,mileCSV(tripsIn(P)));if(st==="saved")toast("Mileage log ready");}catch(e){if(!(e&&e.code==="declined"))toast("Couldn't save the file here.");}})();return;}
+  if(d.act==="milecopy"){copyText(mileCSV(tripsIn(APP.expP||"month")),"milebox");return;}
   if(d.act==="expadd"){EXP_DRAFT=newExpDraft();EXP_DEL=false;EXP_RET=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-desc")?.focus(),30);return;}
   if(d.act==="explog"){EXP_DRAFT=newExpDraft({cat:"parts",jobId:S.id,desc:"Parts"+(vehOf(S.info)?" – "+vehOf(S.info):S.info.customer?" – "+S.info.customer:"")});EXP_RET=S.id;EXP_DEL=false;APP.view="expenses";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-amt")?.focus(),30);return;}
   if(d.act==="expcancel"){EXP_DRAFT=null;EXP_DEL=false;if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";}EXP_RET=null;render();return;}
@@ -2657,10 +2701,13 @@ $("#nextBtn").addEventListener("click",()=>{
 });
 document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ck){el.open?OPEN_CK.add(el.dataset.ck):OPEN_CK.delete(el.dataset.ck);}},true);
 document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer"||e.target.id==="f-customer"))setTimeout(()=>{const a=document.activeElement;if(!a||!a.closest||!a.closest(".sug"))document.querySelectorAll(".sug").forEach(x=>x.innerHTML="");},250);});
-document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();if(e.target.id==="expForm")saveExpDraft();});
+document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();if(e.target.id==="expForm")saveExpDraft();
+  if(e.target.id==="tripForm"){const t=TRIP_DRAFT;if(!num(t.miles)){toast("Enter the miles");return;}const rec={id:t.id||uid(),date:t.date||TODAY,miles:String(num(t.miles)),purpose:(t.purpose||"").trim()||"Business trip"};
+    const k=APP.trips.findIndex(x=>x.id===rec.id);if(k>-1)APP.trips[k]=rec;else APP.trips.push(rec);TRIP_DRAFT=null;save();rerenderKeep();toast(`Logged ${rec.miles} mi`);}});
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.trip&&TRIP_DRAFT){TRIP_DRAFT[d.trip]=t.value;return;}
   if(d.exp&&EXP_DRAFT){EXP_DRAFT[d.exp]=t.value;return;}
   if(d.disc){const dd=S.invoice.disc;if(!dd)return;dd[d.disc]=t.value;save();refreshTotals();const a=document.getElementById("discAmt");if(a){const tt=totals(S);a.textContent=tt.disc?negMoney(tt.disc):"—";}return;}
   if(d.mline){const [id,k]=d.mline.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x[d.mf]=t.value;

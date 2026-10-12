@@ -421,6 +421,26 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .trip-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .trip-form input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px;min-height:44px;width:100%;font:inherit;text-transform:none;letter-spacing:0;color:var(--ink)}
 .trip-form .full{grid-column:1/-1}
+.req-list{display:flex;flex-direction:column;gap:10px}
+.req{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px}
+.req.is-new{border-color:var(--accent);box-shadow:inset 4px 0 0 var(--accent)}
+.req-top{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.req-top strong{font-size:16px;margin-right:auto}
+.req .acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.req-age{font-size:12px}.linkish{border:0;background:none;color:var(--accent);padding:0;font:inherit;text-decoration:underline;cursor:pointer}
+.st.req-new{background:var(--accent-soft);color:var(--accent)}.st.req-booked{background:var(--good-soft);color:var(--good)}.st.req-quoted{background:var(--mon-soft);color:var(--mon)}.st.req-declined{background:var(--na-soft);color:var(--na)}
+.req-no{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.req-no textarea{width:100%;border:1px solid var(--line);border-radius:8px;padding:10px;background:var(--surface);font:inherit;color:var(--ink)}
+.req-no .acts{display:flex;flex-wrap:wrap;gap:6px}
+.req-form{border-color:var(--accent);margin-bottom:14px}
+.avail{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--bg);display:flex;flex-direction:column;gap:8px}
+.av-list{display:flex;flex-direction:column}.av-row{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink)}
+.av-t{font-family:var(--f-mono);font-size:12px}.av-w{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.av-free{margin:0;color:var(--good);font-weight:600;text-transform:none;letter-spacing:0;font-size:14px}
+.av-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.av-day{display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 2px;min-height:58px;text-transform:none;letter-spacing:0;color:var(--ink)}
+.av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
+.av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.req-alert{border-color:var(--accent);background:var(--accent-soft)}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -669,7 +689,7 @@ const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
 rebuildChecklist(APP.settings);
-APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
+APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.requests))APP.requests=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
@@ -805,6 +825,134 @@ function jobCostHTML(){
     <button class="mini" type="button" data-act="explog">＋ Log parts cost</button></div>`;
 }
 
+/* ================= requests inbox (quote / appointment requests from email) ================= */
+let REQ_PASTE=null,REQ_EDIT=null,REQ_NO=null;
+const MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+const WDAYS=["sun","mon","tue","wed","thu","fri","sat"];
+function parseDateLoose(str){
+  const t=String(str||"").toLowerCase().trim();if(!t)return "";
+  if(/\btoday\b/.test(t))return TODAY;if(/\btomorrow\b/.test(t))return addDays(TODAY,1);
+  let m=t.match(/\b(20\d\d)-(\d{1,2})-(\d{1,2})\b/);if(m)return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  const fix=(mo,da,yr)=>{let y=yr?+(yr.length===2?"20"+yr:yr):+TODAY.slice(0,4);let iso=`${y}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`;
+    if(!yr&&iso<addDays(TODAY,-7)){y++;iso=`${y}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`;}return mo>=1&&mo<=12&&da>=1&&da<=31?iso:"";};
+  m=t.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\b/);if(m){const r=fix(+m[1],+m[2],m[3]);if(r)return r;}
+  m=t.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/);if(m)return fix(MONTHS.indexOf(m[1].slice(0,3))+1,+m[2],m[3]);
+  m=t.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/);if(m)return fix(MONTHS.indexOf(m[2])+1,+m[1]);
+  m=t.match(/\b(sunday|sun|monday|mon|tuesday|tues|tue|wednesday|wed|thursday|thurs|thu|friday|fri|saturday|sat)\b/);if(m){const want=WDAYS.indexOf(m[1].slice(0,3));const d=new Date(TODAY+"T12:00:00");let k=(want-d.getDay()+7)%7;if(k===0)k=7;return addDays(TODAY,k);}
+  return "";
+}
+function parseTimeLoose(str){
+  const t=String(str||"").toLowerCase();let m=t.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/);
+  if(m){let h=+m[1]%12;if(m[3][0]==="p")h+=12;return `${String(h).padStart(2,"0")}:${m[2]||"00"}`;}
+  m=t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);if(m)return `${m[1].padStart(2,"0")}:${m[2]}`;
+  if(/\bmorning\b/.test(t))return "09:00";if(/\bafternoon\b/.test(t))return "13:00";if(/\bevening\b/.test(t))return "17:00";
+  return "";
+}
+function parseRequest(raw){
+  const text=String(raw||"").replace(/\r/g,"").replace(/ /g," ");
+  const lines=text.split("\n").map(l=>l.replace(/^[>*\-•\s]+/,"").trim());
+  const LBL=/^([A-Za-z][A-Za-z /&()'-]{1,40}?)\s*[:：]\s*(.*)$/;
+  const fields=[];lines.forEach((l,i)=>{const m=l.match(LBL);if(m&&!/^https?$/i.test(m[1]))fields.push({k:m[1].toLowerCase().trim(),v:m[2].trim(),i});});
+  const get=(re,multi)=>{const f=fields.find(x=>re.test(x.k));if(!f)return "";let v=f.v;
+    if(multi||!v){const out=[v];for(let j=f.i+1;j<lines.length;j++){const l=lines[j];if(LBL.test(l)&&fields.some(x=>x.i===j))break;if(!l&&out.join("").trim()&&!multi)break;out.push(l);}v=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();}
+    return v;};
+  const r={customer:"",phone:"",email:"",location:"",year:"",make:"",model:"",trim:"",vin:"",work:"",date:"",time:"",type:"service",notes:""};
+  let first=get(/^(first name|first)$/),last=get(/^(last name|last|surname)$/);
+  r.customer=get(/^(full name|name|your name|customer|customer name|contact name|client)$/)||[first,last].filter(Boolean).join(" ");
+  r.phone=get(/(phone|cell|mobile|tel)/)||((text.match(/(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/)||[""])[0]);
+  const own=String(APP.settings.email||"").toLowerCase();
+  r.email=(get(/e-?mail/).match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[""])[0]||((text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g)||[]).find(e=>!/no-?reply|formspree|wix|squarespace|godaddy|mailer|notification|github/i.test(e)&&e.toLowerCase()!==own)||"");
+  const addr=get(/^(address|street|street address|service address|location|where|your address|vehicle location|address line 1)$/),city=get(/^(city|town)$/),st=get(/^(state)$/),zip=get(/^(zip|zip code|postal code|zipcode)$/);
+  r.location=[addr,city,[st,zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const yr=get(/^(year|vehicle year)$/),mk=get(/^(make|vehicle make)$/),md=get(/^(model|vehicle model)$/);
+  let veh=get(/(vehicle|car|year.?make.?model|ymm|truck)/);
+  if(yr||mk||md){r.year=(yr.match(/(19|20)\d\d/)||[""])[0];r.make=mk;r.model=md;}
+  else{const src=veh||text;const m=src.match(/\b((?:19[6-9]|20[0-3])\d)\s+([A-Za-z][A-Za-z-]+)\s+([A-Za-z0-9][\w-]*(?:\s+[A-Za-z0-9][\w-]*)?)/);
+    if(m){r.year=m[1];r.make=titleMake(m[2]);r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was)$/i,"");}}
+  const vin=text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/);if(vin&&/\d/.test(vin[0])&&/[A-Z]/.test(vin[0]))r.vin=vin[0];
+  r.work=get(/^(service|services|service needed|service requested|services needed|what do you need|request|issue|problem|concern|repair|repairs|work needed|type of service|reason)/,false)||"";
+  const msg=get(/^(message|comments?|details|description|notes|additional info|additional information|tell us more|your message|question)/,true);
+  if(!r.work&&msg)r.work=msg.split(/\n/)[0].slice(0,140);
+  if(msg&&msg!==r.work)r.notes=msg;
+  if(!fields.length&&!r.work){const body=lines.filter(Boolean).filter(l=>!/^(from|to|sent|date|subject)\b/i.test(l));r.work=(body.find(l=>l.length>15)||"").slice(0,140);r.notes=body.join("\n").slice(0,800);}
+  const dl=get(/(preferred date|appointment date|date requested|requested date|preferred day|best day|day|date|when|availability|available)/);
+  r.date=parseDateLoose(dl)||parseDateLoose((text.match(/\b(?:on|for|this|next)\s+((?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|mon|tues?|wed|thu|thurs|fri|sat|sun)\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|tomorrow)/i)||["",""])[1]);
+  r.time=parseTimeLoose(get(/(preferred time|time|best time|appointment time)/)||dl);
+  if(/pre-?\s?purchase|\bppi\b|inspection before (i )?buy|buying (a|this|the)|looking to buy|thinking of buying|used car inspection/i.test(text))r.type="ppi";
+  if(!fields.length){if(!r.time)r.time=parseTimeLoose(text);
+    if(r.type==="ppi")r.work="Pre-purchase inspection";
+    else{const sent=text.replace(/\s+/g," ").split(/(?<=[.!?])\s+/).find(x=>/(brake|oil|engine|battery|noise|leak|light|check|start|diagnos|replace|repair|fix|service|belt|alternator|starter|squeal|grind)/i.test(x));if(sent)r.work=sent.trim().slice(0,140);}}
+  if(!r.customer){const m=text.match(/\bmy name is ([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/)||text.match(/(?:thanks|thank you|regards|best|sincerely|cheers)[,!.]?\s*(?:\n\s*)?[-–]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/i)||text.match(/\n\s*[-–]\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/);if(m)r.customer=m[1];}
+  if(r.type==="ppi"&&!r.work)r.work="Pre-purchase inspection";
+  return r;
+}
+function dayLoad(d){return APP.jobs.filter(j=>j.info.date===d).sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));}
+function availHTML(rq){
+  const d=rq.date||TODAY,start=d<TODAY?TODAY:d,days=[...Array(7)].map((_,k)=>addDays(start,k-(start>TODAY?1:0))).filter(x=>x>=TODAY).slice(0,7);
+  const js=rq.date?dayLoad(rq.date):[];
+  return `<div class="avail"><div class="lbl" style="margin:0">Your schedule${rq.date?` on ${esc(fmtDate(rq.date,{weekday:"long",month:"short",day:"numeric"}))}`:""}</div>
+    ${rq.date?(js.length?`<div class="av-list">${js.map(j=>`<div class="av-row"><span class="av-t">${j.info.time?esc(fmtTime(j.info.time)):"Any time"}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="av-w">${esc(j.info.customer||"")}${j.info.location?` · ${esc(j.info.location)}`:""}</span></div>`).join("")}</div>`
+      :`<p class="av-free">✓ Nothing booked that day</p>`):`<p class="help" style="margin:0">No date in the request. Pick one below.</p>`}
+    <div class="av-days">${days.map(x=>{const n=dayLoad(x).length,dt=new Date(x+"T12:00:00");return `<button type="button" class="av-day${n?" busy":""}" data-reqday="${x}" aria-pressed="${rq.date===x}"><small>${x===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><span>${n?n+" job"+(n===1?"":"s"):"open"}</span></button>`;}).join("")}</div></div>`;
+}
+const REQ_ST={new:"New",booked:"Booked",quoted:"Quote sent",declined:"Declined"};
+function reqForm(rq){
+  const f=(k,l,extra="",cls="")=>`<label class="${cls}">${l}<input data-req="${k}" value="${esc(rq[k]||"")}" ${extra}></label>`;
+  return `<div class="form req-form" id="reqForm">
+    <p class="formh">${rq.id&&APP.requests.some(x=>x.id===rq.id)?"Review request":"Check what the app found"}</p>
+    <div class="full seg" role="group" aria-label="Request type"><button type="button" data-reqtype="ppi" aria-pressed="${rq.type==="ppi"}">Pre-purchase inspection</button><button type="button" data-reqtype="service" aria-pressed="${rq.type!=="ppi"}">Service / repair</button></div>
+    ${f("customer","Name","","full")}${f("phone","Phone",'inputmode="tel"')}${f("email","Email",'inputmode="email" autocapitalize="off"')}
+    ${f("location","Address","","full")}
+    ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
+    <label class="full">What they need<textarea data-req="work" rows="2">${esc(rq.work||"")}</textarea></label>
+    ${f("date","Day they asked for",'type="date"')}${f("time","Time",'type="time"')}
+    <div class="full">${availHTML(rq)}</div>
+    <label class="full">Notes / full message<textarea data-req="notes" rows="3">${esc(rq.notes||"")}</textarea></label>
+    <div class="formacts full"><button class="btn primary" type="button" data-act="reqsave">Save to inbox</button>${rq.status&&rq.status!=="new"?"":`<button class="btn" type="button" data-act="reqbook">Book it now</button>`}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
+  </div>`;
+}
+function declineText(rq,why){
+  const first=(rq.customer||"").trim().split(/\s+/)[0]||"there",st=APP.settings,w0=(rq.work||"").replace(/\.$/,"").trim();
+  const what=rq.type==="ppi"?"a pre-purchase inspection":!w0||w0.length>60||/\n/.test(w0)?"your request":w0.charAt(0).toLowerCase()+w0.slice(1);
+  const reasons={booked:`I'm fully booked${rq.date?" on "+fmtDate(rq.date,{weekday:"long",month:"short",day:"numeric"}):" for the day you asked for"}.`,
+    area:"your location is outside my service area.",work:"that's not a type of job I take on."};
+  const other=why==="booked"?(()=>{for(let k=0;k<10;k++){const d=addDays(rq.date&&rq.date>TODAY?rq.date:TODAY,k+1);if(!dayLoad(d).length)return d;}return "";})():"";
+  return `Hi ${first}, thanks for reaching out to ${bizName()} about ${what}. Unfortunately ${reasons[why]||reasons.booked}${other?` I do have an opening on ${fmtDate(other,{weekday:"long",month:"short",day:"numeric"})} if that works for you.`:why==="booked"?"":" I'm sorry I can't help with this one."}${st.owner?"\n\n"+st.owner:""}${st.phone?"\n"+st.phone:""}`;
+}
+function renderRequests(){
+  const rs=[...APP.requests].sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1)||(b.at||0)-(a.at||0));
+  const nNew=rs.filter(r=>r.status==="new").length;
+  const card=r=>{
+    const no=REQ_NO&&REQ_NO.id===r.id;
+    return `<div class="req${r.status==="new"?" is-new":""}"><div class="req-top"><strong>${esc(r.customer||"No name")}</strong><span class="st req-${r.status}">${REQ_ST[r.status]||"New"}</span><span class="tag">${r.type==="ppi"?"PPI":"Service"}</span></div>
+      <div class="meta">${esc([[r.year,r.make,r.model].filter(Boolean).join(" "),r.work].filter(Boolean).join(" · ")||"No details")}</div>
+      <div class="meta">${r.date?`Wants ${esc(fmtDate(r.date,{weekday:"short",month:"short",day:"numeric"}))}${r.time?" "+esc(fmtTime(r.time)):""} · ${dayLoad(r.date).length?dayLoad(r.date).length+" job"+(dayLoad(r.date).length===1?"":"s")+" that day":"day is open"}`:"No date asked for"}${r.phone?` · ${esc(r.phone)}`:""}</div>
+      <div class="meta req-age">Received ${esc(fmtDate(isoDay(new Date(r.at||Date.now())),{month:"short",day:"numeric"}))}${r.jobId&&APP.jobs.some(j=>j.id===r.jobId)?` · <button class="linkish" type="button" data-open="${r.jobId}">Open job</button>`:""}</div>
+      ${no?`<div class="req-no"><span class="lbl" style="margin:0">Why you can't</span><div class="chips">${[["booked","Fully booked"],["area","Outside my area"],["work","Don't do that work"]].map(([k,l])=>`<button type="button" data-reqwhy="${k}" aria-pressed="${REQ_NO.why===k}">${l}</button>`).join("")}</div>
+        <textarea id="reqNoText" data-reqnotext="1" rows="4">${esc(REQ_NO.text)}</textarea>
+        <div class="acts">${r.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(r.phone,REQ_NO.text))}" data-reqdecl="${r.id}">💬 Text</a>`:""}${r.email?`<a class="mini${r.phone&&CAN_CAL?"":" go"}" href="mailto:${esc(r.email)}?subject=${encodeURIComponent("Your request with "+bizName())}&body=${encodeURIComponent(REQ_NO.text)}" data-reqdecl="${r.id}">✉️ Email</a>`:""}<button class="mini" type="button" data-reqdeclonly="${r.id}">Just mark declined</button><button class="mini" type="button" data-act="reqnoclose">Cancel</button></div></div>`
+      :`<div class="acts">${r.status==="new"?`<button class="mini go" type="button" data-reqbook="${r.id}">Book it</button>${r.type!=="ppi"?`<button class="mini" type="button" data-reqquote="${r.id}">Send a quote</button>`:""}<button class="mini" type="button" data-reqno="${r.id}">Can't do it</button>`:""}
+        ${r.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(r.phone))}">Call</a>`:""}<button class="mini" type="button" data-reqedit="${r.id}">Review</button><button class="mini del" type="button" data-reqdel="${r.id}">Delete</button></div>`}
+    </div>`;};
+  return `${sampleBanner()}
+  <div class="stage-head dash-head"><div><div class="eyebrow">Quote &amp; appointment requests</div><h2>Requests</h2></div>
+    ${REQ_PASTE||REQ_EDIT?"":`<button class="btn primary" type="button" data-act="reqpaste">📥 Paste request</button>`}</div>
+  ${REQ_PASTE&&!REQ_EDIT?`<div class="form"><p class="formh">Paste the request</p>
+    <p class="help full" style="margin:0">Open the email, press and hold the text, <strong>Select All</strong>, <strong>Copy</strong>, then paste it here. The app picks out the name, phone, car, work and day.</p>
+    <label class="full"><textarea id="reqRaw" rows="8" placeholder="Paste the email here">${esc(REQ_PASTE.raw||"")}</textarea></label>
+    <div class="formacts full"><button class="btn primary" type="button" data-act="reqread">Read it</button>${navigator.clipboard&&navigator.clipboard.readText?`<button class="btn" type="button" data-act="reqclip">Paste from clipboard</button>`:""}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div></div>`:""}
+  ${REQ_EDIT?reqForm(REQ_EDIT):""}
+  ${rs.length?`<p class="when" style="margin:0 0 8px">${nNew} new · ${rs.length} total</p><div class="req-list">${rs.map(card).join("")}</div>`
+    :REQ_PASTE||REQ_EDIT?"":`<div class="emptybox">No requests yet. When a quote or appointment request comes in by email, copy it and tap <strong>📥 Paste request</strong>.</div>`}`;
+}
+function reqToDraft(r){
+  startAdd(null);Object.assign(APP.draft,{type:r.type==="ppi"?"ppi":"service",work:r.type==="ppi"?"":r.work||"",customer:r.customer||"",phone:r.phone||"",location:r.location||"",
+    year:r.year||"",make:r.make||"",model:r.model||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",
+    notes:[r.type==="ppi"&&r.work&&r.work!=="Pre-purchase inspection"?r.work:"",r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")});
+  const c=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c)APP.draft.custId=c.id;
+  APP.reqFrom=r.id;APP.view="jobs";
+}
+
 /* ================= dashboard ================= */
 const jDate=j=>(j.invoice&&j.invoice.date)||j.info.date||"";
 function periodStart(p){const d=new Date(TODAY+"T12:00:00");
@@ -847,6 +995,7 @@ function renderDash(){
     <button type="button" class="tile" data-nav="expenses"><span class="tl">Expenses · ${esc(label.toLowerCase())}</span><strong>${money(expSum(expIn(P)))}</strong><span class="ts">Parts ${money(expSum(expIn(P).filter(e=>e.cat==="parts")))} · tap to see</span></button>
     <div class="tile"><span class="tl">Profit · ${esc(label.toLowerCase())}</span><strong class="${billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P))<0?"neg":""}">${money(billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P)))}</strong><span class="ts">Billed minus tax and expenses</span></div>
   </div>
+  ${APP.requests.some(r=>r.status==="new")?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new").length} new request${APP.requests.filter(r=>r.status==="new").length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
   <div class="dash-card">
     <div class="dc-h"><h3>Billed by month</h3><span class="ts" id="barCap">${esc(fmtDate(mVals[5].m+"-01",{month:"long"}))}: ${money(mVals[5].v)} · ${mVals[5].n} job${mVals[5].n===1?"":"s"}</span></div>
     ${barChart(mVals)}
@@ -1185,7 +1334,7 @@ function renderChrome(){
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -1263,7 +1412,8 @@ function renderJobs(){
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
-  <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p></div>
+  <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button></div></div>
   ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
@@ -2490,6 +2640,7 @@ function render(){applyTheme();
   if(APP.view==="settings")html=renderSettings();
   else if(APP.view==="customers")html=renderCustomers();
   else if(APP.view==="dash")html=renderDash();
+  else if(APP.view==="requests")html=renderRequests();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>preloadMedia(S),0);}
@@ -2513,8 +2664,9 @@ function saveDraft(){
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
   else{const nj=newJob(info,type);if(custId)nj.custId=custId;APP.jobs.push(nj);
+    if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
-  APP.fuFrom=null;
+  APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
 
@@ -2522,13 +2674,15 @@ function saveDraft(){
 document.addEventListener("click",e=>{
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
+  const rd=e.target.closest&&e.target.closest("a[data-reqdecl]");
+  if(rd){const r=APP.requests.find(x=>x.id===rd.dataset.reqdecl);if(r){r.status="declined";save();setTimeout(()=>{REQ_NO=null;rerenderKeep();},800);}return;}
   const es=e.target.closest&&e.target.closest("a[data-estsent]");
   if(es&&S&&S.est){if(S.est.status==="draft"){S.est.status="sent";save();setTimeout(rerenderKeep,800);}return;}
   const sent=e.target.closest&&e.target.closest("a[data-omwsent]");
   if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
-  if(d.nav){if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
+  if(d.nav){if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
@@ -2537,7 +2691,7 @@ document.addEventListener("click",e=>{
   if(d.askdel){APP.confirmDel=d.askdel;render();return;}
   if(d.del){deleteJobMedia(APP.jobs.find(x=>x.id===d.del));APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
-  if(d.act==="cancelAdd"){APP.fuFrom=null;APP.adding=false;APP.editing=null;render();return;}
+  if(d.act==="cancelAdd"){APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.ckadd){const lbl=addCustomItem(d.ckadd,d.pfx);if(lbl){OPEN_CK.add(d.ckadd);if(d.pfx==="sk")OPEN_ADD=null;render();toast(`Added "${lbl}"`);}return;}
   if(d.ckhide){const st=APP.settings;const h=new Set(st.hidden||[]);h.has(d.ckhide)?h.delete(d.ckhide):h.add(d.ckhide);st.hidden=[...h];rebuildChecklist(st);save();render();return;}
@@ -2589,6 +2743,27 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="reqpaste"){REQ_PASTE={raw:""};REQ_EDIT=null;rerenderKeep();setTimeout(()=>document.getElementById("reqRaw")?.focus(),30);return;}
+  if(d.act==="reqclip"){navigator.clipboard.readText().then(t=>{const a=document.getElementById("reqRaw");if(a){a.value=t;REQ_PASTE.raw=t;}if(t.trim())toast("Pasted. Tap Read it.");else toast("Clipboard is empty");}).catch(()=>toast("Press and hold in the box, then Paste"));return;}
+  if(d.act==="reqread"){const raw=(document.getElementById("reqRaw")?.value||"").trim();if(!raw){toast("Paste the email first");return;}
+    const r=parseRequest(raw);REQ_EDIT={id:uid(),at:Date.now(),status:"new",raw,...r};REQ_PASTE=null;render();window.scrollTo(0,0);
+    const got=["customer","phone","make","work","date"].filter(k=>r[k]).length;toast(got>=3?"Got it. Check the details.":"Fill in what's missing");return;}
+  if(d.act==="reqcancel"){REQ_PASTE=null;REQ_EDIT=null;rerenderKeep();return;}
+  if(d.act==="reqsave"||d.act==="reqbook"){const r=REQ_EDIT;if(!r)return;const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
+    REQ_EDIT=null;save();if(d.act==="reqbook"){reqToDraft(r);render();window.scrollTo(0,0);return;}render();window.scrollTo(0,0);toast("Saved to your requests");return;}
+  if(d.reqtype&&REQ_EDIT){REQ_EDIT.type=d.reqtype;if(d.reqtype==="ppi"&&!REQ_EDIT.work)REQ_EDIT.work="Pre-purchase inspection";rerenderKeep();return;}
+  if(d.reqday&&REQ_EDIT){REQ_EDIT.date=d.reqday;rerenderKeep();return;}
+  if(d.reqedit){const r=APP.requests.find(x=>x.id===d.reqedit);if(r){REQ_EDIT={...r};REQ_PASTE=null;render();window.scrollTo(0,0);}return;}
+  if(d.reqdel){APP.requests=APP.requests.filter(x=>x.id!==d.reqdel);save();rerenderKeep();toast("Request deleted");return;}
+  if(d.reqbook){const r=APP.requests.find(x=>x.id===d.reqbook);if(r){reqToDraft(r);render();window.scrollTo(0,0);}return;}
+  if(d.reqquote){const r=APP.requests.find(x=>x.id===d.reqquote);if(!r)return;
+    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
+    j.docMode="est";APP.jobs.push(j);r.status="quoted";r.jobId=j.id;save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
+    if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);return;}
+  if(d.reqno){const r=APP.requests.find(x=>x.id===d.reqno);if(r){REQ_NO={id:r.id,why:"booked",text:declineText(r,"booked")};rerenderKeep();}return;}
+  if(d.reqwhy&&REQ_NO){const r=APP.requests.find(x=>x.id===REQ_NO.id);REQ_NO.why=d.reqwhy;REQ_NO.text=declineText(r,d.reqwhy);rerenderKeep();return;}
+  if(d.act==="reqnoclose"){REQ_NO=null;rerenderKeep();return;}
+  if(d.reqdeclonly){const r=APP.requests.find(x=>x.id===d.reqdeclonly);if(r){r.status="declined";save();}REQ_NO=null;rerenderKeep();return;}
   if(d.act==="tripadd"){TRIP_DRAFT={id:null,date:TODAY,miles:"",purpose:""};rerenderKeep();setTimeout(()=>document.getElementById("t-miles")?.focus(),30);return;}
   if(d.act==="tripcancel"){TRIP_DRAFT=null;rerenderKeep();return;}
   if(d.act==="tripdel"){APP.trips=APP.trips.filter(t=>t.id!==TRIP_DRAFT.id);TRIP_DRAFT=null;save();rerenderKeep();toast("Trip deleted");return;}
@@ -2725,6 +2900,8 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.req&&REQ_EDIT){REQ_EDIT[d.req]=d.req==="vin"?t.value.toUpperCase():t.value;if(d.req==="date"){clearTimeout(window.__rd);window.__rd=setTimeout(rerenderKeep,500);}return;}
+  if(d.reqnotext&&REQ_NO){REQ_NO.text=t.value;document.querySelectorAll("a[data-reqdecl]").forEach(a=>{const r=APP.requests.find(x=>x.id===REQ_NO.id);if(/^sms:/.test(a.href))a.href=smsHref(r.phone,t.value);else a.href=`mailto:${r.email}?subject=${encodeURIComponent("Your request with "+bizName())}&body=${encodeURIComponent(t.value)}`;});return;}
   if(d.trip&&TRIP_DRAFT){TRIP_DRAFT[d.trip]=t.value;return;}
   if(d.exp&&EXP_DRAFT){EXP_DRAFT[d.exp]=t.value;return;}
   if(d.disc){const dd=S.invoice.disc;if(!dd)return;dd[d.disc]=t.value;save();refreshTotals();const a=document.getElementById("discAmt");if(a){const tt=totals(S);a.textContent=tt.disc?negMoney(tt.disc):"—";}return;}

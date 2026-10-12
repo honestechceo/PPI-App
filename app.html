@@ -139,7 +139,7 @@ nav.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border
 .rep-list .txt small{display:block;color:var(--muted)}
 .empty{color:var(--muted);font-size:14px}
 .copyrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20;pointer-events:none}
 .confirm{background:var(--bad-soft);border:1px solid var(--bad);border-radius:10px;padding:12px;margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px}
 @media (max-width:480px){
@@ -282,7 +282,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .sug-wrap label{min-width:0}
 .sug{display:flex;flex-direction:column;border-radius:10px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.18)}
 .sug:empty{display:none}
-.sug-row{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--surface);padding:10px 12px;text-transform:none;letter-spacing:0}
+.sug-row{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;border:0;border-bottom:1px solid var(--line);background:var(--surface);padding:10px 12px;text-transform:none;letter-spacing:0}
 .sug-row:last-child{border-bottom:0}
 .sug-row strong{font-size:15px;color:var(--ink)}
 .sug-row span{font-size:12px;color:var(--muted)}
@@ -2655,10 +2655,7 @@ document.addEventListener("click",e=>{
   if(d.act==="dashbook"){APP.view="jobs";render();startAdd();return;}
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}
   if(d.gocust){APP.view="customers";CUST_OPEN=d.gocust;render();window.scrollTo(0,0);return;}
-  if(d.sugpick){const [cid,vk,target]=d.sugpick.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
-    if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);if(APP.draft.location&&!APP.draft.dist)calcDist("draft",true);}
-    else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);if(S.info.location&&!S.info.dist)calcDist("info",true);}
-    return;}
+  if(d.sugpick){if(SUG_DONE===d.sugpick&&Date.now()-SUG_AT<800)return;sugPick(d.sugpick);return;}
   if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
   if(d.cbook){const [cid,vk,type]=d.cbook.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
     APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
@@ -2699,7 +2696,28 @@ $("#nextBtn").addEventListener("click",()=>{
   go(S.step+1);
 });
 document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ck){el.open?OPEN_CK.add(el.dataset.ck):OPEN_CK.delete(el.dataset.ck);}},true);
-document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer"||e.target.id==="f-customer"))setTimeout(()=>{const a=document.activeElement;if(!a||!a.closest||!a.closest(".sug"))document.querySelectorAll(".sug").forEach(x=>x.innerHTML="");},250);});
+/* customer suggestions: iPhone Safari doesn't focus a tapped button, so the list could vanish before the tap landed.
+   Pick on pointerup and keep the list open while a finger is down. */
+let SUG_HOLD=null,SUG_DONE=null,SUG_AT=0;
+function sugPick(val){
+  const [cid,vk,target]=val.split("|");const c=(APP.customers||[]).find(x=>x.id===cid);if(!c)return;const v=vk?c.vehicles.find(x=>x.key===vk):null;
+    if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);if(APP.draft.location&&!APP.draft.dist)calcDist("draft",true);}
+    else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);if(S.info.location&&!S.info.dist)calcDist("info",true);}
+}
+document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b){if(!(SUG_HOLD&&SUG_HOLD.touch))SUG_HOLD=null;return;}
+  if(e.pointerType==="touch")return;SUG_HOLD={val:b.dataset.sugpick,x:e.clientX,y:e.clientY};if(e.pointerType==="mouse")e.preventDefault();},true);
+document.addEventListener("touchstart",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b)return;const t=e.touches[0];
+  SUG_HOLD={val:b.dataset.sugpick,x:t.clientX,y:t.clientY,touch:true};},{capture:true,passive:true});
+document.addEventListener("touchmove",e=>{const h=SUG_HOLD;if(!h||!h.touch)return;const t=e.touches[0];if(Math.abs(t.clientX-h.x)>12||Math.abs(t.clientY-h.y)>12)SUG_HOLD=null;},{capture:true,passive:true});
+document.addEventListener("touchend",e=>{const h=SUG_HOLD;if(!h||!h.touch)return;SUG_HOLD=null;const t=e.changedTouches[0];
+  const el=t&&document.elementFromPoint(t.clientX,t.clientY),b=el&&el.closest&&el.closest(".sug-row");if(!b||b.dataset.sugpick!==h.val)return;
+  e.preventDefault();SUG_DONE=h.val;SUG_AT=Date.now();document.activeElement&&document.activeElement.blur&&document.activeElement.blur();sugPick(h.val);},{capture:true,passive:false});
+document.addEventListener("contextmenu",e=>{if(e.target.closest&&e.target.closest(".sug-row"))e.preventDefault();},true);
+document.addEventListener("pointercancel",e=>{if(SUG_HOLD&&!SUG_HOLD.touch)SUG_HOLD=null;},true);
+document.addEventListener("pointerup",e=>{const h=SUG_HOLD;if(!h||h.touch)return;SUG_HOLD=null;const b=e.target.closest&&e.target.closest(".sug-row");
+  if(!b||b.dataset.sugpick!==h.val||Math.abs(e.clientX-h.x)>12||Math.abs(e.clientY-h.y)>12)return;
+  e.preventDefault();SUG_DONE=h.val;SUG_AT=Date.now();document.activeElement&&document.activeElement.blur&&document.activeElement.blur();sugPick(h.val);},true);
+document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer"||e.target.id==="f-customer"))setTimeout(()=>{if(SUG_HOLD)return;const a=document.activeElement;if(a&&(a.id==="d-customer"||a.id==="f-customer"))return;if(!a||!a.closest||!a.closest(".sug"))document.querySelectorAll(".sug").forEach(x=>x.innerHTML="");},400);});
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();if(e.target.id==="expForm")saveExpDraft();
   if(e.target.id==="tripForm"){const t=TRIP_DRAFT;if(!num(t.miles)){toast("Enter the miles");return;}const rec={id:t.id||uid(),date:t.date||TODAY,miles:String(num(t.miles)),purpose:(t.purpose||"").trim()||"Business trip"};
     const k=APP.trips.findIndex(x=>x.id===rec.id);if(k>-1)APP.trips[k]=rec;else APP.trips.push(rec);TRIP_DRAFT=null;save();rerenderKeep();toast(`Logged ${rec.miles} mi`);}});

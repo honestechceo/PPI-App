@@ -374,7 +374,16 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .menu-set{display:flex;flex-direction:column;gap:8px}
 .ms-row{display:grid;grid-template-columns:1fr auto auto;gap:4px 8px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
 .ms-row input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:40px;font-weight:600}
-.ms-amt{font-family:var(--f-mono);font-size:13px}.ms-sub{grid-column:1/-1;margin:0}
+.ms-amt{font-family:var(--f-mono);font-size:13px}.ms-sub{grid-column:1/-1;margin:0;text-align:left}
+.ms-item{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.ms-item.open{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.ms-head{width:100%;display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;align-items:center;text-align:left;background:transparent;border:0;padding:12px;min-height:48px}
+.ms-name{font-weight:600}.ms-chev{color:var(--muted)}
+.ms-body{display:flex;flex-direction:column;gap:10px;padding:0 12px 12px}
+.ms-lbl{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ms-lines{display:flex;flex-direction:column;gap:8px}
+.ms-foot{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;border-top:1px solid var(--line);padding-top:10px}
+.ms-foot strong{font-family:var(--f-mono)}.ms-del{display:flex;gap:6px}
 .doc-seg{margin:18px 0 10px;scroll-margin-top:170px}.jump{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .eststamp{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--accent-soft);color:var(--accent)}
 .eststamp.est-approved{background:var(--good-soft);color:var(--good)}.eststamp.est-declined{background:var(--bad-soft);color:var(--bad)}
@@ -1849,15 +1858,41 @@ function menuPanel(){
       :`<p class="help" style="margin:0">Your menu is empty. Build a job's lines below, then tap <strong>Save to menu</strong>. Or start with common jobs and fill in your prices.</p><div class="acts"><button class="mini" type="button" data-act="menustarter">Add common jobs</button></div>`}
   </div>`;
 }
+let MS_OPEN=null,MS_DEL=null;
+function menuLineHTML(it,x,k){
+  const lab=x.k==="labor",flat=x.k==="flat",key=`${it.id}:${k}`,amt=lineAmt({...x,p:lab&&x.p===""?APP.settings.laborRate:x.p});
+  return `<div class="ln${flat?" flat":""}">
+    <div class="ln-top"><select data-mkind="${key}" aria-label="Line type">${LINE_KINDS.map(([v,l])=>`<option value="${v}" ${x.k===v?"selected":""}>${l}</option>`).join("")}</select>
+      <input id="mf-${it.id}-${k}-d" data-mline="${key}" data-mf="d" value="${esc(x.d)}" placeholder="${lab?"Labor description":flat?"Job, e.g. Oil & filter change":x.k==="part"?"Part name":"Fee description"}" aria-label="Description">
+      <button class="xbtn" type="button" data-mdelline="${key}" aria-label="Remove line">×</button></div>
+    <div class="ln-nums">${flat?`<div class="ln-flat"><span>Flat fee</span></div>`:`<label>${lab?"Hours":"Qty"}<input id="mf-${it.id}-${k}-q" data-mline="${key}" data-mf="q" inputmode="decimal" value="${esc(x.q)}" placeholder="1"></label>`}
+      <label>${lab?"Rate":flat?"Price":"Price each"}<input id="mf-${it.id}-${k}-p" data-mline="${key}" data-mf="p" inputmode="decimal" value="${esc(x.p)}" placeholder="${lab&&APP.settings.laborRate?esc(APP.settings.laborRate):"0.00"}"></label>
+      <div class="ln-total"><span>Amount</span><strong id="mamt-${it.id}-${k}">${money(amt)}</strong></div></div>
+  </div>`;
+}
 function menuSettingsHTML(){
   const m=APP.settings.menu||[];
   return `<div class="form" id="menuSet">
     <p class="formh">Service menu</p>
-    <p class="help full" style="margin:0">Jobs you do often, with their labor and parts. On a service invoice, tap <strong>Service menu</strong> to add one in a tap. To change an item's lines or prices, add it to a job, edit it there, then <strong>Save to menu</strong> with the same name.</p>
-    ${m.length?`<div class="full menu-set">${m.map(x=>`<div class="ms-row"><input data-menuname="${x.id}" value="${esc(x.name)}" aria-label="Menu item name"><span class="ms-amt">${menuTotal(x)?money(menuTotal(x)):"—"}</span><button class="xbtn" type="button" data-menudel="${x.id}" aria-label="Delete ${esc(x.name)}">×</button><span class="help ms-sub">${esc(menuSum(x))}</span></div>`).join("")}</div>`:""}
-    <div class="full"><button class="mini" type="button" data-act="menustarter">${m.length?"Add any missing common jobs":"Add common jobs"}</button></div>
+    <p class="help full" style="margin:0">Jobs you do often, with their labor, parts and prices. Tap a job to change it. On a service job, tap <strong>📋 Service menu</strong> to add one in a tap. Labor with no rate uses your labor rate (${APP.settings.laborRate?money(APP.settings.laborRate)+"/hr":"set it under Pricing"}).</p>
+    <div class="full"><button class="btn primary" type="button" data-act="msnew">＋ Add a job</button></div>
+    ${m.length?`<div class="full menu-set">${m.map(it=>{const open=MS_OPEN===it.id,tot=menuTotal(it);
+      return `<div class="ms-item${open?" open":""}" id="ms-${it.id}">
+        <button type="button" class="ms-head" data-msopen="${it.id}" aria-expanded="${open}"><span class="ms-name">${esc(it.name||"Untitled job")}</span><span class="ms-amt" id="mstot-${it.id}">${tot?money(tot):"Set price"}</span><span class="ms-chev">${open?"▴":"▾"}</span>
+          ${open?"":`<span class="help ms-sub">${esc(menuSum(it))||"No lines yet"}</span>`}</button>
+        ${open?`<div class="ms-body">
+          <label class="ms-lbl">Job name<input id="msn-${it.id}" data-menuname="${it.id}" value="${esc(it.name)}" placeholder="e.g. Oil & filter change" autocomplete="off"></label>
+          <div class="ms-lines">${(it.lines||[]).map((x,k)=>menuLineHTML(it,x,k)).join("")||`<p class="help" style="margin:0">No lines yet. Add a flat fee, labor or parts below.</p>`}</div>
+          <div class="copyrow"><button class="mini" type="button" data-maddline="${it.id}:flat">＋ Flat fee</button><button class="mini" type="button" data-maddline="${it.id}:labor">＋ Labor (hourly)</button><button class="mini" type="button" data-maddline="${it.id}:part">＋ Part</button><button class="mini" type="button" data-maddline="${it.id}:fee">＋ Fee</button></div>
+          <div class="ms-foot"><span>Job total <strong id="mstot2-${it.id}">${money(tot)}</strong></span>
+            ${MS_DEL===it.id?`<span class="ms-del"><button class="mini del" type="button" data-menudel="${it.id}">Delete job</button><button class="mini" type="button" data-msdelno="1">Keep</button></span>`:`<button class="mini del" type="button" data-msdelask="${it.id}">Delete</button>`}
+            <button class="mini go" type="button" data-msopen="${it.id}">Done</button></div>
+        </div>`:""}
+      </div>`;}).join("")}</div>`:`<p class="help full" style="margin:0">No jobs yet.</p>`}
+    <div class="full"><button class="mini" type="button" data-act="menustarter">${m.length?"Add any missing common jobs":"Add common jobs (brakes, oil change, battery…)"}</button></div>
   </div>`;
 }
+function refreshMenuTotals(it){const t=menuTotal(it);const a=document.getElementById("mstot-"+it.id),b=document.getElementById("mstot2-"+it.id);if(a)a.textContent=t?money(t):"Set price";if(b)b.textContent=money(t);}
 function lineRow(x,k){
   const lab=x.k==="labor",flat=x.k==="flat";
   return `<div class="ln${flat?" flat":""}" data-ln="${k}">
@@ -2392,7 +2427,16 @@ document.addEventListener("click",e=>{
     it.lines.forEach(x=>ls.push({k:x.k,d:x.d,q:x.q,p:x.k==="labor"&&x.p===""?(APP.settings.laborRate||""):x.p}));
     if(!String(S.info.work||"").trim())S.info.work=it.name;if(S.status==="sched")S.status="active";
     MENU_OPEN=false;save();rerenderKeep();toast(`Added ${it.name}`);document.getElementById("lines")?.scrollIntoView({block:"nearest"});return;}
-  if(d.menudel){const m=APP.settings.menu,k=m.findIndex(x=>x.id===d.menudel);if(k>-1){const [x]=m.splice(k,1);save();rerenderKeep();toast(`Removed "${x.name}"`);}return;}
+  if(d.act==="msnew"){const it={id:uid(),name:"",lines:[{k:"flat",d:"",q:"1",p:""}]};APP.settings.menu.unshift(it);MS_OPEN=it.id;MS_DEL=null;save();rerenderKeep();
+    setTimeout(()=>{const el=document.getElementById("msn-"+it.id);if(el){el.scrollIntoView({block:"center"});el.focus();}},30);return;}
+  if(d.msopen){MS_OPEN=MS_OPEN===d.msopen?null:d.msopen;MS_DEL=null;const m=APP.settings.menu;const prev=m.find(x=>x.id===d.msopen);if(prev&&!prev.name.trim()&&MS_OPEN===null)prev.name=(prev.lines[0]&&prev.lines[0].d)||"Untitled job";save();rerenderKeep();
+    if(MS_OPEN)setTimeout(()=>document.getElementById("ms-"+MS_OPEN)?.scrollIntoView({block:"nearest"}),20);return;}
+  if(d.msdelask){MS_DEL=d.msdelask;rerenderKeep();return;}
+  if(d.msdelno){MS_DEL=null;rerenderKeep();return;}
+  if(d.maddline){const [id,k]=d.maddline.split(":");const it=APP.settings.menu.find(x=>x.id===id);if(!it)return;it.lines.push({k,d:"",q:"1",p:""});save();rerenderKeep();
+    setTimeout(()=>document.getElementById(`mf-${id}-${it.lines.length-1}-d`)?.focus(),20);return;}
+  if(d.mdelline){const [id,k]=d.mdelline.split(":");const it=APP.settings.menu.find(x=>x.id===id);if(!it)return;it.lines.splice(+k,1);save();rerenderKeep();return;}
+  if(d.menudel){MS_DEL=null;MS_OPEN=null;const m=APP.settings.menu,k=m.findIndex(x=>x.id===d.menudel);if(k>-1){const [x]=m.splice(k,1);save();rerenderKeep();toast(`Removed "${x.name}"`);}return;}
   if(d.omw){startOMW(d.omw);return;}
   if(d.omwadj&&OMW){const j=APP.jobs.find(x=>x.id===OMW.id);OMW.mins=Math.max(5,OMW.mins+ +d.omwadj);if(!OMW.edited)OMW.text=omwText(j,OMW.mins);else toast("You edited the text, so update the time in it yourself");rerenderKeep();return;}
   if(d.omwcopy&&OMW){copyText(OMW.text,"omwText");return;}
@@ -2453,6 +2497,9 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.mline){const [id,k]=d.mline.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x[d.mf]=t.value;
+    const a=document.getElementById(`mamt-${id}-${k}`);if(a)a.textContent=money(lineAmt({...x,p:x.k==="labor"&&x.p===""?APP.settings.laborRate:x.p}));refreshMenuTotals(it);
+    clearTimeout(window.__ml);window.__ml=setTimeout(save,400);return;}
   if(d.menuname){const it=APP.settings.menu.find(x=>x.id===d.menuname);if(it){it.name=t.value;clearTimeout(window.__mn);window.__mn=setTimeout(save,400);}return;}
   if(d.omwtext&&OMW){OMW.text=t.value;OMW.edited=true;const a=document.getElementById("omwSend");const j=APP.jobs.find(x=>x.id===OMW.id);if(a&&j)a.href=smsHref(j.info.phone,t.value);return;}
   if(d.themecustom){APP.settings.themeAccent=t.value.toLowerCase();applyTheme();const l=t.closest(".acc-custom");if(l)l.style.setProperty("--c",t.value);clearTimeout(window.__thm);window.__thm=setTimeout(save,300);return;}
@@ -2515,6 +2562,7 @@ document.addEventListener("change",e=>{
   if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
   if(d.lnk!==undefined){const k=+d.lnk,x=S.invoice.lines[k];x.k=t.value;if(x.k==="flat")x.q="1";if(x.k==="labor"&&!x.p&&APP.settings.laborRate)x.p=APP.settings.laborRate;save();render();refreshTotals();return;}
   if(d.set==="hq"){checkHQ();return;}
+  if(d.mkind){const [id,k]=d.mkind.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x.k=t.value;if(x.k==="flat")x.q="1";save();rerenderKeep();return;}
   if(d.themecustom){save();const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.draft==="location"&&hasHQ()&&t.value.trim()){calcDist("draft",true);return;}
   if(d.info==="location"&&hasHQ()&&t.value.trim()&&S){calcDist("info",true);return;}

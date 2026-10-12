@@ -388,6 +388,14 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .eststamp.est-approved{background:var(--good-soft);color:var(--good)}.eststamp.est-declined{background:var(--bad-soft);color:var(--bad)}
 .st-est{background:var(--accent-soft);color:var(--accent)}.st-est.est-approved{background:var(--good-soft);color:var(--good)}.st-est.est-declined{background:var(--bad-soft);color:var(--bad)}
 .est-go{border-color:var(--good)!important;color:var(--good)!important;font-weight:700}
+.disc-ln{margin-top:10px;border-color:var(--good);background:var(--good-soft)}
+.disc-ln input{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:10px;min-height:44px;width:100%}
+.disc-row{display:grid;grid-template-columns:96px 1fr auto;gap:8px;align-items:center}
+.disc-row input{font-family:var(--f-mono);text-align:right}
+.disc-seg{grid-template-columns:1fr 1fr;gap:4px}.disc-seg button{min-height:44px;padding:6px}
+.disc-amt{font-family:var(--f-mono);color:var(--good);min-width:80px;text-align:right}
+.disc-quick{display:flex;flex-wrap:wrap;gap:6px}
+.totals .disc-v{color:var(--good)}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -982,23 +990,42 @@ function travelCalc(job){
   const d=num(job.info.dist), billable=Math.max(0,d-num(st.freeMiles));
   return {fee:Math.round(billable*num(st.perMile)),auto:true,billable,d};
 }
+/* ---- discounts: applied to the subtotal, before tax ---- */
+function discAmt(inv,pre){const d=inv.disc;if(!d||!num(d.v))return 0;
+  const a=d.t==="pct"?Math.round(pre*Math.min(100,num(d.v)))/100:num(d.v);return Math.max(0,Math.min(pre,Math.round(a*100)/100));}
+function discLabel(inv){const d=inv.disc;if(!d||!num(d.v))return "";const r=String(d.r||"").trim();
+  return `Discount${r?" – "+r:""}${d.t==="pct"?` (${num(d.v)}%)`:""}`;}
+const negMoney=a=>"−"+money(a);
+const DISC_QUICK=[["pct","10"],["pct","15"],["amt","20"],["amt","50"]];
+function discHTML(){
+  const inv=S.invoice,d=inv.disc;
+  if(!d)return `<div class="copyrow" style="margin-top:8px"><button class="mini" type="button" data-discadd="1">＋ Discount</button></div>`;
+  const t=totals(S);
+  return `<div class="ln disc-ln"><div class="ln-top"><strong>Discount</strong><button class="xbtn" type="button" data-discdel="1" aria-label="Remove discount">×</button></div>
+    <input id="disc-r" data-disc="r" value="${esc(d.r||"")}" placeholder="Reason (optional), e.g. Military, returning customer" autocomplete="off">
+    <div class="disc-row"><div class="seg disc-seg" role="group" aria-label="Percent or dollars"><button type="button" data-disct="pct" aria-pressed="${d.t==="pct"}">%</button><button type="button" data-disct="amt" aria-pressed="${d.t!=="pct"}">$</button></div>
+      <input id="disc-v" data-disc="v" inputmode="decimal" value="${esc(d.v||"")}" placeholder="${d.t==="pct"?"10":"25.00"}" aria-label="Discount ${d.t==="pct"?"percent":"amount"}">
+      <strong class="disc-amt" id="discAmt">${t.disc?negMoney(t.disc):"—"}</strong></div>
+    <div class="disc-quick">${DISC_QUICK.map(([k,v])=>`<button class="mini" type="button" data-discq="${k}:${v}">${k==="pct"?v+"% off":"$"+v+" off"}</button>`).join("")}</div>
+  </div>`;
+}
 function totals(job){
   const inv=job.invoice, st=APP.settings;
   if(isSvc(job)){
     const ls=inv.lines||[],sum=k=>ls.filter(x=>x.k===k).reduce((a,x)=>a+lineAmt(x),0);
     const labor=sum("labor")+sum("flat"),parts=sum("part"),fees=sum("fee"),tr=travelCalc(job);
-    const sub=labor+parts+fees+tr.fee;
+    const pre=labor+parts+fees+tr.fee,disc=discAmt(inv,pre),sub=Math.round((pre-disc)*100)/100;
     const taxOn=inv.tax==null?!!st.taxOn:inv.tax;
     const tax=taxOn?Math.round(sub*num(st.taxRate))/100:0;
-    return {svc:true,fee:0,labor,parts,fees,travel:tr,extras:labor+parts+fees,sub,taxOn,tax,total:sub+tax};
+    return {svc:true,fee:0,labor,parts,fees,travel:tr,extras:labor+parts+fees,pre,disc,discLabel:discLabel(inv),sub,taxOn,tax,total:sub+tax};
   }
   const fee=inv.fee==null?num(st.fee):num(inv.fee);
   const tr=travelCalc(job);
   const extras=inv.items.reduce((a,x)=>a+num(x.a),0);
-  const sub=fee+tr.fee+extras;
+  const pre=fee+tr.fee+extras,disc=discAmt(inv,pre),sub=Math.round((pre-disc)*100)/100;
   const taxOn=inv.tax==null?!!st.taxOn:inv.tax;
   const tax=taxOn?Math.round(sub*num(st.taxRate))/100:0;
-  return {fee,travel:tr,extras,sub,taxOn,tax,total:sub+tax};
+  return {fee,travel:tr,extras,pre,disc,discLabel:discLabel(inv),sub,taxOn,tax,total:sub+tax};
 }
 function jobTotal(job){return totals(job).total;}
 
@@ -1816,6 +1843,7 @@ function renderService(){
     ${menuPanel()}
     <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</div>
       <label class="ln-amt">Amount<input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}"></label></div>
+    ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl>
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
@@ -1951,6 +1979,7 @@ function estimateText(){
   const row=(d,a)=>L.push(`${d.padEnd(30," ")} ${money(a).padStart(10," ")}`);
   (S.invoice.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q);row(x.k==="flat"?`${x.d||"Labor"} (flat fee)`:`${x.d||RK[x.k]}${q!==1||x.k==="labor"?` (${q}${x.k==="labor"?" hr":""} × ${money(num(x.p))})`:""}`,lineAmt(x));});
   if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
+  if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row("ESTIMATED TOTAL",t.total);
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
@@ -1995,6 +2024,7 @@ function renderInvoice(){
           <td class="amt"><input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}" aria-label="Travel fee"></td></tr>
         ${inv.items.map((x,k)=>`<tr><td><div class="rowx"><input id="it-d-${k}" data-itd="${k}" value="${esc(x.d)}" placeholder="Description"><button class="xbtn" type="button" data-delitem="${k}" aria-label="Remove line">×</button></div></td><td class="amt"><input id="it-a-${k}" data-ita="${k}" inputmode="decimal" value="${esc(x.a)}" placeholder="0"></td></tr>`).join("")}
       </tbody></table></div>
+    ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><button class="mini" type="button" data-act="additem">＋ Add line item</button>
       <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl>
@@ -2009,8 +2039,8 @@ function renderInvoice(){
   </div>`;
 }
 function totalsHTML(t){
-  if(t.svc)return `<dt>Labor</dt><dd>${money(t.labor)}</dd><dt>Parts</dt><dd>${money(t.parts)}</dd>${t.fees?`<dt>Fees</dt><dd>${money(t.fees)}</dd>`:""}<dt>Travel</dt><dd>${money(t.travel.fee)}</dd>${t.taxOn?`<dt>Subtotal</dt><dd>${money(t.sub)}</dd><dt>Tax</dt><dd>${money(t.tax)}</dd>`:""}<dt style="align-self:end">${docMode(S)==="est"?"Estimated total":S.invoice.paid?"Paid":"Total due"}</dt><dd class="grand">${money(t.total)}</dd>`;
-  return `<dt>Inspection</dt><dd>${money(t.fee)}</dd><dt>Travel</dt><dd>${money(t.travel.fee)}</dd>${t.extras?`<dt>Other</dt><dd>${money(t.extras)}</dd>`:""}${t.taxOn?`<dt>Subtotal</dt><dd>${money(t.sub)}</dd><dt>Tax</dt><dd>${money(t.tax)}</dd>`:""}<dt style="align-self:end">${S.invoice.paid?"Paid":"Total due"}</dt><dd class="grand">${money(t.total)}</dd>`;
+  if(t.svc)return `<dt>Labor</dt><dd>${money(t.labor)}</dd><dt>Parts</dt><dd>${money(t.parts)}</dd>${t.fees?`<dt>Fees</dt><dd>${money(t.fees)}</dd>`:""}<dt>Travel</dt><dd>${money(t.travel.fee)}</dd>${t.disc?`<dt>${esc(t.discLabel)}</dt><dd class="disc-v">${negMoney(t.disc)}</dd>`:""}${t.taxOn?`<dt>Subtotal</dt><dd>${money(t.sub)}</dd><dt>Tax</dt><dd>${money(t.tax)}</dd>`:""}<dt style="align-self:end">${docMode(S)==="est"?"Estimated total":S.invoice.paid?"Paid":"Total due"}</dt><dd class="grand">${money(t.total)}</dd>`;
+  return `<dt>Inspection</dt><dd>${money(t.fee)}</dd><dt>Travel</dt><dd>${money(t.travel.fee)}</dd>${t.extras?`<dt>Other</dt><dd>${money(t.extras)}</dd>`:""}${t.disc?`<dt>${esc(t.discLabel)}</dt><dd class="disc-v">${negMoney(t.disc)}</dd>`:""}${t.taxOn?`<dt>Subtotal</dt><dd>${money(t.sub)}</dd><dt>Tax</dt><dd>${money(t.tax)}</dd>`:""}<dt style="align-self:end">${S.invoice.paid?"Paid":"Total due"}</dt><dd class="grand">${money(t.total)}</dd>`;
 }
 function invoiceText(){
   const inv=S.invoice,i=S.info,t=totals(S),st=APP.settings;
@@ -2029,6 +2059,7 @@ function invoiceText(){
   }else row("Pre-purchase inspection",t.fee);
   if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
   if(!t.svc)inv.items.filter(x=>x.d||num(x.a)).forEach(x=>row(x.d||"Item",num(x.a)));
+  if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row(inv.paid?"PAID":"TOTAL DUE",t.total);
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
@@ -2233,6 +2264,7 @@ function buildInvoicePdf(job,est){
   if(!svc)inv.items.filter(x=>x.d||num(x.a)).forEach(x=>line(x.d||"Item","",num(x.a)));
   const tx=PW-PM-200;
   if(svc){tl0("Labor",money(t.labor));tl0("Parts",money(t.parts));if(t.fees)tl0("Fees",money(t.fees));if(t.travel.fee)tl0("Travel",money(t.travel.fee));}
+  if(t.disc){if(!svc)tl0("Before discount",money(t.pre));P.font(10,"normal",PC.good);const dl=P.wrap(t.discLabel,170);P.text(dl,tx,P.y);P.font(10,"bold",PC.good);P.text("-"+money(t.disc),PW-PM-8,P.y,{align:"right"});P.y+=16+(dl.length-1)*12;}
   function tl0(k,v){P.font(10,"normal",PC.muted);P.text(k,tx,P.y);P.font(10,"bold");P.text(v,PW-PM-8,P.y,{align:"right"});P.y+=16;}
   const tl=(k,v,big)=>{P.font(big?13:10,big?"bold":"normal",big?PC.ink:PC.muted);P.text(k,tx,P.y);P.font(big?13:10,"bold");P.text(v,PW-PM-8,P.y,{align:"right"});P.y+=big?22:16;};
   if(t.taxOn){tl("Subtotal",money(t.sub));tl(`Sales tax ${s.taxRate}%`,money(t.tax));}
@@ -2406,6 +2438,10 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.discadd){S.invoice.disc={t:"pct",v:"",r:""};save();rerenderKeep();setTimeout(()=>document.getElementById("disc-v")?.focus(),30);return;}
+  if(d.discdel){delete S.invoice.disc;save();rerenderKeep();return;}
+  if(d.disct){const dd=S.invoice.disc;if(dd){dd.t=d.disct;save();rerenderKeep();}return;}
+  if(d.discq){const [k,v]=d.discq.split(":");const dd=S.invoice.disc||(S.invoice.disc={r:""});dd.t=k;dd.v=v;save();rerenderKeep();return;}
   if(d.vinlook){autoDecode(S,true);return;}
   if(d.vinuse){const dd=VIN_DEC[String(S.info.vin||"").toUpperCase()];if(dd){["year","make","model","trim","engine"].forEach(k=>{if(dd[k])S.info[k]=dd[k];});save();VINMSG=null;rerenderKeep();toast("Vehicle updated from the VIN");}return;}
   if(d.docmode){S.docMode=d.docmode;if(d.docmode==="inv")ensureInvoice();save();MENU_OPEN=false;MENU_SAVE=false;rerenderKeep();return;}
@@ -2496,6 +2532,7 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.disc){const dd=S.invoice.disc;if(!dd)return;dd[d.disc]=t.value;save();refreshTotals();const a=document.getElementById("discAmt");if(a){const tt=totals(S);a.textContent=tt.disc?negMoney(tt.disc):"—";}return;}
   if(d.mline){const [id,k]=d.mline.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x[d.mf]=t.value;
     const a=document.getElementById(`mamt-${id}-${k}`);if(a)a.textContent=money(lineAmt({...x,p:x.k==="labor"&&x.p===""?APP.settings.laborRate:x.p}));refreshMenuTotals(it);
     clearTimeout(window.__ml);window.__ml=setTimeout(save,400);return;}

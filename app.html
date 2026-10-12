@@ -360,6 +360,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .omw-adj{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.omw-adj .mini{padding-left:4px;padding-right:4px;justify-content:center}.omw .note{margin:0}
 .omw-sent{grid-column:1/-1;color:var(--good)}
 .vin-dec{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;text-transform:none;letter-spacing:0;font-weight:400}.vin-dec:empty{display:none}
+.opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)}
 .vin-ok{color:var(--good);font-weight:600}.vin-warn{color:var(--mon)}
 .menu-row{margin-top:6px}
 .menu-pan{border:1px solid var(--accent);background:var(--accent-soft);border-radius:10px;padding:10px 12px;margin-top:10px;display:flex;flex-direction:column;gap:8px}
@@ -373,7 +374,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .ms-row{display:grid;grid-template-columns:1fr auto auto;gap:4px 8px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
 .ms-row input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:40px;font-weight:600}
 .ms-amt{font-family:var(--f-mono);font-size:13px}.ms-sub{grid-column:1/-1;margin:0}
-.doc-seg{margin:18px 0 10px}
+.doc-seg{margin:18px 0 10px;scroll-margin-top:170px}.jump{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .eststamp{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--accent-soft);color:var(--accent)}
 .eststamp.est-approved{background:var(--good-soft);color:var(--good)}.eststamp.est-declined{background:var(--bad-soft);color:var(--bad)}
 .st-est{background:var(--accent-soft);color:var(--accent)}.st-est.est-approved{background:var(--good-soft);color:var(--good)}.st-est.est-declined{background:var(--bad-soft);color:var(--bad)}
@@ -934,6 +935,17 @@ async function autoDecode(job,force){
   VINMSG={id:job.id,vin,html};
   if(S===job&&APP.view==="job"){if(filled.length){rerenderKeep();toast("Vehicle filled in from the VIN");}else{const el=document.getElementById("vinDec");if(el)el.innerHTML=html;}}
 }
+async function draftDecode(){
+  const dr=APP.draft;if(!dr)return;const vin=String(dr.vin||"").toUpperCase();if(!vinReady(vin))return;
+  const z=()=>document.getElementById("dVinDec");const say=h=>{const el=z();if(el)el.innerHTML=h;};
+  const vc=vinCheck(vin);say(`<span class="help">Looking up this VIN…</span>`);
+  let x=null;try{x=await decodeVin(vin);}catch(e){}
+  if(APP.draft!==dr||String(dr.vin||"").toUpperCase()!==vin)return;
+  if(!x){say(`<span class="help">${vc.cls==="err"?esc(vc.msg)+". ":""}Couldn't look up this VIN. Enter the vehicle yourself.</span>`);return;}
+  ["year","make","model","trim","engine"].forEach(k=>{if(x[k]&&!String(dr[k]||"").trim()){dr[k]=x[k];const el=document.getElementById("d-"+k);if(el)el.value=x[k];}});
+  dr.vinDecoded=vin;save();
+  say(`<span class="help vin-ok">✓ ${esc([x.year,x.make,x.model,x.trim].filter(Boolean).join(" "))}${x.engine?" · "+esc(x.engine):""}</span>${vc.cls==="err"?` <span class="help vin-warn">${esc(vc.msg)}</span>`:""}`);
+}
 function vinCheck(v){
   v=(v||"").toUpperCase().replace(/\s/g,"");
   if(!v) return {cls:"",msg:""};
@@ -1160,13 +1172,15 @@ function renderJobForm(){
     ${f("phone","Customer phone",'inputmode="tel"')}
     ${f("location",svc?"Service address":"Inspection address","","full")}
     <label class="full">Distance (miles, one way)<input id="d-dist" data-draft="dist" value="${esc(d.dist)}" inputmode="decimal">${distHelp("draft")}</label>
-    ${svc?`<label>Travel fee<input id="d-est" value="${esc(money(Math.round(tr)))}" readonly tabindex="-1"><span class="help">Parts and labor go on the invoice</span></label>`
+    ${svc?`<label>Travel fee<input id="d-est" value="${esc(money(Math.round(tr)))}" readonly tabindex="-1"><span class="help">Parts and labor go on the estimate or invoice</span></label>`
       :`<label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>`}
     ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
+    <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><span class="vin-dec" id="dVinDec"></span></label>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
     ${f("trim","Trim")}
+    ${f("engine","Engine","","full")}
     <label class="full">Notes<textarea id="d-notes" data-draft="notes" rows="2" placeholder="${svc?"Gate code, parking, parts to pick up":"Seller name, listing link, gate code"}">${esc(d.notes)}</textarea></label>
     <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button><button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
   </form>`;
@@ -1757,7 +1771,8 @@ function renderService(){
   const ta=(id,label,ph,rows=2)=>`<label class="full">${label}<textarea id="f-${id}" data-info="${id}" rows="${rows}" placeholder="${ph}">${esc(i[id])}</textarea></label>`;
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Service / repair</div><h2>${esc(i.work||"Service job")}</h2>
-  <p class="when">Fill in the vehicle and the work, add labor and parts, then send the invoice.</p></div>
+  <p class="when">Fill in the vehicle and the work, then build the estimate or invoice below.</p>
+  <div class="jump"><button class="mini" type="button" data-jump="docSeg">${docMode(S)==="est"?"Estimate":"Invoice"} ↓</button><button class="mini" type="button" data-jump="f-vin">VIN</button><button class="mini" type="button" data-jump="mediaForm">Photos</button></div></div>
   <div class="form">
     <p class="formh">Customer &amp; vehicle</p>
     <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
@@ -1780,9 +1795,7 @@ function renderService(){
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
   </div>
-  ${renderMedia()}
-  ${renderFollowupForm()}
-  <div class="seg doc-seg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
+  <div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
     ${mode==="est"?bizHead("Estimate",`<strong>${esc((S.est&&S.est.num)||"New estimate")}</strong><br>${esc(fmtDate((S.est&&S.est.date)||TODAY,{month:"short",day:"numeric",year:"numeric"}))}${S.est&&S.est.status!=="draft"?`<br><span class="eststamp est-${S.est.status}">${esc((EST_ST.find(x=>x[0]===S.est.status)||[0,""])[1])}</span>`:""}`)
       :bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
@@ -1803,7 +1816,9 @@ function renderService(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>`}
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the text instead.</p>
-  </div>`;
+  </div>
+  ${renderMedia()}
+  ${renderFollowupForm()}`;
 }
 /* ---- saved service menu ---- */
 let MENU_OPEN=false,MENU_SAVE=false,MENU_Q="";
@@ -2270,7 +2285,7 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||""};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||"",engine:b.engine||""};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){
@@ -2355,6 +2370,7 @@ document.addEventListener("click",e=>{
   if(d.calday){APP.calDay=d.calday;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
+  if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
   if(d.vinlook){autoDecode(S,true);return;}
   if(d.vinuse){const dd=VIN_DEC[String(S.info.vin||"").toUpperCase()];if(dd){["year","make","model","trim","engine"].forEach(k=>{if(dd[k])S.info[k]=dd[k];});save();VINMSG=null;rerenderKeep();toast("Vehicle updated from the VIN");}return;}
   if(d.docmode){S.docMode=d.docmode;if(d.docmode==="inv")ensureInvoice();save();MENU_OPEN=false;MENU_SAVE=false;rerenderKeep();return;}
@@ -2443,6 +2459,8 @@ document.addEventListener("input",e=>{
   if(d.cf){const c=(APP.customers||[]).find(x=>x.id===d.cid);if(c){c[d.cf]=t.value;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}return;}
   if(d.draft==="customer"){const b=$("#sug-draft");if(b)b.innerHTML=sugHTML("draft",t.value);}
   if(d.info==="customer"){const b=$("#sug-info");if(b)b.innerHTML=sugHTML("info",t.value);}
+  if(d.draft==="vin"){t.value=t.value.toUpperCase();const z=$("#dVinDec");if(z&&!vinReady(t.value))z.innerHTML="";
+    if(vinReady(t.value)){clearTimeout(window.__dvd);window.__dvd=setTimeout(()=>draftDecode(),350);}}
   if(d.draft){APP.draft[d.draft]=t.value;clearTimeout(window.__dsv);window.__dsv=setTimeout(save,400);
     if(d.draft==="dist"){const tr=Math.round(Math.max(0,num(t.value)-num(APP.settings.freeMiles))*num(APP.settings.perMile));const est=document.getElementById("d-est");
       if(est){if(APP.draft.type==="service")est.value=money(tr);else{est.value=money(num(APP.settings.fee)+tr);est.nextElementSibling.textContent=`${money(APP.settings.fee)} PPI${tr?` + ${money(tr)} travel`:""}`;}}}

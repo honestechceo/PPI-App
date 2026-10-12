@@ -299,9 +299,9 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .hist-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:9px 0;font-size:13px}
 .hist-what{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
 .hist-amt{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-.tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
-.tabs .navbtn{padding:8px 2px;font-size:13px;text-align:center;overflow:hidden;text-overflow:ellipsis}
-@media (max-width:380px){.tabs .navbtn{font-size:12px}}
+.tabs{display:grid;grid-template-columns:.8fr 1.05fr 1.15fr 1.05fr 1fr;gap:4px;margin-top:8px}
+.tabs .navbtn{padding:8px 1px;font-size:12.5px;text-align:center;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:380px){.tabs .navbtn{font-size:11px}}
 .snaps{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .snap-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0;font-weight:500}
 .snap-row:last-child{border-bottom:0}
@@ -397,6 +397,25 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .disc-amt{font-family:var(--f-mono);color:var(--good);min-width:80px;text-align:right}
 .disc-quick{display:flex;flex-wrap:wrap;gap:6px}
 .totals .disc-v{color:var(--good)}
+.exp-seg{grid-template-columns:repeat(4,1fr);margin-bottom:12px}
+.exp-cats button,.exp-filter button{min-height:40px}
+.exp-filter{margin-bottom:6px}
+.exp-list{display:flex;flex-direction:column}
+.exp-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;padding:10px 0;font-size:14px;color:var(--ink)}
+.er-d{font-size:12px;color:var(--muted);white-space:nowrap}.er-w{min-width:0;overflow:hidden;text-overflow:ellipsis}.er-w small{color:var(--muted)}
+.er-j{display:block;color:var(--accent)!important;font-size:11px}
+.er-a{font-family:var(--f-mono);white-space:nowrap}
+.tag.exp-tools{background:var(--mon-soft);color:var(--mon)}.tag.exp-parts{background:var(--accent-soft);color:var(--accent)}.tag.exp-fuel{background:var(--bad-soft);color:var(--bad)}
+.rc-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.rc-img{max-width:140px;max-height:180px;border-radius:8px;border:1px solid var(--line)}
+.exp-form{margin-bottom:14px;border-color:var(--accent)}
+.cost-box{margin:10px 0;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;display:flex;flex-direction:column;gap:6px;background:var(--bg)}
+.cb-h{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px;align-items:baseline}
+.cb-list{display:flex;flex-direction:column}
+.cb-row{display:flex;justify-content:space-between;gap:8px;border:0;background:transparent;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;text-align:left;color:var(--ink)}
+.cb-row span:last-child{font-family:var(--f-mono)}
+.cb-sum{display:flex;justify-content:space-between;font-size:14px}.cb-sum strong{font-family:var(--f-mono)}
+.neg{color:var(--bad)!important}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -431,7 +450,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 <header class="top">
   <div class="top-inner">
     <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span></div>
-    <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Dashboard</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
+    <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
       <div class="bar"><i id="barFill"></i></div>
@@ -645,7 +664,7 @@ const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
 rebuildChecklist(APP.settings);
-APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
+APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
@@ -660,6 +679,95 @@ function save(){
   try{syncCustomers();}catch(e){console.error(e);}
   try{ localStorage.setItem(KEY,JSON.stringify(APP)); markSaved(true); }
   catch(e){ markSaved(false); if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
+}
+
+/* ================= expenses (parts, tools, supplies…) ================= */
+const EXP_CATS=[["parts","Parts"],["tools","Tools"],["supplies","Supplies"],["fuel","Fuel"],["other","Other"]];
+const EXP_NAME=Object.fromEntries(EXP_CATS);
+let EXP_DRAFT=null,EXP_RET=null,EXP_DEL=false;const RCPT={};
+const expSum=a=>a.reduce((t,e)=>t+num(e.amt),0);
+const jobCost=id=>expSum((APP.expenses||[]).filter(e=>e.jobId===id));
+function expIn(p){const start=p==="all"?"":p==="year"?TODAY.slice(0,4)+"-01-01":p==="week"?periodStart("week"):TODAY.slice(0,7)+"-01";
+  return (APP.expenses||[]).filter(e=>(!start||e.date>=start)&&e.date<=TODAY);}
+function newExpDraft(o={}){return {id:null,date:TODAY,cat:"parts",desc:"",vendor:"",amt:"",jobId:"",rcData:"",hadRc:false,...o};}
+function expJobOptions(sel){
+  const js=[...APP.jobs].filter(j=>j.id===sel||(j.info.date||"")>=addDays(TODAY,-60)).sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||""));
+  return `<option value="">Not for a specific job</option>${js.map(j=>`<option value="${j.id}" ${j.id===sel?"selected":""}>${esc(fmtDate(j.info.date,{month:"short",day:"numeric"}))} · ${esc(j.info.customer||"No name")}${isSvc(j)&&j.info.work?" · "+esc(j.info.work.slice(0,30)):vehOf(j.info)?" · "+esc(vehOf(j.info)):""}</option>`).join("")}`;
+}
+function expFormHTML(){
+  const d=EXP_DRAFT,vendors=[...new Set((APP.expenses||[]).map(e=>(e.vendor||"").trim()).filter(Boolean))].slice(0,30);
+  const rc=d.rcData||(d.hadRc&&RCPT[d.id])||"";
+  return `<form class="form exp-form" id="expForm" autocomplete="off">
+    <p class="formh">${d.id?"Edit expense":"Add an expense"}</p>
+    <div class="full"><span class="lbl">Type</span><div class="chips exp-cats" role="group" aria-label="Expense type">${EXP_CATS.map(([k,l])=>`<button type="button" data-expcat="${k}" aria-pressed="${d.cat===k}">${l}</button>`).join("")}</div></div>
+    <label class="full">What was it<input id="x-desc" data-exp="desc" value="${esc(d.desc)}" placeholder="${d.cat==="tools"?"e.g. 1/2 in. impact wrench":d.cat==="parts"?"e.g. Front pads & rotors":"Description"}"></label>
+    <label>Amount ($)<input id="x-amt" data-exp="amt" inputmode="decimal" value="${esc(d.amt)}" placeholder="0.00"></label>
+    <label>Date<input id="x-date" data-exp="date" type="date" value="${esc(d.date)}"></label>
+    <label class="full">Store<input id="x-vendor" data-exp="vendor" list="vendorList" value="${esc(d.vendor)}" placeholder="e.g. AutoZone, Advance, Amazon"><datalist id="vendorList">${vendors.map(v=>`<option value="${esc(v)}"></option>`).join("")}</datalist></label>
+    <label class="full">For a job<select id="x-job" data-exp="jobId">${expJobOptions(d.jobId)}</select><span class="help">Link parts to a job to see that job's real profit.</span></label>
+    <div class="full rc-row">${rc?`<img class="rc-img" src="${rc}" alt="Receipt"><button class="mini del" type="button" data-exprcdel="1">Remove receipt</button>`:`<label class="mini">📷 Receipt photo<input type="file" accept="image/*" capture="environment" data-exprc="1" hidden></label><span class="help">Optional. Kept on this phone.</span>`}</div>
+    <div class="formacts"><button class="btn primary" type="submit">${d.id?"Save changes":"Save expense"}</button><button class="btn" type="button" data-act="expcancel">Cancel</button>
+      ${d.id?(EXP_DEL?`<button class="btn danger" type="button" data-act="expdelgo">Delete it</button>`:`<button class="btn" type="button" data-act="expdel">Delete</button>`):""}</div>
+  </form>`;
+}
+function renderExpenses(){
+  const P=APP.expP||"month",F=APP.expF||"",label={week:"This week",month:"This month",year:"This year",all:"All time"}[P];
+  const inP=expIn(P),list=inP.filter(e=>!F||e.cat===F).sort((a,b)=>b.date.localeCompare(a.date)||(b.at||0)-(a.at||0));
+  const byCat=EXP_CATS.map(([k,l])=>[k,l,expSum(inP.filter(e=>e.cat===k))]).filter(x=>x[2]>0),mx=Math.max(1,...byCat.map(x=>x[2]));
+  const hb=(k,v)=>`<div class="hb"><span class="hb-k">${esc(k)}</span><span class="hb-track"><i style="width:${Math.max(2,v/mx*100).toFixed(1)}%"></i></span><span class="hb-v">${money(v)}</span></div>`;
+  const row=e=>{const j=e.jobId&&APP.jobs.find(x=>x.id===e.jobId);return `<button type="button" class="exp-row" data-expedit="${e.id}">
+      <span class="er-d">${esc(fmtDate(e.date,{month:"short",day:"numeric"}))}</span><span class="tag exp-${e.cat}">${esc(EXP_NAME[e.cat]||"Other")}</span>
+      <span class="er-w">${esc(e.desc||EXP_NAME[e.cat])}${e.vendor?` <small>· ${esc(e.vendor)}</small>`:""}${j?`<small class="er-j">For ${esc(j.info.customer||"job")}</small>`:""}</span>
+      <span class="er-a">${money(e.amt)}${e.rc?" 📎":""}</span></button>`;};
+  return `${sampleBanner()}
+  <div class="stage-head dash-head"><div><div class="eyebrow">Business costs</div><h2>Expenses</h2></div>
+    ${EXP_DRAFT?"":`<button class="btn primary" type="button" data-act="expadd">+ Add expense</button>`}</div>
+  ${EXP_DRAFT?expFormHTML():""}
+  <div class="seg exp-seg" role="group" aria-label="Period">${[["week","Week"],["month","Month"],["year","Year"],["all","All"]].map(([k,l])=>`<button type="button" data-expp="${k}" aria-pressed="${P===k}">${l}</button>`).join("")}</div>
+  <div class="tiles">
+    <div class="tile"><span class="tl">Spent · ${esc(label.toLowerCase())}</span><strong>${money(expSum(inP))}</strong><span class="ts">${inP.length} expense${inP.length===1?"":"s"}</span></div>
+    <div class="tile"><span class="tl">Parts · tools</span><strong>${money(expSum(inP.filter(e=>e.cat==="parts")))}</strong><span class="ts">${money(expSum(inP.filter(e=>e.cat==="tools")))} on tools</span></div>
+  </div>
+  ${byCat.length>1?`<div class="dash-card"><div class="dc-h"><h3>By type</h3><span class="ts">${esc(label)}</span></div>${byCat.map(([k,l,v])=>hb(l,v)).join("")}</div>`:""}
+  <div class="dash-card">
+    <div class="dc-h"><h3>${F?esc(EXP_NAME[F]):"All expenses"}</h3><span class="ts">${money(expSum(list))}</span></div>
+    <div class="chips exp-filter" role="group" aria-label="Filter">${[["","All"],...EXP_CATS].map(([k,l])=>`<button type="button" data-expf="${k}" aria-pressed="${F===k}">${l}</button>`).join("")}</div>
+    ${list.length?`<div class="exp-list">${list.map(row).join("")}</div>`:`<p class="empty">No ${F?esc(EXP_NAME[F].toLowerCase())+" ":""}expenses ${esc(label.toLowerCase())}. Tap <strong>+ Add expense</strong> after you buy parts or tools.</p>`}
+  </div>
+  ${(APP.expenses||[]).length?`<div class="copyrow"><button class="btn dl-only" type="button" data-act="expcsv">Save spreadsheet (CSV) for taxes</button><button class="btn" type="button" data-act="expcopy">Copy list</button></div>
+  <textarea class="copybox" id="expbox" hidden readonly></textarea>
+  <p class="help">The spreadsheet opens in Numbers, Excel or Google Sheets. Receipt photos stay on this phone and aren't in backups, so keep paper receipts for big purchases.</p>`:""}`;
+}
+async function loadReceipts(){
+  const ids=[];if(EXP_DRAFT&&EXP_DRAFT.hadRc&&!RCPT[EXP_DRAFT.id])ids.push(EXP_DRAFT.id);
+  for(const id of ids){try{const v=await MDB.get("r_"+id);if(v){RCPT[id]=v;const y=window.scrollY;render();window.scrollTo(0,y);}}catch(e){}}
+}
+function expCSV(rows){
+  const q=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;};
+  const L=[["Date","Type","Description","Store","Amount","Job"].join(",")];
+  rows.sort((a,b)=>a.date.localeCompare(b.date)).forEach(e=>{const j=e.jobId&&APP.jobs.find(x=>x.id===e.jobId);
+    L.push([e.date,EXP_NAME[e.cat]||"Other",e.desc,e.vendor,num(e.amt).toFixed(2),j?`${j.info.customer||""} ${j.invoice.num||""}`.trim():""].map(q).join(","));});
+  return L.join("\n");
+}
+async function saveExpDraft(){
+  const d=EXP_DRAFT;if(!num(d.amt)){toast("Enter the amount");document.getElementById("x-amt")?.focus();return;}
+  const isNew=!d.id,id=d.id||uid();
+  const rec={id,date:d.date||TODAY,cat:d.cat,desc:d.desc.trim(),vendor:d.vendor.trim(),amt:String(Math.round(num(d.amt)*100)/100),jobId:d.jobId||"",rc:!!(d.rcData||(d.hadRc&&!d.rcRemoved)),at:Date.now()};
+  if(d.rcData){try{await MDB.put("r_"+id,d.rcData);RCPT[id]=d.rcData;}catch(e){rec.rc=false;toast("Couldn't keep the receipt photo");}}
+  else if(d.rcRemoved){try{await MDB.del("r_"+id);}catch(e){}delete RCPT[id];}
+  const ex=APP.expenses;const k=ex.findIndex(x=>x.id===id);if(k>-1)ex[k]=rec;else ex.push(rec);
+  EXP_DRAFT=null;EXP_DEL=false;save();
+  if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";EXP_RET=null;render();toast(`Saved ${money(rec.amt)} to this job's costs`);document.getElementById("costBox")?.scrollIntoView({block:"center"});return;}
+  EXP_RET=null;render();window.scrollTo(0,0);toast(isNew?`Saved ${money(rec.amt)} ${EXP_NAME[rec.cat].toLowerCase()} expense`:"Expense updated");
+}
+function jobCostHTML(){
+  const c=jobCost(S.id),t=totals(S),list=(APP.expenses||[]).filter(e=>e.jobId===S.id);
+  const prof=t.total-t.tax-c;
+  return `<div class="cost-box" id="costBox"><div class="cb-h"><strong>Your costs on this job</strong><span class="help">Private, not on the invoice</span></div>
+    ${list.length?`<div class="cb-list">${list.map(e=>`<button type="button" class="cb-row" data-expedit="${e.id}"><span>${esc(e.desc||EXP_NAME[e.cat])}${e.vendor?` · ${esc(e.vendor)}`:""}</span><span>${money(e.amt)}</span></button>`).join("")}</div>
+      <div class="cb-sum"><span>Spent ${money(c)}</span><span>Profit <strong class="${prof<0?"neg":""}">${money(prof)}</strong></span></div>`
+      :`<p class="help" style="margin:0">Log what you paid for parts to see the real profit on this job.</p>`}
+    <button class="mini" type="button" data-act="explog">＋ Log parts cost</button></div>`;
 }
 
 /* ================= dashboard ================= */
@@ -701,6 +809,8 @@ function renderDash(){
     <button type="button" class="tile${unpaidAmt?" warn":""}" data-act="dashunpaid"><span class="tl">Unpaid · all time</span><strong>${money(unpaidAmt)}</strong><span class="ts">${unpaid.length} invoice${unpaid.length===1?"":"s"}${unpaid.length?" · tap to see":""}</span></button>
     <div class="tile"><span class="tl">Jobs done · ${esc(label.toLowerCase())}</span><strong>${inP.length}</strong><span class="ts">${nP} PPI · ${nS} service</span></div>
     <div class="tile"><span class="tl">Average job</span><strong>${money(avg)}</strong><span class="ts">${custInP.size?`${newC} new · ${retC} returning`:"No customers yet"}</span></div>
+    <button type="button" class="tile" data-nav="expenses"><span class="tl">Expenses · ${esc(label.toLowerCase())}</span><strong>${money(expSum(expIn(P)))}</strong><span class="ts">Parts ${money(expSum(expIn(P).filter(e=>e.cat==="parts")))} · tap to see</span></button>
+    <div class="tile"><span class="tl">Profit · ${esc(label.toLowerCase())}</span><strong class="${billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P))<0?"neg":""}">${money(billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P)))}</strong><span class="ts">Billed minus tax and expenses</span></div>
   </div>
   <div class="dash-card">
     <div class="dc-h"><h3>Billed by month</h3><span class="ts" id="barCap">${esc(fmtDate(mVals[5].m+"-01",{month:"long"}))}: ${money(mVals[5].v)} · ${mVals[5].n} job${mVals[5].n===1?"":"s"}</span></div>
@@ -1038,8 +1148,9 @@ function renderChrome(){
   $("#navSettings").setAttribute("aria-current",APP.view==="settings"?"page":"false");
   $("#navCust").setAttribute("aria-current",APP.view==="customers"?"page":"false");
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
+  $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -1847,6 +1958,7 @@ function renderService(){
     ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl>
+    ${jobCostHTML()}
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
       ${payBoxHTML(t.total)}
@@ -2341,6 +2453,7 @@ function render(){applyTheme();
   if(APP.view==="settings")html=renderSettings();
   else if(APP.view==="customers")html=renderCustomers();
   else if(APP.view==="dash")html=renderDash();
+  else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>preloadMedia(S),0);}
   else{const s=STAGES[S.step];
@@ -2378,7 +2491,7 @@ document.addEventListener("click",e=>{
   if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
-  if(d.nav){APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
+  if(d.nav){if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
@@ -2439,6 +2552,21 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="expadd"){EXP_DRAFT=newExpDraft();EXP_DEL=false;EXP_RET=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-desc")?.focus(),30);return;}
+  if(d.act==="explog"){EXP_DRAFT=newExpDraft({cat:"parts",jobId:S.id,desc:"Parts"+(vehOf(S.info)?" – "+vehOf(S.info):S.info.customer?" – "+S.info.customer:"")});EXP_RET=S.id;EXP_DEL=false;APP.view="expenses";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-amt")?.focus(),30);return;}
+  if(d.act==="expcancel"){EXP_DRAFT=null;EXP_DEL=false;if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";}EXP_RET=null;render();return;}
+  if(d.act==="expdel"){EXP_DEL=true;rerenderKeep();return;}
+  if(d.act==="expdelgo"){const id=EXP_DRAFT.id;APP.expenses=APP.expenses.filter(e=>e.id!==id);MDB.del("r_"+id).catch(()=>{});EXP_DRAFT=null;EXP_DEL=false;save();
+    if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";}EXP_RET=null;render();toast("Expense deleted");return;}
+  if(d.expedit){const e=APP.expenses.find(x=>x.id===d.expedit);if(!e)return;if(APP.view==="job")EXP_RET=S.id;
+    EXP_DRAFT=newExpDraft({...e,hadRc:!!e.rc});EXP_DEL=false;APP.view="expenses";render();window.scrollTo(0,0);return;}
+  if(d.expcat){if(EXP_DRAFT){EXP_DRAFT.cat=d.expcat;rerenderKeep();}return;}
+  if(d.exprcdel){if(EXP_DRAFT){EXP_DRAFT.rcData="";if(EXP_DRAFT.hadRc){EXP_DRAFT.hadRc=false;EXP_DRAFT.rcRemoved=true;}rerenderKeep();}return;}
+  if(d.expp){APP.expP=d.expp;save();rerenderKeep();return;}
+  if(d.expf!==undefined){APP.expF=d.expf;rerenderKeep();return;}
+  if(d.act==="expcsv"){(async()=>{const dl=await getSaver();if(!dl){toast("Saving files isn't available here. Use Copy list.");return;}
+    const P=APP.expP||"month",rows=expIn(P);try{const st=await dl.save(`expenses-${P==="all"?"all":P==="year"?TODAY.slice(0,4):TODAY.slice(0,7)}.csv`,expCSV(rows));if(st==="saved")toast("Spreadsheet ready");}catch(e){if(!(e&&e.code==="declined"))toast("Couldn't save the file here.");}})();return;}
+  if(d.act==="expcopy"){copyText(expCSV(expIn(APP.expP||"month")),"expbox");return;}
   if(d.discadd){S.invoice.disc={t:"pct",v:"",r:""};save();rerenderKeep();setTimeout(()=>document.getElementById("disc-v")?.focus(),30);return;}
   if(d.discdel){delete S.invoice.disc;save();rerenderKeep();return;}
   if(d.disct){const dd=S.invoice.disc;if(dd){dd.t=d.disct;save();rerenderKeep();}return;}
@@ -2529,10 +2657,11 @@ $("#nextBtn").addEventListener("click",()=>{
 });
 document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.dataset.ck){el.open?OPEN_CK.add(el.dataset.ck):OPEN_CK.delete(el.dataset.ck);}},true);
 document.addEventListener("focusout",e=>{if(e.target&&(e.target.id==="d-customer"||e.target.id==="f-customer"))setTimeout(()=>{const a=document.activeElement;if(!a||!a.closest||!a.closest(".sug"))document.querySelectorAll(".sug").forEach(x=>x.innerHTML="");},250);});
-document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();});
+document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobForm")saveDraft();if(e.target.id==="expForm")saveExpDraft();});
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.exp&&EXP_DRAFT){EXP_DRAFT[d.exp]=t.value;return;}
   if(d.disc){const dd=S.invoice.disc;if(!dd)return;dd[d.disc]=t.value;save();refreshTotals();const a=document.getElementById("discAmt");if(a){const tt=totals(S);a.textContent=tt.disc?negMoney(tt.disc):"—";}return;}
   if(d.mline){const [id,k]=d.mline.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x[d.mf]=t.value;
     const a=document.getElementById(`mamt-${id}-${k}`);if(a)a.textContent=money(lineAmt({...x,p:x.k==="labor"&&x.p===""?APP.settings.laborRate:x.p}));refreshMenuTotals(it);
@@ -2599,6 +2728,9 @@ document.addEventListener("change",e=>{
   if(d.invc){S.invoice[d.invc]=t.checked;save();refreshTotals();return;}
   if(d.lnk!==undefined){const k=+d.lnk,x=S.invoice.lines[k];x.k=t.value;if(x.k==="flat")x.q="1";if(x.k==="labor"&&!x.p&&APP.settings.laborRate)x.p=APP.settings.laborRate;save();render();refreshTotals();return;}
   if(d.set==="hq"){checkHQ();return;}
+  if(d.exprc&&EXP_DRAFT){const f=t.files&&t.files[0];t.value="";if(!f)return;const dr=EXP_DRAFT;
+    imgFromBlob(f).then(im=>{if(!im){toast("Couldn't read that photo");return;}const c=drawTo(im,im.naturalWidth,im.naturalHeight,1400);dr.rcData=c.toDataURL("image/jpeg",0.72);if(EXP_DRAFT===dr)rerenderKeep();});return;}
+  if(d.exp==="jobId"&&EXP_DRAFT){EXP_DRAFT.jobId=t.value;return;}
   if(d.mkind){const [id,k]=d.mkind.split(":");const it=APP.settings.menu.find(x=>x.id===id);const x=it&&it.lines[+k];if(!x)return;x.k=t.value;if(x.k==="flat")x.q="1";save();rerenderKeep();return;}
   if(d.themecustom){save();const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.draft==="location"&&hasHQ()&&t.value.trim()){calcDist("draft",true);return;}

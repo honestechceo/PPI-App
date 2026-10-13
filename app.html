@@ -882,6 +882,7 @@ function parseRequest(raw){
     if(r.type==="ppi")r.work="Pre-purchase inspection";
     else{const sent=text.replace(/\s+/g," ").split(/(?<=[.!?])\s+/).find(x=>/(brake|oil|engine|battery|noise|leak|light|check|start|diagnos|replace|repair|fix|service|belt|alternator|starter|squeal|grind)/i.test(x));if(sent)r.work=sent.trim().slice(0,140);}}
   if(!r.customer){const m=text.match(/\bmy name is ([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/)||text.match(/(?:thanks|thank you|regards|best|sincerely|cheers)[,!.]?\s*(?:\n\s*)?[-–]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/i)||text.match(/\n\s*[-–]\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/);if(m)r.customer=m[1];}
+  {const pv=get(/^(quote|quoted price|price|agreed price|agreed|quote amount|estimate|total)$/);const m=pv.match(/\$?\s*(\d[\d,]*(?:\.\d{1,2})?)/);if(m)r.agreed=m[1].replace(/,/g,"");}
   if(r.type==="ppi"&&!r.work)r.work="Pre-purchase inspection";
   return r;
 }
@@ -905,6 +906,7 @@ function reqForm(rq){
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
     <label class="full">What they need<textarea data-req="work" rows="2">${esc(rq.work||"")}</textarea></label>
     ${f("date","Day they asked for",'type="date"')}${f("time","Time",'type="time"')}
+    ${f("agreed","Agreed price ($)",'inputmode="decimal" placeholder="If you agreed on one"')}<label class="check"><input type="checkbox" data-reqc="agreedTravel" ${rq.agreedTravel!==false?"checked":""}> Travel included</label>
     <div class="full">${availHTML(rq)}</div>
     <label class="full">Notes / full message<textarea data-req="notes" rows="3">${esc(rq.notes||"")}</textarea></label>
     <div class="formacts full"><button class="btn primary" type="button" data-act="reqsave">Save to inbox</button>${rq.status&&rq.status!=="new"?"":`<button class="btn" type="button" data-act="reqbook">Book it now</button>`}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
@@ -924,7 +926,7 @@ function renderRequests(){
   const card=r=>{
     const no=REQ_NO&&REQ_NO.id===r.id;
     return `<div class="req${r.status==="new"?" is-new":""}"><div class="req-top"><strong>${esc(r.customer||"No name")}</strong><span class="st req-${r.status}">${REQ_ST[r.status]||"New"}</span><span class="tag">${r.type==="ppi"?"PPI":"Service"}</span></div>
-      <div class="meta">${esc([[r.year,r.make,r.model].filter(Boolean).join(" "),r.work].filter(Boolean).join(" · ")||"No details")}</div>
+      <div class="meta">${esc([[r.year,r.make,r.model].filter(Boolean).join(" "),r.work].filter(Boolean).join(" · ")||"No details")}${num(r.agreed)?` · <strong>Agreed ${money(r.agreed)}</strong>`:""}</div>
       <div class="meta">${r.date?`Wants ${esc(fmtDate(r.date,{weekday:"short",month:"short",day:"numeric"}))}${r.time?" "+esc(fmtTime(r.time)):""} · ${dayLoad(r.date).length?dayLoad(r.date).length+" job"+(dayLoad(r.date).length===1?"":"s")+" that day":"day is open"}`:"No date asked for"}${r.phone?` · ${esc(r.phone)}`:""}</div>
       <div class="meta req-age">Received ${esc(fmtDate(isoDay(new Date(r.at||Date.now())),{month:"short",day:"numeric"}))}${r.jobId&&APP.jobs.some(j=>j.id===r.jobId)?` · <button class="linkish" type="button" data-open="${r.jobId}">Open job</button>`:""}</div>
       ${no?`<div class="req-no"><span class="lbl" style="margin:0">Why you can't</span><div class="chips">${[["booked","Fully booked"],["area","Outside my area"],["work","Don't do that work"]].map(([k,l])=>`<button type="button" data-reqwhy="${k}" aria-pressed="${REQ_NO.why===k}">${l}</button>`).join("")}</div>
@@ -946,7 +948,7 @@ function renderRequests(){
 }
 function reqToDraft(r){
   startAdd(null);Object.assign(APP.draft,{type:r.type==="ppi"?"ppi":"service",work:r.type==="ppi"?"":r.work||"",customer:r.customer||"",phone:r.phone||"",location:r.location||"",
-    year:r.year||"",make:r.make||"",model:r.model||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",
+    year:r.year||"",make:r.make||"",model:r.model||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,
     notes:[r.type==="ppi"&&r.work&&r.work!=="Pre-purchase inspection"?r.work:"",r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")});
   const c=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c)APP.draft.custId=c.id;
   APP.reqFrom=r.id;APP.view="jobs";
@@ -1479,11 +1481,11 @@ function jobCard(j){
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
     <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · Tech: ${esc(i.tech)}`:""}</div>
-    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}</div>
+    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
-      ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
       ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
       ${j.status!=="done"&&i.location?dirLink(i.location):""}
       ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
@@ -1506,6 +1508,8 @@ function renderJobForm(){
     <label class="full">Distance (miles, one way)<input id="d-dist" data-draft="dist" value="${esc(d.dist)}" inputmode="decimal">${distHelp("draft")}</label>
     ${svc?`<label>Travel fee<input id="d-est" value="${esc(money(Math.round(tr)))}" readonly tabindex="-1"><span class="help">Parts and labor go on the estimate or invoice</span></label>`
       :`<label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>`}
+    <label>Agreed price ($)<input id="d-agreed" data-draft="agreed" inputmode="decimal" value="${esc(d.agreed||"")}" placeholder="Optional"><span class="help">Price you agreed on. Goes in the confirmation and starts the invoice.</span></label>
+    <label class="check full"><input type="checkbox" data-draftc="agreedTravel" ${d.agreedTravel!==false?"checked":""}> Travel is included in the agreed price</label>
     ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
     <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><span class="vin-dec" id="dVinDec"></span></label>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
@@ -1517,10 +1521,20 @@ function renderJobForm(){
     <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button><button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
   </form>`;
 }
+/* agreed price: starts the invoice at the price agreed with the customer */
+function applyAgreed(j){
+  const i=j.info,a=num(i.agreed),inv=j.invoice;if(!a||inv.paid)return;const inc=i.agreedTravel!==false;
+  if(isSvc(j)){const ls=inv.lines||(inv.lines=[]);const k=ls.findIndex(x=>x.agreed);
+    if(k>-1)ls[k].p=String(a);else if(!ls.some(x=>x.d||num(x.p)))inv.lines=[{k:"flat",d:(i.work||"Service").split("\n")[0].slice(0,80),q:"1",p:String(a),agreed:true}];}
+  else inv.fee=a;
+  if(inc){inv.travelOverride="0";inv.agreedTO=true;}else if(inv.agreedTO){inv.travelOverride="";inv.agreedTO=false;}
+}
+function agreedLine(j){const i=j.info,a=num(i.agreed);if(!a)return "";const t=totals(j),inc=i.agreedTravel!==false;
+  return `Agreed price: ${money(a)}${inc?" (travel included)":t.travel.fee?` + ${money(t.travel.fee)} travel`:""}${t.taxOn&&t.tax?` + ${money(t.tax)} tax`:""}.`;}
 function confirmText(j){
   const i=j.info, st=APP.settings, t=totals(j);
-  if(isSvc(j))return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your service appointment is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.${i.work?"\n\nWork: "+i.work:""}\n\n${t.travel.fee?`Travel fee: ${money(t.travel.fee)}. `:""}Parts and labor will be on your invoice when the job is done.\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
-  return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your pre-purchase inspection is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.\n\nPrice: ${money(t.total)} (${money(t.fee)} inspection${t.travel.fee?` + ${money(t.travel.fee)} travel`:""}). Please have the seller keep the engine cold before I arrive so I can check the cold start.\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
+  if(isSvc(j))return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your service appointment is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.${i.work?"\n\nWork: "+i.work:""}\n\n${num(i.agreed)?agreedLine(j)+" Anything extra will only be done with your OK.":`${t.travel.fee?`Travel fee: ${money(t.travel.fee)}. `:""}Parts and labor will be on your invoice when the job is done.`}\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
+  return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your pre-purchase inspection is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.\n\n${num(i.agreed)?agreedLine(j):`Price: ${money(t.total)} (${money(t.fee)} inspection${t.travel.fee?` + ${money(t.travel.fee)} travel`:""}).`} Please have the seller keep the engine cold before I arrive so I can check the cold start.\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
 }
 
 /* ================= theme ================= */
@@ -2653,16 +2667,16 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||"",engine:b.engine||""};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||"",engine:b.engine||"",agreed:b.agreed||"",agreedTravel:b.agreedTravel!==false};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){
   const d=APP.draft;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
   const {type,custId,...info}=d;
-  if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);
+  if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
-  else{const nj=newJob(info,type);if(custId)nj.custId=custId;APP.jobs.push(nj);
+  else{const nj=newJob(info,type);if(custId)nj.custId=custId;applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
   APP.fuFrom=null;APP.reqFrom=null;
@@ -2756,8 +2770,8 @@ document.addEventListener("click",e=>{
   if(d.reqdel){APP.requests=APP.requests.filter(x=>x.id!==d.reqdel);save();rerenderKeep();toast("Request deleted");return;}
   if(d.reqbook){const r=APP.requests.find(x=>x.id===d.reqbook);if(r){reqToDraft(r);render();window.scrollTo(0,0);}return;}
   if(d.reqquote){const r=APP.requests.find(x=>x.id===d.reqquote);if(!r)return;
-    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
-    j.docMode="est";APP.jobs.push(j);r.status="quoted";r.jobId=j.id;save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
+    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
+    j.docMode="est";applyAgreed(j);APP.jobs.push(j);r.status="quoted";r.jobId=j.id;save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
     if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);return;}
   if(d.reqno){const r=APP.requests.find(x=>x.id===d.reqno);if(r){REQ_NO={id:r.id,why:"booked",text:declineText(r,"booked")};rerenderKeep();}return;}
   if(d.reqwhy&&REQ_NO){const r=APP.requests.find(x=>x.id===REQ_NO.id);REQ_NO.why=d.reqwhy;REQ_NO.text=declineText(r,d.reqwhy);rerenderKeep();return;}
@@ -2955,6 +2969,8 @@ function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S)
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
+  if(d.draftc&&APP.draft){APP.draft[d.draftc]=t.checked;save();return;}
+  if(d.reqc&&REQ_EDIT){REQ_EDIT[d.reqc]=t.checked;return;}
   if(d.restorefile){const f=t.files&&t.files[0];if(!f)return;
     const fr=new FileReader();fr.onload=()=>{const o=parseBackup(String(fr.result||""));t.value="";
       if(!o){toast("That file isn't a Honestech app backup.");return;}

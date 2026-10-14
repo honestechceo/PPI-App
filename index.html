@@ -487,6 +487,15 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .dj .acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
 .st.dsp-unassigned{background:var(--na-soft);color:var(--na)}.st.dsp-assigned{background:var(--accent-soft);color:var(--accent)}.st.dsp-enroute{background:var(--mon-soft);color:var(--mon)}.st.dsp-onsite{background:var(--good-soft);color:var(--good)}.st.dsp-done{background:var(--good);color:#fff}
 @media (min-width:860px){.dsp-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));align-items:start}}
+.tmr-card{border-color:var(--accent)}
+.tmr-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.tmr-clock{font-family:var(--f-display);font-size:30px;margin-right:auto;color:var(--muted)}.tmr-clock.on{color:var(--good)}
+.tmr-clock.on::before{content:"● ";font-size:16px;vertical-align:middle;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.2}}
+.tmr-use{display:flex;align-items:flex-end}
+.tmr-avg{font-size:14px;line-height:1.5}
+.jt-row{display:grid;grid-template-columns:minmax(0,1fr) auto 64px 72px;gap:8px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.jt-row strong{font-family:var(--f-mono);text-align:right}.jt-row .ts:last-child{text-align:right}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -1065,6 +1074,42 @@ function renderDispatch(){
     ${rep.map(x=>`<div class="hb"><span class="hb-k">${esc(x.t.me?x.t.name+" (you)":x.t.name)}</span><span class="hb-track"><i style="width:${Math.max(2,x.amt/Math.max(1,...rep.map(y=>y.amt))*100).toFixed(1)}%;background:${x.t.color}"></i></span><span class="hb-v">${x.n} · ${money(x.amt)}</span></div>`).join("")}</div>`;
 }
 
+/* ================= job timer & your average job times ================= */
+const JOB_CATS=[["Front brakes",/front.{0,25}(brake|pad|rotor)|(brake|pad|rotor).{0,25}front/i],["Rear brakes",/rear.{0,25}(brake|pad|rotor|shoe|drum)|(brake|pad|rotor|shoe|drum).{0,25}rear/i],
+  ["Brakes",/brake|pads?\b|rotors?\b|caliper/i],["Oil change",/oil (and|&) filter|oil change|\boil\b.{0,10}service|\blof\b/i],["Battery",/battery/i],["Alternator",/alternator/i],["Starter",/starter/i],
+  ["Spark plugs",/spark plug|tune.?up|ignition coil|coil pack/i],["Serpentine belt",/serpentine|drive belt|belt tensioner/i],["Diagnosis",/diagnos|check engine|cel\b|scan|no.?start|won'?t start|electrical/i],
+  ["Coolant / thermostat",/coolant|thermostat|radiator|overheat|water pump/i],["Fluid service",/fluid (flush|service|exchange)|brake fluid|power steering fluid/i],["Sensor",/sensor|o2|oxygen|map sensor|maf/i],["Suspension",/strut|shock|control arm|sway|tie rod|ball joint/i],
+  ["Pre-purchase inspection",/pre-?purchase|\bppi\b/i]];
+function jobCat(j){if(!isSvc(j))return "Pre-purchase inspection";if(j.menuName){const c=JOB_CATS.find(([n,re])=>re.test(j.menuName));return c?c[0]:j.menuName;}
+  const txt=[j.info.work,(j.invoice.lines||[]).map(x=>x.d).join(" ")].join(" ");const c=JOB_CATS.find(([n,re])=>re.test(txt));return c?c[0]:"";}
+const tmrHours=j=>{const t=j.timer;if(!t)return 0;let ms=(t.segs||[]).reduce((a,x)=>a+(x.e-x.s),0);if(t.run)ms+=Date.now()-t.run;return ms/3600000;};
+const jobHours=j=>num(j.actualHrs)||(j.timer?Math.round(tmrHours(j)*10)/10:0);
+function catStats(cat,exceptId){if(!cat)return null;const js=APP.jobs.filter(j=>j.id!==exceptId&&j.status==="done"&&jobCat(j)===cat&&jobHours(j)>0);
+  if(!js.length)return null;const hs=js.map(jobHours).sort((a,b)=>a-b);const avg=hs.reduce((a,h)=>a+h,0)/hs.length;
+  const billed=js.reduce((a,j)=>{const t=totals(j);return a+(t.svc?t.labor:t.fee)-(t.disc||0)*0;},0),hrs=hs.reduce((a,h)=>a+h,0);
+  return {cat,n:js.length,avg:Math.round(avg*10)/10,min:hs[0],max:hs[hs.length-1],rate:hrs?billed/hrs:0};}
+const fmtHM=h=>{const m=Math.round(h*60);return m<60?`${m} min`:`${Math.floor(m/60)} hr ${String(m%60).padStart(2,"0")} min`;};
+function timerHTML(){
+  const t=S.timer||{segs:[]},run=!!t.run,h=tmrHours(S),cat=jobCat(S),st=catStats(cat,S.id),done=S.status==="done";
+  return `<div class="form tmr-card" id="tmrCard"><p class="formh">⏱ Job time</p>
+    <div class="full tmr-row"><strong class="tmr-clock${run?" on":""}" id="tmrClock">${h?fmtHM(h):"0 min"}</strong>
+      ${done?"":run?`<button class="btn" type="button" data-tmr="pause">Pause</button><button class="btn primary" type="button" data-tmr="stop">Stop</button>`
+        :`<button class="btn primary" type="button" data-tmr="start">${h?"Resume":"Start timer"}</button>${h?`<button class="mini del" type="button" data-tmr="reset">Reset</button>`:""}`}</div>
+    <label>Actual hours<input data-acthrs="1" inputmode="decimal" value="${esc(S.actualHrs||"")}" placeholder="${h?(Math.round(h*10)/10):"e.g. 1.5"}"><span class="help">Forgot the timer? Type it here.</span></label>
+    <div class="tmr-use">${jobHours(S)?`<button class="mini" type="button" data-tmr="uselabor">Use ${jobHours(S)} hr on the labor line</button>`:""}</div>
+    <div class="full tmr-avg">${cat?(st?`<strong>Your average for ${esc(cat)}: ${st.avg} hr</strong> <span class="help">(${st.n} job${st.n===1?"":"s"} · fastest ${st.min.toFixed(1)}, longest ${st.max.toFixed(1)}${st.rate?` · your labor earns about ${money(st.rate)}/hr on these`:""})</span>${done?"":` <button class="mini" type="button" data-tmr="useavg">Use ${st.avg} hr</button>`}`
+      :`<span class="help">First ${esc(cat)} job with a time. Your average shows here after you finish it.</span>`):`<span class="help">Add the work above (or pick from your service menu) and the app will track your average time for this kind of job.</span>`}</div>
+  </div>`;
+}
+let TMR_IV=null;
+function tickTimer(){clearInterval(TMR_IV);if(!S||!S.timer||!S.timer.run)return;TMR_IV=setInterval(()=>{const el=document.getElementById("tmrClock");if(!el||!S||!S.timer||!S.timer.run){clearInterval(TMR_IV);return;}el.textContent=fmtHM(tmrHours(S));},15000);}
+function jobTimesHTML(){
+  const cats=[...new Set(APP.jobs.filter(j=>j.status==="done"&&jobHours(j)>0).map(jobCat).filter(Boolean))].map(c=>catStats(c)).filter(Boolean).sort((a,b)=>b.n-a.n).slice(0,8);
+  if(!cats.length)return `<div class="dash-card"><div class="dc-h"><h3>Your job times</h3></div><p class="empty">Use the ⏱ timer on service jobs and your average time per job type shows up here.</p></div>`;
+  return `<div class="dash-card"><div class="dc-h"><h3>Your job times</h3><span class="ts">Average · all time</span></div>
+    ${cats.map(c=>`<div class="jt-row"><span>${esc(c.cat)}</span><span class="ts">${c.n} job${c.n===1?"":"s"}</span><strong>${c.avg} hr</strong><span class="ts">${c.rate?money(c.rate)+"/hr":""}</span></div>`).join("")}<p class="help" style="margin:8px 0 0">$/hr = labor charged ÷ your actual time (parts not counted).</p></div>`;
+}
+
 /* ================= dashboard ================= */
 const jDate=j=>(j.invoice&&j.invoice.date)||j.info.date||"";
 function periodStart(p){const d=new Date(TODAY+"T12:00:00");
@@ -1115,6 +1160,7 @@ function renderDash(){
   </div>
   ${today.length||upcoming.length?`<div class="dash-card"><div class="dc-h"><h3>${today.length?"Today":"Coming up"}</h3><button class="mini" type="button" data-nav="jobs">Schedule</button></div>${(today.length?today:upcoming.slice(0,3)).map(jobRow).join("")}${today.length&&upcoming.length>today.length?`<p class="ts" style="margin:8px 0 0">${upcoming.length-today.length} more coming up</p>`:""}</div>`:`<div class="dash-card"><div class="dc-h"><h3>Coming up</h3></div><p class="empty">Nothing booked. Tap <strong>+ Book a job</strong>.</p></div>`}
   ${unpaid.length?`<div class="dash-card" id="dashUnpaid"><div class="dc-h"><h3>Unpaid invoices</h3><span class="ts">${money(unpaidAmt)}</span></div>${unpaid.map(j=>{const days=Math.round((new Date(TODAY)-new Date(jDate(j)))/864e5);return `<button type="button" class="hist-row" ${isSvc(j)?`data-open="${j.id}"`:`data-openinv="${j.id}"`}><span>${esc(j.info.customer||"Customer")}</span><span class="tag ${days>14?"tag-bad":""}">${days<=0?"today":days+"d"}</span><span class="hist-what">${esc(j.invoice.num||"")}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`;}).join("")}</div>`:""}
+  ${jobTimesHTML()}
   <div class="dash-card"><div class="dc-h"><h3>Where the money came from</h3><span class="ts">${esc(label)}</span></div>
     ${billed?Object.entries(b).filter(([k,v])=>v>0).map(([k,v])=>hb(k,v,bMax)).join(""):`<p class="empty">No completed jobs ${esc(label.toLowerCase())}.</p>`}</div>
   ${viaArr.length?`<div class="dash-card"><div class="dc-h"><h3>How customers paid</h3><span class="ts">${esc(label)}</span></div>${viaArr.map(([k,v])=>hb(k,v,viaMax)).join("")}</div>`:""}
@@ -2256,7 +2302,8 @@ function renderService(){
     ${ta("work","Work requested","What the customer asked for")}
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
-  </div></div>
+  </div>
+  ${timerHTML()}</div>
   <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
     ${mode==="est"?bizHead("Estimate",`<strong>${esc((S.est&&S.est.num)||"New estimate")}</strong><br>${esc(fmtDate((S.est&&S.est.date)||TODAY,{month:"short",day:"numeric",year:"numeric"}))}${S.est&&S.est.status!=="draft"?`<br><span class="eststamp est-${S.est.status}">${esc((EST_ST.find(x=>x[0]===S.est.status)||[0,""])[1])}</span>`:""}`)
@@ -2308,7 +2355,7 @@ function menuPanel(){
   const q=MENU_Q.trim().toLowerCase(),list=m.filter(x=>!q||x.name.toLowerCase().includes(q)||menuSum(x).toLowerCase().includes(q));
   return `<div class="menu-pan"><div class="menu-head"><strong>Service menu</strong><button class="xbtn" type="button" data-act="menuclose" aria-label="Close menu">×</button></div>
     ${m.length>5?`<input id="menuQ" data-menuq="1" value="${esc(MENU_Q)}" placeholder="Search your menu" autocomplete="off">`:""}
-    ${m.length?`<div class="menu-list">${list.map(x=>`<button type="button" class="menu-item" data-menuadd="${x.id}"><span class="mi-name">${esc(x.name)}</span><span class="mi-amt">${menuTotal(x)?money(menuTotal(x)):"Set prices"}</span><span class="mi-sub">${esc(menuSum(x))}</span></button>`).join("")||`<p class="help">Nothing matches.</p>`}</div>`
+    ${m.length?`<div class="menu-list">${list.map(x=>`<button type="button" class="menu-item" data-menuadd="${x.id}"><span class="mi-name">${esc(x.name)}</span><span class="mi-amt">${menuTotal(x)?money(menuTotal(x)):"Set prices"}</span><span class="mi-sub">${esc(menuSum(x))}${(()=>{const c=JOB_CATS.find(([n,re])=>re.test(x.name));const st=catStats(c?c[0]:x.name);return st?` · your avg ${st.avg} hr`:"";})()}</span></button>`).join("")||`<p class="help">Nothing matches.</p>`}</div>`
       :`<p class="help" style="margin:0">Your menu is empty. Build a job's lines below, then tap <strong>Save to menu</strong>. Or start with common jobs and fill in your prices.</p><div class="acts"><button class="mini" type="button" data-act="menustarter">Add common jobs</button></div>`}
   </div>`;
 }
@@ -2771,7 +2818,7 @@ function render(){applyTheme();
   else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
-  else if(isSvc(S)){html=renderService();setTimeout(()=>preloadMedia(S),0);}
+  else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
   else{const s=STAGES[S.step];
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   $("#main").innerHTML=html;
@@ -2874,6 +2921,13 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.tmr){const t=S.timer||(S.timer={segs:[],run:0});const k=d.tmr;
+    if(k==="start"){t.run=Date.now();if(S.status==="sched")S.status="active";}
+    else if(k==="pause"||k==="stop"){if(t.run){t.segs.push({s:t.run,e:Date.now()});t.run=0;}if(k==="stop"){S.actualHrs=String(Math.max(0.1,Math.round(tmrHours(S)*10)/10));toast(`Logged ${S.actualHrs} hr`);}}
+    else if(k==="reset"){S.timer={segs:[],run:0};S.actualHrs="";}
+    else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
+      if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
+    save();rerenderKeep();tickTimer();return;}
   if(d.act==="techadd"){TECH_NEW={name:"",phone:""};rerenderKeep();setTimeout(()=>document.getElementById("tmName")?.focus(),30);return;}
   if(d.act==="techcancel"){TECH_NEW=null;rerenderKeep();return;}
   if(d.act==="techsave"){const n=(TECH_NEW.name||"").trim();if(!n){toast("Enter the technician's name");return;}const ts=APP.settings.techs;
@@ -2948,7 +3002,7 @@ document.addEventListener("click",e=>{
     const ex=m.find(x=>x.name.toLowerCase()===name.toLowerCase());if(ex){ex.lines=lines;ex.name=name;}else m.push({id:uid(),name,lines});
     MENU_SAVE=false;save();rerenderKeep();toast(ex?`Updated "${name}" on your menu`:`Saved "${name}" to your menu`);return;}
   if(d.act==="menustarter"){const n=addStarterMenu();save();rerenderKeep();toast(n?`Added ${n} common job${n===1?"":"s"}. Fill in your prices.`:"Those are already on your menu");return;}
-  if(d.menuadd){const it=APP.settings.menu.find(x=>x.id===d.menuadd);if(!it)return;const ls=S.invoice.lines||(S.invoice.lines=[]);
+  if(d.menuadd){const it=APP.settings.menu.find(x=>x.id===d.menuadd);if(!it)return;if(!S.menuName)S.menuName=it.name;const ls=S.invoice.lines||(S.invoice.lines=[]);
     it.lines.forEach(x=>ls.push({k:x.k,d:x.d,q:x.q,p:x.k==="labor"&&x.p===""?(APP.settings.laborRate||""):x.p}));
     if(!String(S.info.work||"").trim())S.info.work=it.name;if(S.status==="sched")S.status="active";
     MENU_OPEN=false;save();rerenderKeep();toast(`Added ${it.name}`);document.getElementById("lines")?.scrollIntoView({block:"nearest"});return;}
@@ -3009,6 +3063,8 @@ document.addEventListener("click",e=>{
 $("#prevBtn").addEventListener("click",()=>{if(APP.view==="job"&&!isSvc(S))go(S.step-1);});
 $("#nextBtn").addEventListener("click",()=>{
   if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
+  if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
+  if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
   if(isSvc(S)&&S.status!=="done"&&docMode(S)==="est"){S.docMode="inv";if(S.est&&S.est.status!=="declined"&&S.est.status!=="approved"){S.est.status="approved";S.est.approvedDate=TODAY;S.est.total=jobTotal(S);}ensureInvoice();}
   if(isSvc(S)||STAGES[S.step].id==="invoice"){if(isSvc(S)&&S.status==="done"){APP.view="jobs";save();render();window.scrollTo(0,0);return;}S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);
@@ -3042,6 +3098,7 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}
   if(d.techf){const [id,f]=d.techf.split(":");const tm=APP.settings.techs.find(x=>x.id===id);if(tm){tm[f]=e.target.value;
     if(f==="name")APP.jobs.forEach(j=>{if(j.techId===id)j.info.tech=e.target.value;});clearTimeout(window.__tf);window.__tf=setTimeout(save,400);}return;}
   if(d.technew&&TECH_NEW){TECH_NEW[d.technew]=t.value;return;}

@@ -889,7 +889,7 @@ function renderPlan(){
     <p style="margin:0;font-size:17px"><strong>${esc(planStatusLine())}</strong></p>
     ${a.kind==="paid"&&BILLING.portal?`<div class="acts" style="margin-top:8px"><a class="btn" href="${esc(BILLING.portal)}" target="_blank" rel="noopener">Manage subscription</a></div>`:""}
     ${signed?`<div class="acts" style="margin-top:8px"><button class="mini" type="button" data-act="planrefresh">Refresh</button></div>`:`<p class="help" style="margin:8px 0 0">Make a free account in Settings → Cloud sync to subscribe and use the app on all your devices.</p>`}</div>
-  ${a.kind==="comp"?"":`<div class="plan-grid">
+  ${a.kind==="comp"?"":a.kind==="paid"?`<p class="help">To switch plans, add technicians, update your card or cancel, tap Manage subscription.</p>`:`<div class="plan-grid">
     <div class="plan-card"><div class="pc-h"><strong>Solo</strong><span class="ts">For one mechanic</span></div>
       <div class="pc-price">${PRICES.soloM}</div><div class="help">or ${PRICES.soloY}, 2 months free</div>
       <ul><li>Unlimited PPIs, service jobs, estimates & invoices</li><li>PDF reports with your logo</li><li>Customers, reminders, requests inbox</li><li>Expenses, mileage & job times</li><li>Cloud sync on all your devices</li></ul>

@@ -1,7 +1,7 @@
 // Supabase Edge Function: stripe-webhook
 // Receives Stripe events and keeps public.subscriptions up to date.
 // Secrets needed (Supabase → Edge Functions → Secrets): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET,
-// and optionally STRIPE_TEAM_PRICES (comma-separated price IDs that count as the Team plan).
+// STRIPE_TEAM_PRICES is optional now: the Team plan is recognized by its product name.
 // Deploy with "Verify JWT" turned OFF (Stripe can't send a Supabase login).
 import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -13,8 +13,15 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function saveSub(sub: Stripe.Subscription, shopId?: string | null) {
   const items = sub.items?.data || [];
-  const isTeam = items.some((i) => TEAM.includes(i.price.id)) || items.some((i) => /team/i.test(String(i.price.nickname || i.price.lookup_key || "")));
-  const seats = items.reduce((n, i) => n + (TEAM.includes(i.price.id) ? 0 : (i.quantity || 0)), 0);
+  const names: Record<string, string> = {};
+  for (const i of items) {
+    const pid = typeof i.price.product === "string" ? i.price.product : i.price.product?.id;
+    if (pid && !(pid in names)) { try { names[pid] = (await stripe.products.retrieve(pid)).name || ""; } catch { names[pid] = ""; } }
+  }
+  const nameOf = (i: Stripe.SubscriptionItem) => names[typeof i.price.product === "string" ? i.price.product : i.price.product?.id || ""] || "";
+  const teamItem = (i: Stripe.SubscriptionItem) => TEAM.includes(i.price.id) || (/team/i.test(nameOf(i)) && !/technician/i.test(nameOf(i)));
+  const isTeam = items.some(teamItem);
+  const seats = items.reduce((n, i) => n + (teamItem(i) ? 0 : (i.quantity || 0)), 0);
   const row: Record<string, unknown> = {
     status: sub.status, plan: isTeam ? "team" : "solo", seats: Math.max(1, seats),
     stripe_customer: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,

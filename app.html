@@ -580,6 +580,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .cal-dayhead strong{font-family:var(--f-display);font-size:20px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 body.gated nav.tabs{display:none}
+.seat-pick{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:6px 0 2px}.seat-pick select{width:auto;min-width:64px}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -858,8 +859,9 @@ async function cloudSignIn(email,pw,create){
 }
 function cloudSignOut(){PLAN=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
 /* ================= plans & subscriptions (Stripe) ================= */
-// Stripe Payment Links + customer portal. Fill these in (test-mode links first). Empty = checkout not open yet.
-const BILLING={soloMonthly:"https://buy.stripe.com/test_8x29AMdxb7yn1uY3zB0sU00",soloYearly:"https://buy.stripe.com/test_aFabIU78N4mb4Hadab0sU01",teamMonthly:"https://buy.stripe.com/test_fZu6oA2Sx7ync9C3zB0sU02",teamYearly:"https://buy.stripe.com/test_5kQaEQeBf5qfb5yfij0sU03",portal:"https://billing.stripe.com/p/login/test_8x29AMdxb7yn1uY3zB0sU00",terms:"terms.html",privacy:"privacy.html"};
+// Checkout and the billing page are opened by the "billing" server function (Supabase Edge Function).
+const BILLING={terms:"terms.html",privacy:"privacy.html"};
+let BUY_BUSY="",TEAM_SEATS=0;
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
 async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
@@ -875,30 +877,33 @@ function access(){
   if(!APP.firstOpen){APP.firstOpen=TODAY;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}
   const left=PRICES.trialDays-dayDiff(TODAY,APP.firstOpen);return {ok:left>=0,kind:"trial",left,local:true};
 }
-function payLink(base){if(!base)return "";const u=new URL(base);if(AUTH&&AUTH.shop_id)u.searchParams.set("client_reference_id",AUTH.shop_id);if(AUTH&&AUTH.email)u.searchParams.set("prefilled_email",AUTH.email);return u.toString();}
+async function openBilling(body){const r=await supa("/functions/v1/billing",{method:"POST",body:{...body,return_url:location.origin+location.pathname}});
+  if(!r||!r.url)throw {msg:(r&&r.error)||"Couldn't open the billing page"};location.href=r.url;}
 function planStatusLine(){const a=access();
   return a.kind==="account"?"No account yet":a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
     :a.kind==="sample"?"Sample data":a.left>=0?`Free trial · ${a.left} day${a.left===1?"":"s"} left`:"Free trial ended";}
 function trialBannerHTML(){const a=access();if(a.kind!=="trial"||a.left>10)return "";
   return `<button type="button" class="dash-card dash-link trial-ban" data-nav="plan"><span><strong>${a.left>0?`${a.left} day${a.left===1?"":"s"} left in your free trial`:"Your free trial ends today"}</strong> · choose a plan to keep going</span><span>›</span></button>`;}
 function renderPlan(){
-  const a=access(),open=!!(BILLING.soloMonthly||BILLING.teamMonthly),signed=!!AUTH;
-  const btn=(link,label)=>!open||!link?`<button class="btn" type="button" disabled>Checkout opens soon</button>`:!signed?`<button class="btn primary" type="button" data-helpgo="settings|setCloud">Create a free account first</button>`:`<a class="btn primary" href="${esc(payLink(link))}" target="_blank" rel="noopener">${label}</a>`;
+  const a=access(),signed=!!AUTH,busy=!!BUY_BUSY;
+  const btn=(plan,int,label)=>!signed?`<button class="btn primary" type="button" data-helpgo="settings|setCloud">Create a free account first</button>`:`<button class="btn primary" type="button" data-act="buy" data-plan="${plan}" data-int="${int}" ${busy?"disabled":""}>${BUY_BUSY===plan+int?"Opening…":label}</button>`;
   return `<div class="stage-head"><div class="eyebrow">Your plan</div><h2>${a.ok?"Plans":"Choose a plan to keep going"}</h2>
     <p class="when">${a.ok?"":"Your free trial has ended. Your jobs, customers and invoices are safe. Pick a plan to unlock the app again."}</p></div>
   <div class="dash-card plan-now"><div class="dc-h"><h3>Right now</h3><span class="ts">${PLAN&&PLAN.at?"checked "+esc(new Date(PLAN.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})):""}</span></div>
     <p style="margin:0;font-size:17px"><strong>${esc(planStatusLine())}</strong></p>
-    ${a.kind==="paid"&&BILLING.portal?`<div class="acts" style="margin-top:8px"><a class="btn" href="${esc(BILLING.portal+(AUTH&&AUTH.email?"?prefilled_email="+encodeURIComponent(AUTH.email):""))}" target="_blank" rel="noopener">Manage subscription</a></div>`:""}
+    ${a.kind==="paid"?`<div class="acts" style="margin-top:8px"><button class="btn" type="button" data-act="portal" ${busy?"disabled":""}>${BUY_BUSY==="portal"?"Opening…":"Manage subscription"}</button></div>`:""}
     ${signed?`<div class="acts" style="margin-top:8px"><button class="mini" type="button" data-act="planrefresh">Refresh</button></div>`:`<p class="help" style="margin:8px 0 0">Make a free account in Settings → Cloud sync to subscribe and use the app on all your devices.</p>`}</div>
   ${a.kind==="comp"?"":a.kind==="paid"?`<p class="help">To switch plans, add technicians, update your card or cancel, tap Manage subscription.</p>`:`<div class="plan-grid">
     <div class="plan-card"><div class="pc-h"><strong>Solo</strong><span class="ts">For one mechanic</span></div>
       <div class="pc-price">${PRICES.soloM}</div><div class="help">or ${PRICES.soloY}, 2 months free</div>
       <ul><li>Unlimited PPIs, service jobs, estimates & invoices</li><li>PDF reports with your logo</li><li>Customers, reminders, requests inbox</li><li>Expenses, mileage & job times</li><li>Cloud sync on all your devices</li></ul>
-      <div class="acts">${btn(BILLING.soloMonthly,"Start Solo monthly")}${BILLING.soloYearly?btn(BILLING.soloYearly,"Start Solo yearly"):""}</div></div>
+      <div class="acts">${btn("solo","month","Start Solo monthly")}${btn("solo","year","Start Solo yearly")}</div></div>
     <div class="plan-card"><div class="pc-h"><strong>Team</strong><span class="ts">You + technicians</span></div>
       <div class="pc-price">${PRICES.team}</div><div class="help">or ${PRICES.teamY}, 2 months free</div><div class="help">Includes you + 2 technicians. ${PRICES.seat} after that</div>
       <ul><li>Everything in Solo</li><li>Dispatch board & technician assignments</li><li>Job sheets to techs, status tracking</li><li>Per-technician reports</li></ul>
-      <div class="acts">${btn(BILLING.teamMonthly,"Start Team monthly")}${BILLING.teamYearly?btn(BILLING.teamYearly,"Start Team yearly"):""}</div></div></div>`}
+      <label class="seat-pick">Extra technicians (beyond the 2 included)<select id="teamSeats" onchange="TEAM_SEATS=+this.value||0">${Array.from({length:21},(_,n)=>`<option value="${n}" ${n===TEAM_SEATS?"selected":""}>${n}</option>`).join("")}</select></label>
+      <div class="acts">${btn("team","month","Start Team monthly")}${btn("team","year","Start Team yearly")}</div></div></div>`}
+  ${a.kind==="trial"&&a.left>2&&signed?`<p class="help"><strong>You won't be charged until your free trial ends</strong> (${a.left} days left). Picking a plan now just keeps things running without a gap.</p>`:""}
   <p class="help">Cancel anytime from Manage subscription. Payments are handled securely by Stripe; the app never sees your card.
     <a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p>`;
 }
@@ -3340,6 +3345,11 @@ document.addEventListener("click",e=>{
     CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
     cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
       .catch(e=>{CLOUD_FORM.busy=false;let m=e&&e.msg||"Couldn't sign in";if(/invalid login|invalid_credentials/i.test(m))m="Wrong email or password.";if(/already registered|already been registered|exists/i.test(m))m="That email already has an account. Tap Sign in.";if(e.code==="offline")m="No internet connection. Try again when you're online.";CLOUD_FORM.msg=m;rerenderKeep();});return;}
+  if(d.act==="buy"||d.act==="portal"){if(BUY_BUSY)return;const sel=document.getElementById("teamSeats");if(sel)TEAM_SEATS=+sel.value||0;
+    BUY_BUSY=d.act==="portal"?"portal":d.plan+d.int;rerenderKeep();
+    openBilling(d.act==="portal"?{action:"portal"}:{action:"checkout",plan:d.plan,interval:d.int,seats:d.plan==="team"?TEAM_SEATS:0})
+      .catch(e=>{BUY_BUSY="";rerenderKeep();toast(e&&e.code==="offline"?"You're offline. Try again when you have signal.":(e&&e.msg)||"Couldn't open checkout");});
+    setTimeout(()=>{if(BUY_BUSY){BUY_BUSY="";if(APP.view==="plan")rerenderKeep();}},15000);return;}
   if(d.act==="planrefresh"){fetchPlan().then(()=>{rerenderKeep();toast(access().kind==="paid"?"Your plan is active. Thank you!":"Plan checked");});return;}
   if(d.act==="syncnow"){syncNow(true);return;}
   if(d.act==="signout"){cloudSignOut();rerenderKeep();toast("Signed out. Your data stays on this device.");return;}

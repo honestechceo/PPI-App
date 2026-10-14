@@ -539,6 +539,17 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .cloud-dot.c-ok{color:var(--good)}.cloud-dot.c-syncing{color:var(--accent)}.cloud-dot.c-offline,.cloud-dot.c-error{color:var(--bad)}
 .cloud-set{border-color:var(--accent)}
 .sync-st{font-size:14px;font-weight:600}.sync-st.s-ok{color:var(--good)}.sync-st.s-error,.sync-st.s-offline{color:var(--bad)}.sync-st.s-syncing{color:var(--accent)}
+a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
+.trial-ban{border-color:var(--mon);background:var(--mon-soft)}
+.plan-line{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.plan-grid{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:12px}
+.plan-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:6px}
+.plan-card:last-child{border-color:var(--accent)}
+.pc-h{display:flex;justify-content:space-between;align-items:baseline}.pc-h strong{font-size:20px}
+.pc-price{font-family:var(--f-display);font-size:34px;font-weight:700}
+.plan-card ul{margin:6px 0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
+.plan-card .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+@media (min-width:700px){.plan-grid{grid-template-columns:1fr 1fr}}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -769,7 +780,7 @@ function sampleApp(){
   return {v:3,sample:true,view:"jobs",active:j1.id,day:"",adding:false,draft:null,settings:{...s,laborRate:"100",next:1001},jobs:[j1,j2,j5,j3,j4]};
 }
 function blankApp(keepSettings){
-  return {v:3,sample:false,view:keepSettings?"jobs":"settings",active:null,day:"",adding:false,draft:null,settings:keepSettings||defaultSettings(),jobs:[]};
+  return {v:3,sample:false,view:keepSettings?"jobs":"settings",active:null,day:"",adding:false,draft:null,settings:keepSettings||defaultSettings(),jobs:[],customers:[],expenses:[],trips:[],requests:[]};
 }
 let APP;
 try{
@@ -843,9 +854,53 @@ async function cloudSignIn(email,pw,create){
   if(APP.sample){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
   SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
   try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
-  SYNC.state="idle";await syncNow(true);
+  SYNC.state="idle";await fetchPlan();await syncNow(true);
 }
-function cloudSignOut(){AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+function cloudSignOut(){PLAN=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+/* ================= plans & subscriptions (Stripe) ================= */
+// Stripe Payment Links + customer portal. Fill these in (test-mode links first). Empty = checkout not open yet.
+const BILLING={soloMonthly:"",soloYearly:"",team:"",portal:"",terms:"terms.html",privacy:"privacy.html"};
+const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",seat:"$10/mo per extra tech",trialDays:30};
+let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
+async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
+const dayDiff=(a,b)=>Math.round((new Date(a+"T12:00:00")-new Date(b+"T12:00:00"))/864e5);
+function access(){
+  if(APP.sample)return {ok:true,kind:"sample"};
+  if(PLAN&&AUTH&&PLAN.shop_id===AUTH.shop_id){
+    if(PLAN.comp)return {ok:true,kind:"comp"};
+    if(["active","trialing","past_due"].includes(PLAN.status))return {ok:true,kind:"paid",status:PLAN.status,plan:PLAN.plan,end:PLAN.period_end};
+    const left=dayDiff(String(PLAN.trial_ends||"").slice(0,10)||TODAY,TODAY);return {ok:left>=0,kind:"trial",left,ended:PLAN.status==="canceled"||PLAN.status==="unpaid"};
+  }
+  if(!APP.firstOpen){APP.firstOpen=TODAY;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}
+  const left=PRICES.trialDays-dayDiff(TODAY,APP.firstOpen);return {ok:left>=0,kind:"trial",left,local:true};
+}
+function payLink(base){if(!base)return "";const u=new URL(base);if(AUTH&&AUTH.shop_id)u.searchParams.set("client_reference_id",AUTH.shop_id);if(AUTH&&AUTH.email)u.searchParams.set("prefilled_email",AUTH.email);return u.toString();}
+function planStatusLine(){const a=access();
+  return a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
+    :a.kind==="sample"?"Sample data":a.left>=0?`Free trial · ${a.left} day${a.left===1?"":"s"} left`:"Free trial ended";}
+function trialBannerHTML(){const a=access();if(a.kind!=="trial"||a.left>10)return "";
+  return `<button type="button" class="dash-card dash-link trial-ban" data-nav="plan"><span><strong>${a.left>0?`${a.left} day${a.left===1?"":"s"} left in your free trial`:"Your free trial ends today"}</strong> · choose a plan to keep going</span><span>›</span></button>`;}
+function renderPlan(){
+  const a=access(),open=!!(BILLING.soloMonthly||BILLING.team),signed=!!AUTH;
+  const btn=(link,label)=>!open||!link?`<button class="btn" type="button" disabled>Checkout opens soon</button>`:!signed?`<button class="btn primary" type="button" data-helpgo="settings|setCloud">Create a free account first</button>`:`<a class="btn primary" href="${esc(payLink(link))}" target="_blank" rel="noopener">${label}</a>`;
+  return `<div class="stage-head"><div class="eyebrow">Your plan</div><h2>${a.ok?"Plans":"Choose a plan to keep going"}</h2>
+    <p class="when">${a.ok?"":"Your free trial has ended. Your jobs, customers and invoices are safe. Pick a plan to unlock the app again."}</p></div>
+  <div class="dash-card plan-now"><div class="dc-h"><h3>Right now</h3><span class="ts">${PLAN&&PLAN.at?"checked "+esc(new Date(PLAN.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})):""}</span></div>
+    <p style="margin:0;font-size:17px"><strong>${esc(planStatusLine())}</strong></p>
+    ${a.kind==="paid"&&BILLING.portal?`<div class="acts" style="margin-top:8px"><a class="btn" href="${esc(BILLING.portal)}" target="_blank" rel="noopener">Manage subscription</a></div>`:""}
+    ${signed?`<div class="acts" style="margin-top:8px"><button class="mini" type="button" data-act="planrefresh">Refresh</button></div>`:`<p class="help" style="margin:8px 0 0">Make a free account in Settings → Cloud sync to subscribe and use the app on all your devices.</p>`}</div>
+  ${a.kind==="comp"?"":`<div class="plan-grid">
+    <div class="plan-card"><div class="pc-h"><strong>Solo</strong><span class="ts">For one mechanic</span></div>
+      <div class="pc-price">${PRICES.soloM}</div><div class="help">or ${PRICES.soloY}, 2 months free</div>
+      <ul><li>Unlimited PPIs, service jobs, estimates & invoices</li><li>PDF reports with your logo</li><li>Customers, reminders, requests inbox</li><li>Expenses, mileage & job times</li><li>Cloud sync on all your devices</li></ul>
+      <div class="acts">${btn(BILLING.soloMonthly,"Start Solo monthly")}${BILLING.soloYearly?btn(BILLING.soloYearly,"Start Solo yearly"):""}</div></div>
+    <div class="plan-card"><div class="pc-h"><strong>Team</strong><span class="ts">You + technicians</span></div>
+      <div class="pc-price">${PRICES.team}</div><div class="help">+ ${PRICES.seat}</div>
+      <ul><li>Everything in Solo</li><li>Dispatch board & technician assignments</li><li>Job sheets to techs, status tracking</li><li>Per-technician reports</li></ul>
+      <div class="acts">${btn(BILLING.team,"Start Team")}</div></div></div>`}
+  <p class="help">Cancel anytime from Manage subscription. Payments are handled securely by Stripe; the app never sees your card.
+    <a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p>`;
+}
 function localRecords(){
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
   add("job",APP.jobs);add("customer",APP.customers);add("expense",APP.expenses);add("trip",APP.trips);add("request",APP.requests);
@@ -881,6 +936,7 @@ async function syncNow(full){
       await supa("/rest/v1/records?on_conflict=shop_id,kind,id",{method:"POST",body:chunk.map(x=>x.row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
       chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
     if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
+    if(!PLAN||Date.now()-(PLAN.at||0)>10*60000||PLAN.shop_id!==AUTH.shop_id)await fetchPlan();
     SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();SMETA.lastAt=SYNC.last;saveMeta();
   }catch(e){SYNC.state=e.code==="offline"?"offline":e.code==="signedout"?"off":"error";SYNC.err=e.msg||"Sync failed";}
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
@@ -902,9 +958,11 @@ function cloudSettingsHTML(){
   if(AUTH)return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
     <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
     <div class="full" id="syncLbl">${syncStatusHTML()}</div>
+    <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
     <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
   return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
+    <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
     <p class="help full" style="margin:0">Make a free account to keep your data safe in the cloud and use the app on more than one device: phone, iPad or computer. ${APP.sample?"The sample jobs won't be uploaded.":"Everything already on this phone is uploaded when you first sign in."}</p>
     <label class="full">Email<input id="cEmail" data-cloud="email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(CLOUD_FORM.email)}"></label>
     <label class="full">Password<input id="cPw" data-cloud="pw" type="password" autocomplete="current-password" value="${esc(CLOUD_FORM.pw)}"></label>
@@ -1295,6 +1353,7 @@ const HELP=[
  ["Money","Read your Home screen",["Billed, unpaid, jobs done, expenses and profit for the week, month or year.","Tap Unpaid to see who owes you.","Your job times shows your average hours and $/hr per job type."],"dash|"],
  ["Team","Add technicians and dispatch",["Settings → Team & dispatch → ＋ Add a technician.","A 🧭 Dispatch button appears on Schedule.","Assign jobs, text job sheets, and track On the way / On site."],"settings|teamSet"],
  ["App","Use the app on more than one device (cloud sync)",["Settings → ☁️ Cloud sync → enter your email and a password → Create account.","Everything on this phone uploads. The ☁︎ button at the top turns green when it's up to date.","On a computer or iPad, open the app link in any browser, go to Settings and Sign in with the same email.","Changes sync by themselves when you're online. Offline changes catch up when you're back.","Photos, videos and receipt pictures stay on the device that took them for now."],"settings|setCloud"],
+ ["App","Plans, free trial and billing",["New accounts get a 30-day free trial with everything included.","Settings → Cloud sync → View plans to see Solo and Team and subscribe (card payments by Stripe).","Manage subscription lets you change your card, switch plans or cancel anytime.","If a trial or plan ends, your data is kept safe and unlocks again when you subscribe."],"plan|"],
  ["App","Change colors and dark mode",["Settings → Appearance.","Pick Auto, Light or Dark, an app color, and a background."],"settings|setAppear"],
  ["App","Where is my data saved?",["Everything saves on this phone as you go. The ✓ Saved time shows at the top.","The app keeps daily copies for 14 days on the phone.","Save a backup file to iCloud Drive so you never lose your jobs."],"settings|backup"]];
 let HELP_Q="",HELP_OPEN=null;
@@ -1432,6 +1491,7 @@ function renderDash(){
     <button type="button" class="tile" data-nav="expenses"><span class="tl">Expenses · ${esc(label.toLowerCase())}</span><strong>${money(expSum(expIn(P)))}</strong><span class="ts">Parts ${money(expSum(expIn(P).filter(e=>e.cat==="parts")))} · tap to see</span></button>
     <div class="tile"><span class="tl">Profit · ${esc(label.toLowerCase())}</span><strong class="${billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P))<0?"neg":""}">${money(billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P)))}</strong><span class="ts">Billed minus tax and expenses</span></div>
   </div>
+  ${trialBannerHTML()}
   <div class="dash-grid">
   ${APP.requests.some(r=>r.status==="new")?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new").length} new request${APP.requests.filter(r=>r.status==="new").length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
   <div class="dash-card">
@@ -1773,7 +1833,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -3120,6 +3180,7 @@ async function savePdf(kind){
 
 /* ================= render & navigation ================= */
 function render(){applyTheme();
+  if(!access().ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
   syncActive();
   let html;
   if(APP.view==="settings")html=renderSettings();
@@ -3128,6 +3189,7 @@ function render(){applyTheme();
   else if(APP.view==="requests")html=renderRequests();
   else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="help")html=renderHelp();
+  else if(APP.view==="plan")html=renderPlan();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
@@ -3239,6 +3301,7 @@ document.addEventListener("click",e=>{
     CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
     cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
       .catch(e=>{CLOUD_FORM.busy=false;let m=e&&e.msg||"Couldn't sign in";if(/invalid login|invalid_credentials/i.test(m))m="Wrong email or password.";if(/already registered|already been registered|exists/i.test(m))m="That email already has an account. Tap Sign in.";if(e.code==="offline")m="No internet connection. Try again when you're online.";CLOUD_FORM.msg=m;rerenderKeep();});return;}
+  if(d.act==="planrefresh"){fetchPlan().then(()=>{rerenderKeep();toast(access().kind==="paid"?"Your plan is active. Thank you!":"Plan checked");});return;}
   if(d.act==="syncnow"){syncNow(true);return;}
   if(d.act==="signout"){cloudSignOut();rerenderKeep();toast("Signed out. Your data stays on this device.");return;}
   if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};render();setTimeout(initSigPad,30);return;}
@@ -3551,6 +3614,8 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
 setTimeout(()=>{syncLabel();if(AUTH)syncNow();},800);
+if(/[?&]paid=1/.test(location.search)){history.replaceState(null,"",location.pathname);toast("Thanks! Activating your plan…");
+  let n=0;const poll=async()=>{await fetchPlan();if(access().kind==="paid"){APP.view="plan";render();toast("Your plan is active. Thank you!");return;}if(++n<10)setTimeout(poll,3000);};setTimeout(poll,1500);}
 /* Show save buttons only where this view can save files */
 document.body.classList.add("dl-checking");
 document.body.classList.toggle("no-cal",!CAN_CAL);

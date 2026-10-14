@@ -859,7 +859,7 @@ async function cloudSignIn(email,pw,create){
 function cloudSignOut(){PLAN=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
 /* ================= plans & subscriptions (Stripe) ================= */
 // Stripe Payment Links + customer portal. Fill these in (test-mode links first). Empty = checkout not open yet.
-const BILLING={soloMonthly:"https://buy.stripe.com/test_8x29AMdxb7yn1uY3zB0sU00",soloYearly:"https://buy.stripe.com/test_aFabIU78N4mb4Hadab0sU01",teamMonthly:"https://buy.stripe.com/test_fZu6oA2Sx7ync9C3zB0sU02",teamYearly:"https://buy.stripe.com/test_5kQaEQeBf5qfb5yfij0sU03",portal:"",terms:"terms.html",privacy:"privacy.html"};
+const BILLING={soloMonthly:"https://buy.stripe.com/test_8x29AMdxb7yn1uY3zB0sU00",soloYearly:"https://buy.stripe.com/test_aFabIU78N4mb4Hadab0sU01",teamMonthly:"https://buy.stripe.com/test_fZu6oA2Sx7ync9C3zB0sU02",teamYearly:"https://buy.stripe.com/test_5kQaEQeBf5qfb5yfij0sU03",portal:"https://billing.stripe.com/p/login/test_8x29AMdxb7yn1uY3zB0sU00",terms:"terms.html",privacy:"privacy.html"};
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
 async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}

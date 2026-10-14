@@ -19,7 +19,7 @@ async function saveSub(sub: Stripe.Subscription, shopId?: string | null) {
     status: sub.status, plan: isTeam ? "team" : "solo", seats: Math.max(1, seats),
     stripe_customer: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
     stripe_subscription: sub.id,
-    current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null,
+    current_period_end: (() => { const t = (sub as any).current_period_end || (items[0] as any)?.current_period_end; return t ? new Date(t * 1000).toISOString() : null; })(),
     updated_at: new Date().toISOString(),
   };
   let target = shopId || (sub.metadata?.shop_id as string | undefined) || null;

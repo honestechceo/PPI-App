@@ -2,7 +2,7 @@
 
 Pre-purchase inspection app for mobile mechanics: job schedule, a 70-point inspection checklist in field order, per-wheel tread and brake pad readings, buyer report, invoice with travel fees, PDF export, and backup/restore.
 
-Live: https://honestechceo.github.io/PPI-App/
+Live: https://honestechmobileapp.com (also https://honestechceo.github.io/PPI-App/)
 
 ## Install on iPhone
 

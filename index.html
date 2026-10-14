@@ -441,6 +441,30 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
 .av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .req-alert{border-color:var(--accent);background:var(--accent-soft)}
+/* ---------- wide screens: iPhone Duo unfolded (7.6"), iPad, landscape ---------- */
+@media (min-width:860px){
+  .top-inner,main,.foot-inner{max-width:1180px}
+  main{padding-left:24px;padding-right:24px}
+  .tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .dash-grid{columns:2;column-gap:14px}.dash-grid>*{break-inside:avoid;display:inline-block;width:100%}
+  .dash-grid>.dash-link{display:flex}
+  .jobs,.req-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+  .svc-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);grid-template-areas:"a doc" "b doc";column-gap:18px;align-items:start}
+  .svc-a{grid-area:a}.svc-b{grid-area:b}.svc-doc{grid-area:doc}.svc-doc .doc-seg{margin-top:0}
+  .cal-wrap{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+  .cal-r .jobs{grid-template-columns:1fr}
+  .cal-day{min-height:64px}
+  .form{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .form>.full,.form>.formh,.form>.formacts,.form>p.help{grid-column:1/-1}
+  .exp-form,.req-form,#jobForm{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .svc-a .form,.svc-b .form,.svc-doc .form{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .stage-head h2{font-size:38px}
+  .tabs{max-width:720px}
+  .dash-head{align-items:center}.dash-head>.btn{flex:0 0 auto;width:auto;min-width:220px;max-width:280px;margin-left:auto}
+  .report{padding:22px 26px}
+}
+@media (min-width:1100px){.items{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -997,6 +1021,7 @@ function renderDash(){
     <button type="button" class="tile" data-nav="expenses"><span class="tl">Expenses · ${esc(label.toLowerCase())}</span><strong>${money(expSum(expIn(P)))}</strong><span class="ts">Parts ${money(expSum(expIn(P).filter(e=>e.cat==="parts")))} · tap to see</span></button>
     <div class="tile"><span class="tl">Profit · ${esc(label.toLowerCase())}</span><strong class="${billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P))<0?"neg":""}">${money(billed-inP.reduce((a,j)=>a+totals(j).tax,0)-expSum(expIn(P)))}</strong><span class="ts">Billed minus tax and expenses</span></div>
   </div>
+  <div class="dash-grid">
   ${APP.requests.some(r=>r.status==="new")?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new").length} new request${APP.requests.filter(r=>r.status==="new").length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
   <div class="dash-card">
     <div class="dc-h"><h3>Billed by month</h3><span class="ts" id="barCap">${esc(fmtDate(mVals[5].m+"-01",{month:"long"}))}: ${money(mVals[5].v)} · ${mVals[5].n} job${mVals[5].n===1?"":"s"}</span></div>
@@ -1008,7 +1033,7 @@ function renderDash(){
     ${billed?Object.entries(b).filter(([k,v])=>v>0).map(([k,v])=>hb(k,v,bMax)).join(""):`<p class="empty">No completed jobs ${esc(label.toLowerCase())}.</p>`}</div>
   ${viaArr.length?`<div class="dash-card"><div class="dc-h"><h3>How customers paid</h3><span class="ts">${esc(label)}</span></div>${viaArr.map(([k,v])=>hb(k,v,viaMax)).join("")}</div>`:""}
   ${top.length?`<div class="dash-card"><div class="dc-h"><h3>Top customers</h3><span class="ts">All time</span></div>${top.map(x=>`<button type="button" class="hist-row" data-gocust="${x.c.id}"><span>${esc(x.c.name)}</span><span class="tag">${custJobs(x.c).length} job${custJobs(x.c).length===1?"":"s"}</span><span class="hist-what">${esc(x.c.vehicles.map(vehName).filter(Boolean).join(", "))}</span><span class="hist-amt">${money(x.billed)}</span></button>`).join("")}</div>`:""}
-  ${fuDue?`<button type="button" class="dash-card dash-link" data-nav="jobs"><span><strong>${fuDue} service reminder${fuDue===1?"":"s"}</strong> due in the next 2 weeks</span><span>›</span></button>`:""}`;
+  ${fuDue?`<button type="button" class="dash-card dash-link" data-nav="jobs"><span><strong>${fuDue} service reminder${fuDue===1?"":"s"}</strong> due in the next 2 weeks</span><span>›</span></button>`:""}</div>`;
 }
 function barChart(vals){
   const W=600,H=230,padL=84,padR=8,top=20,bot=36,max=Math.max(1,...vals.map(v=>v.v)),bw=(W-padL-padR)/vals.length;
@@ -1387,7 +1412,7 @@ function renderMonthCal(){
   const dayJobs=APP.jobs.filter(j=>j.info.date===sel).sort((a,b)=>(a.info.time||"99")<(b.info.time||"99")?-1:1);
   const dayFu=APP.jobs.filter(j=>fuOpen(j)&&j.followup.date===sel);
   const monthJobs=APP.jobs.filter(j=>(j.info.date||"").slice(0,7)===ym);
-  return `<div class="cal">
+  return `<div class="cal-wrap"><div class="cal-l"><div class="cal">
     <div class="cal-nav"><button type="button" class="mini" data-calnav="-1" aria-label="Previous month">‹</button>
       <strong>${esc(first.toLocaleDateString(undefined,{month:"long",year:"numeric"}))}</strong>
       <button type="button" class="mini" data-calnav="1" aria-label="Next month">›</button></div>
@@ -1395,11 +1420,11 @@ function renderMonthCal(){
     <div class="cal-grid">${cells}</div>
     <div class="cal-legend"><span><i class="dot-b"></i>Booked</span><span><i class="dot-d"></i>Done</span><span><i class="dot-f"></i>Reminder</span>
       <span class="cal-sum">${monthJobs.length} job${monthJobs.length===1?"":"s"} this month</span>${ym!==TODAY.slice(0,7)||sel!==TODAY?`<button type="button" class="mini" data-caltoday="1">Today</button>`:""}</div>
-  </div>
+  </div></div><div class="cal-r">
   <div class="cal-dayhead"><div><div class="group-h" style="margin:0">${esc(sel===TODAY?"Today":fmtDate(sel,{weekday:"long"}))}</div><strong>${esc(fmtDate(sel,{month:"long",day:"numeric",year:"numeric"}))}</strong></div>
     <button class="btn primary" type="button" data-bookday="${sel}">+ Book this day</button></div>
   ${dayJobs.length?`<div class="jobs">${dayJobs.map(jobCard).join("")}</div>`:`<div class="emptybox">${sel<TODAY?"No jobs on this day.":"Nothing booked yet. This day is open."}</div>`}
-  ${dayFu.length?`<div class="group-h">Service reminders due</div><div class="jobs">${dayFu.map(j=>`<div class="job fu"><div class="when-col"><div class="t" style="font-size:16px">Due</div></div><div class="who">${esc(j.info.customer||"Customer")} <span class="st st-active">${esc(j.followup.what||"Service")}</span></div><div class="meta">${esc(vehOf(j.info))}</div><div class="acts"><button class="mini go" type="button" data-fubook="${j.id}">Book it</button></div></div>`).join("")}</div>`:""}`;
+  ${dayFu.length?`<div class="group-h">Service reminders due</div><div class="jobs">${dayFu.map(j=>`<div class="job fu"><div class="when-col"><div class="t" style="font-size:16px">Due</div></div><div class="who">${esc(j.info.customer||"Customer")} <span class="st st-active">${esc(j.followup.what||"Service")}</span></div><div class="meta">${esc(vehOf(j.info))}</div><div class="acts"><button class="mini go" type="button" data-fubook="${j.id}">Book it</button></div></div>`).join("")}</div>`:""}</div></div>`;
 }
 function renderJobs(){
   const days=[...Array(14)].map((_,k)=>addDays(TODAY,k));
@@ -2122,6 +2147,7 @@ function renderService(){
   <div class="stage-head"><div class="eyebrow">Service / repair</div><h2>${esc(i.work||"Service job")}</h2>
   <p class="when">Fill in the vehicle and the work, then build the estimate or invoice below.</p>
   <div class="jump"><button class="mini" type="button" data-jump="docSeg">${docMode(S)==="est"?"Estimate":"Invoice"} ↓</button><button class="mini" type="button" data-jump="f-vin">VIN</button><button class="mini" type="button" data-jump="mediaForm">Photos</button></div></div>
+  <div class="svc-grid"><div class="svc-a">
   <div class="form">
     <p class="formh">Customer &amp; vehicle</p>
     <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
@@ -2143,8 +2169,8 @@ function renderService(){
     ${ta("work","Work requested","What the customer asked for")}
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
-  </div>
-  <div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
+  </div></div>
+  <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
     ${mode==="est"?bizHead("Estimate",`<strong>${esc((S.est&&S.est.num)||"New estimate")}</strong><br>${esc(fmtDate((S.est&&S.est.date)||TODAY,{month:"short",day:"numeric",year:"numeric"}))}${S.est&&S.est.status!=="draft"?`<br><span class="eststamp est-${S.est.status}">${esc((EST_ST.find(x=>x[0]===S.est.status)||[0,""])[1])}</span>`:""}`)
       :bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
@@ -2167,9 +2193,9 @@ function renderService(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>`}
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the text instead.</p>
-  </div>
-  ${renderMedia()}
-  ${renderFollowupForm()}`;
+  </div></div>
+  <div class="svc-b">${renderMedia()}
+  ${renderFollowupForm()}</div></div>`;
 }
 /* ---- saved service menu ---- */
 let MENU_OPEN=false,MENU_SAVE=false,MENU_Q="";

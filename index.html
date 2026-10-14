@@ -465,6 +465,28 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
   .report{padding:22px 26px}
 }
 @media (min-width:1100px){.items{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.team-list{display:flex;flex-direction:column;gap:10px}
+.tm-row{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:10px}
+.tm-row input,.tm-new input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;min-height:42px;width:100%;font:inherit;color:var(--ink)}
+.tm-colors{grid-column:1/-1;display:flex;gap:8px}
+.tm-c{width:26px;height:26px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--line);padding:0}
+.tm-c[aria-pressed="true"]{box-shadow:0 0 0 3px var(--ink)}
+.tm-dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:0 0 auto}.tm-dot.sm{width:9px;height:9px;margin-right:4px;vertical-align:middle}
+.tm-new{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--accent);border-radius:10px;background:var(--accent-soft)}
+.tm-new .acts{display:flex;gap:6px}
+.dsp-nav{display:flex;align-items:center;gap:10px;margin:0 0 12px}.dsp-nav strong{font-size:16px}
+.dsp-board{display:flex;flex-direction:column;gap:14px;margin-bottom:14px}
+.dsp-col{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.dsp-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.dsp-h .ts{margin-left:auto}
+.dj{background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--tc);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.dj-top{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.dj-top strong{margin-right:auto}
+.dj-who{font-weight:600}
+.dj-as{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+.dj-as select{flex:1;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:6px 8px;font:inherit;text-transform:none;letter-spacing:0;color:var(--ink)}
+.dj-st button{min-height:36px;font-size:13px}
+.dj .acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px}
+.st.dsp-unassigned{background:var(--na-soft);color:var(--na)}.st.dsp-assigned{background:var(--accent-soft);color:var(--accent)}.st.dsp-enroute{background:var(--mon-soft);color:var(--mon)}.st.dsp-onsite{background:var(--good-soft);color:var(--good)}.st.dsp-done{background:var(--good);color:#fff}
+@media (min-width:860px){.dsp-board{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));align-items:start}}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -659,7 +681,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true,techs:[]};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor (hourly)"],["flat","Flat fee"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
@@ -713,7 +735,7 @@ const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
 rebuildChecklist(APP.settings);
-APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.requests))APP.requests=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
+APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.requests))APP.requests=[];if(!Array.isArray(APP.settings.techs))APP.settings.techs=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
 let S=null; // the job being worked on
 function syncActive(){S=APP.jobs.find(j=>j.id===APP.active)||null; if(!S&&APP.view==="job")APP.view="jobs";}
@@ -979,6 +1001,70 @@ function reqToDraft(r){
   APP.reqFrom=r.id;APP.view="jobs";
 }
 
+/* ================= team & dispatch (turns on when technicians are added) ================= */
+const TECH_COLORS=["#1d5fa8","#e2620f","#2b8a3e","#6a3fc8","#c0262d","#0b7f8f","#b07d0a","#3d4651"];
+const hasTeam=()=>(APP.settings.techs||[]).length>0;
+function teamList(){const st=APP.settings;return [{id:"me",name:(st.owner||"Me").trim()||"Me",phone:st.phone||"",color:"#15202b",me:true},...(st.techs||[])];}
+function techOf(j){if(j.techId){const t=teamList().find(x=>x.id===j.techId);if(t)return t;}
+  const n=String(j.info.tech||"").trim().toLowerCase();if(!n)return null;return teamList().find(x=>x.name.trim().toLowerCase()===n)||null;}
+function linkTech(j){const t=techOf(j);j.techId=t?t.id:"";}
+const DSP_ST=[["assigned","Assigned"],["enroute","On the way"],["onsite","On site"]];
+function dspStatus(j){if(j.status==="done")return "done";if(!techOf(j))return "unassigned";return j.dispatch||"assigned";}
+const DSP_LBL={unassigned:"Unassigned",assigned:"Assigned",enroute:"On the way",onsite:"On site",done:"Done"};
+let TECH_NEW=null,TECH_DEL=null;
+function teamSettingsHTML(){
+  const ts=APP.settings.techs||[];
+  return `<div class="form" id="teamSet">
+    <p class="formh">Team &amp; dispatch</p>
+    <p class="help full" style="margin:0">Working solo? Leave this empty. Add technicians to turn on the <strong>Dispatch board</strong>, where you assign jobs, text job sheets to techs and track where everyone is. You're on the team automatically as ${esc(teamList()[0].name)}.</p>
+    ${ts.length?`<div class="full team-list">${ts.map(t=>`<div class="tm-row"><span class="tm-dot" style="background:${esc(t.color)}"></span>
+      <input data-techf="${t.id}:name" value="${esc(t.name)}" placeholder="Name" aria-label="Technician name"><input data-techf="${t.id}:phone" value="${esc(t.phone||"")}" inputmode="tel" placeholder="Phone" aria-label="Technician phone">
+      ${TECH_DEL===t.id?`<button class="mini del" type="button" data-techdelgo="${t.id}">Remove</button><button class="mini" type="button" data-techdelno="1">Keep</button>`:`<button class="xbtn" type="button" data-techdel="${t.id}" aria-label="Remove ${esc(t.name)}">×</button>`}
+      <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div></div>`).join("")}</div>`:""}
+    ${TECH_NEW?`<div class="full tm-new"><input id="tmName" data-technew="name" value="${esc(TECH_NEW.name)}" placeholder="Technician name"><input data-technew="phone" value="${esc(TECH_NEW.phone)}" inputmode="tel" placeholder="Phone (for texting job sheets)">
+      <div class="acts"><button class="mini go" type="button" data-act="techsave">Add technician</button><button class="mini" type="button" data-act="techcancel">Cancel</button></div></div>`
+      :`<div class="full"><button class="mini" type="button" data-act="techadd">＋ Add a technician</button></div>`}
+  </div>`;
+}
+function jobSheet(j,t){
+  const i=j.info,veh=vehOf(i),st=APP.settings;
+  return [`${bizName()} job${t&&!t.me?" for "+t.name.split(" ")[0]:""}`,
+    `${fmtDate(i.date,{weekday:"short",month:"short",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}`,
+    `${isSvc(j)?"Service":"Pre-purchase inspection"}${isSvc(j)&&i.work?": "+i.work:""}`,"",
+    `Customer: ${i.customer||"—"}${i.phone?" · "+i.phone:""}`,
+    i.location?`Address: ${i.location}`:"",i.location?`Directions: ${mapsHref(i.location)}`:"",
+    veh?`Vehicle: ${veh}${i.vin?" · VIN "+i.vin:""}`:"",
+    num(i.agreed)?`Agreed price: ${money(i.agreed)}${i.agreedTravel!==false?" (travel included)":""}`:"",
+    i.notes?`Notes: ${i.notes}`:"","",`Reply when you're on the way and when you're done.`].filter((x,k,a)=>x!==""||(a[k-1]!==""&&k>0)).join("\n");
+}
+function renderDispatch(){
+  const day=APP.dspDay||TODAY,team=teamList();
+  const js=APP.jobs.filter(j=>j.info.date===day).sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));
+  const cols=[{id:"",name:"Unassigned",color:"var(--na)"},...team].map(t=>({t,js:js.filter(j=>t.id?(techOf(j)||{}).id===t.id:!techOf(j))}));
+  const rt=APP.settings.roundTrip!==false?2:1;
+  const card=j=>{const i=j.info,tc=techOf(j),stt=dspStatus(j);
+    return `<div class="dj" style="--tc:${tc?esc(tc.color):"var(--line)"}">
+      <div class="dj-top"><strong>${i.time?esc(fmtTime(i.time)):"Any time"}</strong><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="st dsp-${stt}">${DSP_LBL[stt]}</span></div>
+      <div class="dj-who">${esc(i.customer||"No name")}${num(i.agreed)?` · ${money(i.agreed)}`:""}</div>
+      <div class="meta">${esc([vehOf(i),isSvc(j)?i.work:""].filter(Boolean).join(" · ")||"—")}</div>
+      <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}</div>
+      <label class="dj-as">Tech<select data-assign="${j.id}"><option value="">Unassigned</option>${team.map(t=>`<option value="${t.id}" ${tc&&tc.id===t.id?"selected":""}>${esc(t.me?t.name+" (you)":t.name)}</option>`).join("")}</select></label>
+      ${tc&&j.status!=="done"?`<div class="chips dj-st">${DSP_ST.map(([k,l])=>`<button type="button" data-dspst="${j.id}:${k}" aria-pressed="${stt===k}">${l}</button>`).join("")}</div>`:""}
+      <div class="acts">${tc&&!tc.me&&tc.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(tc.phone,jobSheet(j,tc)))}" data-sheetsent="${j.id}">💬 Send to ${esc(tc.name.split(" ")[0])}</a>`:""}${tc&&!tc.me?`<button class="mini" type="button" data-sheetcopy="${j.id}">Copy job sheet</button>`:""}<button class="mini" type="button" data-open="${j.id}">Open</button>${j.sheetAt?`<span class="meta">✓ sent ${esc(new Date(j.sheetAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</span>`:""}</div>
+    </div>`;};
+  // week report
+  const wk=periodStart("week"),done=APP.jobs.filter(j=>j.status==="done"&&jDate(j)>=wk&&jDate(j)<=TODAY);
+  const rep=team.map(t=>{const mine=done.filter(j=>(techOf(j)||{}).id===t.id);return {t,n:mine.length,amt:mine.reduce((a,j)=>a+jobTotal(j),0)};});
+  return `${sampleBanner()}
+  <div class="stage-head dash-head"><div><div class="eyebrow">Team</div><h2>Dispatch</h2></div><button class="btn primary" type="button" data-bookday="${day}">+ Book a job</button></div>
+  <div class="dsp-nav"><button class="mini" type="button" data-dspnav="-1" aria-label="Previous day">‹</button><strong>${esc(day===TODAY?"Today · ":"")}${esc(fmtDate(day,{weekday:"long",month:"short",day:"numeric"}))}</strong><button class="mini" type="button" data-dspnav="1" aria-label="Next day">›</button>${day!==TODAY?`<button class="mini" type="button" data-dspnav="0">Today</button>`:""}</div>
+  <div class="dsp-board">${cols.filter(c=>c.t.id||c.js.length).map(c=>{const mi=c.js.reduce((a,j)=>a+num(j.info.dist)*rt,0);
+    return `<section class="dsp-col"><div class="dsp-h"><span class="tm-dot" style="background:${c.t.color}"></span><strong>${esc(c.t.me?c.t.name+" (you)":c.t.name)}</strong><span class="ts">${c.js.length} job${c.js.length===1?"":"s"}${mi?` · ${Math.round(mi)} mi`:""}</span></div>
+      ${c.js.length?c.js.map(card).join(""):`<p class="empty">${c.t.id?"Free all day":"Nothing waiting"}</p>`}</section>`;}).join("")}</div>
+  <div class="dash-card"><div class="dc-h"><h3>This week by technician</h3><span class="ts">Completed jobs</span></div>
+    ${rep.map(x=>`<div class="hb"><span class="hb-k">${esc(x.t.me?x.t.name+" (you)":x.t.name)}</span><span class="hb-track"><i style="width:${Math.max(2,x.amt/Math.max(1,...rep.map(y=>y.amt))*100).toFixed(1)}%;background:${x.t.color}"></i></span><span class="hb-v">${x.n} · ${money(x.amt)}</span></div>`).join("")}</div>`;
+}
+
 /* ================= dashboard ================= */
 const jDate=j=>(j.invoice&&j.invoice.date)||j.info.date||"";
 function periodStart(p){const d=new Date(TODAY+"T12:00:00");
@@ -1217,7 +1303,7 @@ function distHelp(target){
     :`<span class="help">Add your home base in Settings → Pricing to calculate this automatically</span>`;
 }
 function techNames(){const seen=new Map();const add=n=>{n=String(n||"").trim();if(n&&!seen.has(n.toLowerCase()))seen.set(n.toLowerCase(),n);};
-  add(APP.settings.owner);[...APP.jobs].sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||"")).forEach(j=>add(j.info&&j.info.tech));return [...seen.values()];}
+  add(APP.settings.owner);(APP.settings.techs||[]).forEach(t=>add(t.name));[...APP.jobs].sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||"")).forEach(j=>add(j.info&&j.info.tech));return [...seen.values()];}
 function techDL(){return `<datalist id="techList">${techNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`;}
 const TECH_ATTR='list="techList" autocomplete="off" placeholder="Optional"';
 function bizContact(){const s=APP.settings;return [s.phone,s.email,s.web].filter(Boolean).join(" · ");}
@@ -1361,7 +1447,7 @@ function renderChrome(){
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -1440,7 +1526,7 @@ function renderJobs(){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button></div></div>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
@@ -1506,7 +1592,7 @@ function jobCard(j){
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
-    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · Tech: ${esc(i.tech)}`:""}</div>
+    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&j.status!=="done"&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
     <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
@@ -1680,6 +1766,7 @@ function renderSettings(){
     <label>Default next service<select id="s-fuMonths" data-set="fuMonths">${["3","6","12"].map(v=>`<option value="${v}" ${String(s.fuMonths||"3")===v?"selected":""}>${v} months</option>`).join("")}</select></label>
     <p class="help full" style="margin:0">Calendar alerts come from your iPhone's Calendar app. Tap <strong>Add to Calendar</strong> on a booked job, or on a service reminder. This works in the home-screen app (Safari), not inside Claude.</p>
   </div>
+  ${teamSettingsHTML()}
   ${menuSettingsHTML()}
   ${themeSectionHTML()}
   ${renderChecklistSettings()}
@@ -2681,6 +2768,7 @@ function render(){applyTheme();
   else if(APP.view==="customers")html=renderCustomers();
   else if(APP.view==="dash")html=renderDash();
   else if(APP.view==="requests")html=renderRequests();
+  else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>preloadMedia(S),0);}
@@ -2706,6 +2794,7 @@ function saveDraft(){
   else{const nj=newJob(info,type);if(custId)nj.custId=custId;applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
+  APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
   APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
@@ -2714,6 +2803,8 @@ function saveDraft(){
 document.addEventListener("click",e=>{
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
+  const sh=e.target.closest&&e.target.closest("a[data-sheetsent]");
+  if(sh){const j=APP.jobs.find(x=>x.id===sh.dataset.sheetsent);if(j){j.sheetAt=Date.now();save();setTimeout(rerenderKeep,800);}return;}
   const rd=e.target.closest&&e.target.closest("a[data-reqdecl]");
   if(rd){const r=APP.requests.find(x=>x.id===rd.dataset.reqdecl);if(r){r.status="declined";save();setTimeout(()=>{REQ_NO=null;rerenderKeep();},800);}return;}
   const es=e.target.closest&&e.target.closest("a[data-estsent]");
@@ -2722,7 +2813,7 @@ document.addEventListener("click",e=>{
   if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
-  if(d.nav){if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
+  if(d.nav){TECH_NEW=null;TECH_DEL=null;if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
@@ -2783,6 +2874,17 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="techadd"){TECH_NEW={name:"",phone:""};rerenderKeep();setTimeout(()=>document.getElementById("tmName")?.focus(),30);return;}
+  if(d.act==="techcancel"){TECH_NEW=null;rerenderKeep();return;}
+  if(d.act==="techsave"){const n=(TECH_NEW.name||"").trim();if(!n){toast("Enter the technician's name");return;}const ts=APP.settings.techs;
+    ts.push({id:uid(),name:n,phone:(TECH_NEW.phone||"").trim(),color:TECH_COLORS[(ts.length+1)%TECH_COLORS.length]});TECH_NEW=null;save();rerenderKeep();toast(ts.length===1?`Added ${n}. Dispatch is now on in Schedule.`:`Added ${n}`);return;}
+  if(d.techdel){TECH_DEL=d.techdel;rerenderKeep();return;}
+  if(d.techdelno){TECH_DEL=null;rerenderKeep();return;}
+  if(d.techdelgo){const t=APP.settings.techs.find(x=>x.id===d.techdelgo);APP.settings.techs=APP.settings.techs.filter(x=>x.id!==d.techdelgo);APP.jobs.forEach(j=>{if(j.techId===d.techdelgo)j.techId="";});TECH_DEL=null;save();rerenderKeep();toast(`Removed ${t?t.name:"technician"}. Their past jobs keep the name.`);return;}
+  if(d.techcolor){const [id,c]=d.techcolor.split(":");const t=APP.settings.techs.find(x=>x.id===id);if(t){t.color=c;save();rerenderKeep();}return;}
+  if(d.dspnav!==undefined){APP.dspDay=d.dspnav==="0"?TODAY:addDays(APP.dspDay||TODAY,+d.dspnav);rerenderKeep();return;}
+  if(d.dspst){const [id,k]=d.dspst.split(":");const j=APP.jobs.find(x=>x.id===id);if(j){j.dispatch=j.dispatch===k&&k!=="assigned"?"assigned":k;if(k!=="assigned"&&j.status==="sched")j.status="active";save();rerenderKeep();}return;}
+  if(d.sheetcopy){const j=APP.jobs.find(x=>x.id===d.sheetcopy);if(j){copyText(jobSheet(j,techOf(j)));j.sheetAt=Date.now();save();}return;}
   if(d.act==="reqpaste"){REQ_PASTE={raw:""};REQ_EDIT=null;rerenderKeep();setTimeout(()=>document.getElementById("reqRaw")?.focus(),30);return;}
   if(d.act==="reqclip"){navigator.clipboard.readText().then(t=>{const a=document.getElementById("reqRaw");if(a){a.value=t;REQ_PASTE.raw=t;}if(t.trim())toast("Pasted. Tap Read it.");else toast("Clipboard is empty");}).catch(()=>toast("Press and hold in the box, then Paste"));return;}
   if(d.act==="reqread"){const raw=(document.getElementById("reqRaw")?.value||"").trim();if(!raw){toast("Paste the email first");return;}
@@ -2940,6 +3042,9 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.techf){const [id,f]=d.techf.split(":");const tm=APP.settings.techs.find(x=>x.id===id);if(tm){tm[f]=e.target.value;
+    if(f==="name")APP.jobs.forEach(j=>{if(j.techId===id)j.info.tech=e.target.value;});clearTimeout(window.__tf);window.__tf=setTimeout(save,400);}return;}
+  if(d.technew&&TECH_NEW){TECH_NEW[d.technew]=t.value;return;}
   if(d.req&&REQ_EDIT){REQ_EDIT[d.req]=d.req==="vin"?t.value.toUpperCase():t.value;if(d.req==="date"){clearTimeout(window.__rd);window.__rd=setTimeout(rerenderKeep,500);}return;}
   if(d.reqnotext&&REQ_NO){REQ_NO.text=t.value;document.querySelectorAll("a[data-reqdecl]").forEach(a=>{const r=APP.requests.find(x=>x.id===REQ_NO.id);if(/^sms:/.test(a.href))a.href=smsHref(r.phone,t.value);else a.href=`mailto:${r.email}?subject=${encodeURIComponent("Your request with "+bizName())}&body=${encodeURIComponent(t.value)}`;});return;}
   if(d.trip&&TRIP_DRAFT){TRIP_DRAFT[d.trip]=t.value;return;}
@@ -2963,6 +3068,7 @@ document.addEventListener("input",e=>{
     return;}
   if(d.set){APP.settings[d.set]=t.value;save();if(/^(fee|freeMiles|perMile)$/.test(d.set)){const ex=document.getElementById("priceEx");if(ex)ex.textContent=priceExample();}return;}
   if(d.info){S.info[d.info]=d.info==="vin"?t.value.toUpperCase():t.value;
+    if(d.info==="tech"&&S){linkTech(S);}
     if(d.info==="location"){const a=document.getElementById("dirLink");if(a){a.href=mapsHref(t.value);a.hidden=!t.value.trim();}}
     if(d.info==="vin"){const vc=vinCheck(t.value);const m=$("#vinMsg");m.className="vinmsg "+vc.cls;m.textContent=vc.msg;
       const dz=$("#vinDec");if(dz&&!vinReady(t.value)){dz.innerHTML="";}
@@ -2996,6 +3102,7 @@ function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S)
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
+  if(d.assign){const j=APP.jobs.find(x=>x.id===d.assign);if(j){const tm=teamList().find(x=>x.id===t.value);j.techId=tm?tm.id:"";j.info.tech=tm?tm.name:"";if(!tm)j.dispatch="";else if(!j.dispatch)j.dispatch="assigned";save();rerenderKeep();toast(tm?`Assigned to ${tm.name}`:"Unassigned");}return;}
   if(d.draftc&&APP.draft){APP.draft[d.draftc]=t.checked;save();return;}
   if(d.reqc&&REQ_EDIT){REQ_EDIT[d.reqc]=t.checked;return;}
   if(d.restorefile){const f=t.files&&t.files[0];if(!f)return;

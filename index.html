@@ -954,7 +954,21 @@ function syncStatusText(){const t=SYNC.last?new Date(SYNC.last).toLocaleTimeStri
   return {off:"Not signed in",idle:"Waiting to sync",syncing:"Syncing…",ok:`Up to date${t?" · "+t:""}`,offline:`Offline. Will sync when you're back online${t?" · last "+t:""}`,error:`Sync problem: ${SYNC.err}`}[SYNC.state]||"";}
 function syncStatusHTML(){return `<span class="sync-st s-${SYNC.state}">${SYNC.state==="ok"?"☁︎ ✓":SYNC.state==="syncing"?"☁︎ ↻":SYNC.state==="offline"?"☁︎ ✕":SYNC.state==="error"?"☁︎ !":"☁︎"} ${esc(syncStatusText())}</span>`;}
 let CLOUD_FORM={email:"",pw:"",busy:false,msg:""};
+let RECOVERY=null;
+(()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
+  if(q.get("type")==="recovery"&&q.get("access_token"))RECOVERY={token:q.get("access_token"),msg:"",busy:false};
+  else if(q.get("error_code"))RECOVERY={err:q.get("error_code")==="otp_expired"?"That reset link has expired or was already used. Send a new one.":(q.get("error_description")||"That link didn't work. Send a new one.").replace(/\+/g," ")};
+  history.replaceState(null,"",location.pathname+location.search);})();
+async function sendReset(email){email=String(email||"").trim().toLowerCase();if(!email)throw {msg:"Type your email first, then tap Forgot password"};
+  await supa("/auth/v1/recover?redirect_to="+encodeURIComponent(location.origin+location.pathname),{method:"POST",auth:false,body:{email}});}
+async function setNewPassword(pw){if(!pw||pw.length<6)throw {msg:"Use a password with at least 6 characters"};
+  const u=await supa("/auth/v1/user",{method:"PUT",auth:false,headers:{Authorization:"Bearer "+RECOVERY.token},body:{password:pw}});
+  const email=(u&&u.email)||(u&&u.user&&u.user.email);RECOVERY=null;await cloudSignIn(email,pw,false);}
 function cloudSettingsHTML(){
+  if(RECOVERY&&RECOVERY.token)return `<div class="form cloud-set" id="setCloud"><p class="formh">🔑 Set a new password</p>
+    <label class="full">New password<input id="cNewPw" type="password" autocomplete="new-password"></label>
+    ${RECOVERY.msg?`<p class="full help vin-warn" style="margin:0">${esc(RECOVERY.msg)}</p>`:""}
+    <div class="formacts full"><button class="btn primary" type="button" data-act="setpw" ${RECOVERY.busy?"disabled":""}>${RECOVERY.busy?"Saving…":"Save and sign in"}</button><button class="btn" type="button" data-act="cancelpw">Cancel</button></div></div>`;
   if(AUTH)return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
     <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
     <div class="full" id="syncLbl">${syncStatusHTML()}</div>
@@ -962,12 +976,14 @@ function cloudSettingsHTML(){
     <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
   return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
+    ${RECOVERY&&RECOVERY.err?`<p class="full help vin-warn" style="margin:0">${esc(RECOVERY.err)}</p>`:""}
     <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
     <p class="help full" style="margin:0">Make a free account to keep your data safe in the cloud and use the app on more than one device: phone, iPad or computer. ${APP.sample?"The sample jobs won't be uploaded.":"Everything already on this phone is uploaded when you first sign in."}</p>
     <label class="full">Email<input id="cEmail" data-cloud="email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(CLOUD_FORM.email)}"></label>
     <label class="full">Password<input id="cPw" data-cloud="pw" type="password" autocomplete="current-password" value="${esc(CLOUD_FORM.pw)}"></label>
-    ${CLOUD_FORM.msg?`<p class="full help ${/created|Signed/.test(CLOUD_FORM.msg)?"":"vin-warn"}" style="margin:0">${esc(CLOUD_FORM.msg)}</p>`:""}
-    <div class="formacts full"><button class="btn primary" type="button" data-act="signin" ${CLOUD_FORM.busy?"disabled":""}>${CLOUD_FORM.busy?"Working…":"Sign in"}</button><button class="btn" type="button" data-act="signup" ${CLOUD_FORM.busy?"disabled":""}>Create account</button></div></div>`;
+    ${CLOUD_FORM.msg?`<p class="full help ${/created|Signed|Check your email/.test(CLOUD_FORM.msg)?"":"vin-warn"}" style="margin:0">${esc(CLOUD_FORM.msg)}</p>`:""}
+    <div class="formacts full"><button class="btn primary" type="button" data-act="signin" ${CLOUD_FORM.busy?"disabled":""}>${CLOUD_FORM.busy?"Working…":"Sign in"}</button><button class="btn" type="button" data-act="signup" ${CLOUD_FORM.busy?"disabled":""}>Create account</button></div>
+    <div class="full"><button class="mini" type="button" data-act="forgotpw" ${CLOUD_FORM.busy?"disabled":""}>Forgot password?</button></div></div>`;
 }
 
 /* ================= expenses (parts, tools, supplies…) ================= */
@@ -3297,6 +3313,13 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="forgotpw"){CLOUD_FORM.email=document.getElementById("cEmail")?.value||CLOUD_FORM.email;CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
+    sendReset(CLOUD_FORM.email).then(()=>{CLOUD_FORM.busy=false;CLOUD_FORM.msg="Check your email for a password reset link. Open it on this device.";rerenderKeep();})
+      .catch(e=>{CLOUD_FORM.busy=false;CLOUD_FORM.msg=e&&e.msg||"Couldn't send the reset email";rerenderKeep();});return;}
+  if(d.act==="cancelpw"){RECOVERY=null;render();return;}
+  if(d.act==="setpw"){const pw=document.getElementById("cNewPw")?.value||"";RECOVERY.busy=true;RECOVERY.msg="";rerenderKeep();
+    setNewPassword(pw).then(()=>{render();toast("Password changed. You're signed in.");})
+      .catch(e=>{if(RECOVERY){RECOVERY.busy=false;RECOVERY.msg=e&&e.msg||"Couldn't change the password";}render();});return;}
   if(d.act==="signin"||d.act==="signup"){const create=d.act==="signup";CLOUD_FORM.email=document.getElementById("cEmail")?.value||CLOUD_FORM.email;CLOUD_FORM.pw=document.getElementById("cPw")?.value||CLOUD_FORM.pw;
     CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
     cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
@@ -3614,6 +3637,7 @@ document.addEventListener("visibilitychange",()=>{if(document.visibilityState===
 window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
 setTimeout(()=>{syncLabel();if(AUTH)syncNow();},800);
+if(RECOVERY){APP.view="settings";render();setTimeout(()=>document.getElementById("setCloud")?.scrollIntoView({block:"center"}),300);}
 if(/[?&]paid=1/.test(location.search)){history.replaceState(null,"",location.pathname);toast("Thanks! Activating your plan…");
   let n=0;const poll=async()=>{await fetchPlan();if(access().kind==="paid"){APP.view="plan";render();toast("Your plan is active. Thank you!");return;}if(++n<10)setTimeout(poll,3000);};setTimeout(poll,1500);}
 /* Show save buttons only where this view can save files */
@@ -3622,7 +3646,7 @@ document.body.classList.toggle("no-cal",!CAN_CAL);
 (async()=>{let ok=false;try{ok=!!(await getSaver());}catch(e){}
   document.body.classList.remove("dl-checking");document.body.classList.toggle("no-dl",!ok);})();
 /* Installed web app: work offline */
-if(!IN_CLAUDE&&"serviceWorker" in navigator&&location.protocol==="https:"&&/github\.io$/.test(location.hostname)){
+if(!IN_CLAUDE&&"serviceWorker" in navigator&&location.protocol==="https:"&&/github\.io$|honestechmobileapp\.com$/.test(location.hostname)){
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }
 </script>

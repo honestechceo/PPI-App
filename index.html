@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Honestech"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#15202b"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Honestech"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#15202b"><meta name="description" content="The app for mobile mechanics: schedule jobs, do pre-purchase inspections, send estimates and invoices, and track expenses and mileage from your phone. 30-day free trial."><meta property="og:title" content="Honestech Mobile Mechanic App"><meta property="og:description" content="Run your mobile repair business from your phone. Inspections, estimates, invoices, scheduling and more."><meta property="og:url" content="https://honestechmobileapp.com/"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Honestech Mobile Mechanic App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -583,6 +583,43 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 body.gated nav.tabs{display:none}
 .seat-pick{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:6px 0 2px}.seat-pick select{width:auto;min-width:64px}
 .tech-step{display:flex;align-items:center;gap:12px}.tech-step span{flex:1}.tech-step strong{min-width:28px;text-align:center;font-size:20px}.tech-step .mini{min-width:44px;font-size:20px;line-height:1}
+
+/* landing (signed-out) */
+body.gated main{max-width:1060px}
+.lp{display:flex;flex-direction:column;gap:56px;padding-top:8px}
+.lp-hero{display:grid;gap:28px;align-items:center}
+@media(min-width:860px){.lp-hero{grid-template-columns:1.1fr .9fr;gap:48px}}
+.lp-h1{font-family:var(--f-display);font-weight:700;font-size:clamp(40px,9vw,68px);line-height:.95;letter-spacing:-.01em;margin:0 0 16px;max-width:14ch}
+.lp-lede{font-size:18px;line-height:1.5;color:var(--muted);margin:0 0 22px;max-width:46ch}
+.lp-cta{display:flex;flex-wrap:wrap;gap:10px}.lp-cta .btn:not(.primary){color:var(--ink)}.lp-cta .btn{flex:0 0 auto;text-decoration:none;text-align:center;padding:14px 20px;font-size:16px}
+.lp-note{color:var(--muted);font-size:14px;margin:12px 0 0}
+.lp-demo{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;box-shadow:0 18px 40px -24px rgba(21,32,43,.45)}
+.lp-demo-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 2px 10px;border-bottom:1px solid var(--line)}
+.lp-demo-h strong{font-family:var(--f-display);font-size:22px}.lp-demo-h span{color:var(--muted);font-size:13px}
+.lp-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.lp-row b{display:block;font-weight:600}.lp-row small{color:var(--muted)}
+.lp-chips{display:flex;gap:4px;flex:0 0 auto}
+.lp-chip{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:7px 10px;font:500 13px var(--f-body);min-height:36px;cursor:pointer}
+.lp-chip.good.on{background:var(--good-soft);border-color:var(--good);color:var(--good)}
+.lp-chip.mon.on{background:var(--mon-soft);border-color:var(--mon);color:var(--mon)}
+.lp-chip.bad.on{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.lp-sum{display:flex;gap:14px;flex-wrap:wrap;padding:12px 2px 4px;font-weight:600;font-size:15px}
+.lp-sum-good{color:var(--good)}.lp-sum-mon{color:var(--mon)}.lp-sum-bad{color:var(--bad)}
+.lp-demo-f{color:var(--muted);font-size:13px;padding:2px}
+.lp-h2{font-family:var(--f-display);font-weight:700;font-size:clamp(30px,6vw,40px);line-height:1;margin:0 0 18px}
+.lp-cols{display:grid;gap:22px}@media(min-width:760px){.lp-cols{grid-template-columns:repeat(3,1fr);gap:28px}}
+.lp-cols h4{margin:0 0 8px;font-size:17px;padding-bottom:8px;border-bottom:3px solid var(--accent)}
+.lp-cols ul{margin:0;padding-left:18px;line-height:1.55}.lp-cols li{margin:4px 0}
+.lp-plans{display:grid;gap:14px}@media(min-width:640px){.lp-plans{grid-template-columns:1fr 1fr}}
+.lp-plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.lp-plan h4{margin:0;font-size:18px}.lp-plan p{margin:6px 0 0;color:var(--muted)}
+.lp-plan .lp-amt{font-family:var(--f-display);font-weight:700;font-size:40px;color:var(--ink);margin:6px 0 0;line-height:1}
+.lp-join{max-width:520px;width:100%;margin:0 auto;scroll-margin-top:90px}
+.lp-faq details{border-bottom:1px solid var(--line);padding:12px 0}.lp-faq summary{font-weight:600;cursor:pointer;font-size:16px}
+.lp-faq details p{margin:8px 0 0;color:var(--muted);max-width:60ch}
+.lp-foot{border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:14px}
+.lp-foot p{margin:0 0 10px}.lp-foot a{color:var(--accent)}.lp-foot p:last-child{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+@media(max-width:420px){.lp-chip{padding:7px 8px;font-size:12px}}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -925,14 +962,71 @@ function renderPlan(){
   <p class="help">Cancel anytime from Manage subscription. Payments are handled securely by Stripe; the app never sees your card.
     <a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p>`;
 }
+const DEMO_ROWS=[["Front brake pads","3 mm left","bad"],["Battery","412 CCA, tested","good"],["Tires","5/32 tread, even wear","mon"],["Coolant","Clean, full","good"]];
+let DEMO=DEMO_ROWS.map(r=>r[2]);
+function demoSummary(){const n=k=>DEMO.filter(x=>x===k).length;
+  return `<span class="lp-sum-good">${n("good")} good</span><span class="lp-sum-mon">${n("mon")} watch</span><span class="lp-sum-bad">${n("bad")} needs repair</span>`;}
+function demoHTML(){
+  return `<div class="lp-demo" aria-label="Try an inspection">
+    <div class="lp-demo-h"><strong>2016 Honda Accord</strong><span>Pre-purchase inspection</span></div>
+    ${DEMO_ROWS.map((r,i)=>`<div class="lp-row"><div><b>${r[0]}</b><small>${r[1]}</small></div>
+      <div class="lp-chips" role="group" aria-label="${r[0]}">${[["good","Good"],["mon","Watch"],["bad","Repair"]].map(([k,l])=>`<button type="button" class="lp-chip ${k}${DEMO[i]===k?" on":""}" data-demo="${i}|${k}" aria-pressed="${DEMO[i]===k}">${l}</button>`).join("")}</div></div>`).join("")}
+    <div class="lp-sum" id="lpSum">${demoSummary()}</div>
+    <div class="lp-demo-f">Tap to change a result. The PDF report updates as you go.</div></div>`;
+}
 function renderJoin(){
-  return `<div class="stage-head"><div class="eyebrow">Welcome</div><h2>Create your account</h2>
-    <p class="when">Start your ${PRICES.trialDays}-day free trial. No card needed. Your jobs are backed up to your account and you can use the app on your phone, iPad or computer.</p></div>
-  ${cloudSettingsHTML()}
-  <div class="dash-card"><div class="dc-h"><h3>What you get</h3></div>
-    <ul style="margin:0;padding-left:20px;line-height:1.6"><li>Pre-purchase inspections with PDF reports</li><li>Service jobs, estimates & invoices with your logo</li><li>Schedule, customers, reminders & requests inbox</li><li>Expenses, mileage & job times</li><li>Dispatch for your technicians (Team plan)</li></ul>
-    <p class="help" style="margin:10px 0 0">After the trial: Solo ${PRICES.soloM} or Team ${PRICES.team}. Cancel anytime.</p></div>
-  <p class="help"><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p><div class="acts"><button class="mini" type="button" data-nav="help">How the app works</button></div>`;
+  return `<div class="lp">
+  <section class="lp-hero">
+    <div class="lp-hero-t">
+      <h2 class="lp-h1">Run your mobile repair business from your phone</h2>
+      <p class="lp-lede">Book the job, inspect the car, send the estimate and get paid, right from the driveway. Built for mechanics who work out of a van, not a shop.</p>
+      <div class="lp-cta"><a class="btn primary" href="#lpJoin" data-lpjump="1">Start ${PRICES.trialDays}-day free trial</a><a class="btn" href="#lpJoin" data-lpjump="1">Sign in</a></div>
+      <p class="lp-note">No card needed to try it. Works on iPhone, Android, iPad and computer.</p>
+    </div>
+    ${demoHTML()}
+  </section>
+
+  <section class="lp-day">
+    <h3 class="lp-h2">Everything a mobile job needs</h3>
+    <div class="lp-cols">
+      <div><h4>Before you roll</h4><ul>
+        <li>Schedule and calendar with reminders</li><li>Requests inbox for quotes that come in by email</li>
+        <li>Travel charge worked out from your home base</li><li>"On my way" text with your ETA</li></ul></div>
+      <div><h4>At the car</h4><ul>
+        <li>Pre-purchase inspections with photos and notes</li><li>VIN decoder fills in year, make and model</li>
+        <li>Service menu with your prices, one tap to add</li><li>Job timer to learn how long work really takes</li></ul></div>
+      <div><h4>After the job</h4><ul>
+        <li>Estimates and invoices with your logo</li><li>Customer signature on the spot</li>
+        <li>Parts, tools and mileage tracked for taxes</li><li>Review requests and follow-up reminders</li></ul></div>
+    </div>
+  </section>
+
+  <section class="lp-price">
+    <h3 class="lp-h2">Simple pricing</h3>
+    <div class="lp-plans">
+      <div class="lp-plan"><h4>Solo</h4><p class="lp-amt">${PRICES.soloM}</p><p>or ${PRICES.soloY} (2 months free)</p><p>For one mechanic. Every feature included.</p></div>
+      <div class="lp-plan"><h4>Team</h4><p class="lp-amt">${PRICES.team}</p><p>or ${PRICES.teamY} (2 months free)</p><p>You plus 2 technicians, with dispatch and job assignments. Extra techs ${PRICES.seat}.</p></div>
+    </div>
+    <p class="lp-note">Every account starts with ${PRICES.trialDays} days free. Cancel anytime from the app.</p>
+  </section>
+
+  <section class="lp-join" id="lpJoin">
+    ${cloudSettingsHTML()}
+  </section>
+
+  <section class="lp-faq">
+    <h3 class="lp-h2">Questions</h3>
+    <details><summary>Do I need a credit card for the trial?</summary><p>No. Make an account and use everything for ${PRICES.trialDays} days. Pick a plan when you're ready.</p></details>
+    <details><summary>Does it work without signal?</summary><p>Yes. Jobs save on your phone and sync to your account when you're back online.</p></details>
+    <details><summary>Do I need to install anything?</summary><p>No. Open honestechmobileapp.com in your browser. On iPhone, tap Share, then Add to Home Screen to use it like an app.</p></details>
+    <details><summary>What happens to my data if I cancel?</summary><p>Your jobs, customers and invoices stay in your account. Pick a plan again any time to pick up where you left off.</p></details>
+    <details><summary>Can my technicians use it?</summary><p>Yes, on the Team plan. Assign jobs, send job sheets and track each tech's work.</p></details>
+  </section>
+
+  <footer class="lp-foot">
+    <p>Made by a working mobile mechanic in New Jersey. Questions? <a href="mailto:info@honestechservice.com">info@honestechservice.com</a></p>
+    <p><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a> <button class="mini" type="button" data-nav="help">How the app works</button></p>
+  </footer></div>`;
 }
 function localRecords(){
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
@@ -3277,6 +3371,12 @@ function saveDraft(){
 
 /* ================= events ================= */
 document.addEventListener("click",e=>{
+  const dm=e.target.closest&&e.target.closest("[data-demo]");
+  if(dm){const [i,k]=dm.dataset.demo.split("|");DEMO[+i]=k;const row=dm.parentElement;
+    row.querySelectorAll(".lp-chip").forEach(b=>{const on=b===dm;b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);});
+    const sm=document.getElementById("lpSum");if(sm)sm.innerHTML=demoSummary();return;}
+  const lj=e.target.closest&&e.target.closest("[data-lpjump]");
+  if(lj){e.preventDefault();const f=document.getElementById("lpJoin");if(f){f.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});setTimeout(()=>document.getElementById("cEmail")?.focus({preventScroll:true}),400);}return;}
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
   const rv=e.target.closest&&e.target.closest("a[data-reviewsent]");

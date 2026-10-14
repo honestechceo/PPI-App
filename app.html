@@ -517,6 +517,23 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .hc-row.ok span:first-child{color:var(--good);font-weight:700}
 .flash-hl{box-shadow:0 0 0 3px var(--accent)!important;transition:box-shadow .3s}
 @media (min-width:860px){.help-list{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
+.fineprint{font-size:11.5px;line-height:1.45;color:var(--muted);margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px}
+.sig-btn{border-color:var(--accent);color:var(--accent);font-weight:700}
+.sig-show{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.sig-show img{height:46px;background:#fff;border-radius:4px;border:1px solid var(--line)}
+.sig-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:14px}
+.sig-box{background:var(--surface);border-radius:14px;padding:16px;width:100%;max-width:560px;display:flex;flex-direction:column;gap:10px}
+#sigCv{width:100%;height:190px;background:#fff;border:2px dashed var(--line);border-radius:10px;touch-action:none}
+.sig-hint{margin-top:-6px;text-align:center}
+.sig-box input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;min-height:44px;font:inherit;color:var(--ink)}
+.sig-box .acts{display:flex;flex-wrap:wrap;gap:8px}
+.review-btn{border-color:#e0a100!important;color:#9a6a00!important;font-weight:700}
+.route-box{background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px 14px;margin:0 0 12px;display:flex;flex-direction:column;gap:8px}
+.route-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.route-list li{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.rt-n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
+.rt-w small{display:block;color:var(--muted);font-size:12px}
+.route-box .acts{display:flex;flex-wrap:wrap;gap:8px}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -711,7 +728,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true,techs:[]};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true,techs:[],ppiDisc:"This report describes the vehicle's condition at the time of inspection, based on a visual and operational check without disassembly. It is not a warranty or guarantee of future condition. Some problems may not be detectable during a single inspection.",warranty:"",reviewLink:"",reviewMsg:""};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor (hourly)"],["flat","Flat fee"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
@@ -1156,6 +1173,10 @@ const HELP=[
  ["Service jobs","Set a next-service reminder",["On a service job, fill in Next service reminder (what and when).","It shows on your Schedule when it's due.","Tap Text reminder to message the customer and Book it to schedule it."],""],
  ["Getting paid","Mark an invoice paid",["On the invoice, tap how they paid: Cash, Card, Zelle…","Tap Save invoice PDF to send them a receipt that says PAID.","Unpaid invoices show on Home so nothing slips."],""],
  ["Requests","Turn an email request into a job",["Copy the request email.","Schedule → 📥 Requests → Paste request → Read it.","Check the details and your schedule for that day.","Tap Book it, Send a quote, or Can't do it."],"requests|"],
+ ["Getting paid","Get a customer signature",["On an estimate, tap ✍️ Customer signs to approve. Signing also marks it approved.","On an invoice, tap ✍️ Get customer signature.","Hand them the phone, they sign with a finger, tap Save. It prints on the PDF."],""],
+ ["Getting paid","Ask for a Google review",["Settings → Invoices → paste your Google review link.","After a job is marked paid, tap ⭐ Ask for a review (on the invoice or the job card).","It opens Messages with a friendly request and your link."],"settings|setInvoices"],
+ ["Getting started","Add your PPI disclaimer and warranty",["Settings → Invoices.","Edit the PPI report disclaimer (prints on every PPI report).","Add your warranty wording (prints on service estimates and invoices)."],"settings|setInvoices"],
+ ["Jobs","Plan the day's route",["On Schedule, tap 🗺 Plan today's route (or pick a day first).","The app puts the day's jobs in the shortest driving order from where you are.","Tap Open full route in Google Maps, or Directions for one stop."],"jobs|"],
  ["Money","Track expenses",["Expenses → + Add expense.","Pick Parts, Tools, Supplies, Fuel or Other. Add the amount, store and a receipt photo.","Link parts to a job to see that job's real profit."],"expenses|"],
  ["Money","Mileage for taxes",["Expenses → Business miles.","Job miles are counted for you. Tap ＋ Add a trip for parts runs.","Save mileage log (CSV) at tax time."],"expenses|mileCard"],
  ["Money","Read your Home screen",["Billed, unpaid, jobs done, expenses and profit for the week, month or year.","Tap Unpaid to see who owes you.","Your job times shows your average hours and $/hr per job type."],"dash|"],
@@ -1180,6 +1201,79 @@ function renderHelp(){
       ${open?`<div class="help-b"><ol>${h[2].map(x=>`<li>${esc(x)}</li>`).join("")}</ol>${h[3]?`<button class="mini go" type="button" data-helpgo="${h[3]}">Take me there ›</button>`:""}</div>`:""}</div>`;}).join("")}</div>`).join("")
     :`<div class="emptybox">Nothing found for "${esc(HELP_Q)}". Try another word.</div>`}
   <p class="help" style="margin:16px 0 0">Still stuck? Every screen saves as you go, so it's safe to tap around and explore.</p>`;
+}
+
+/* ================= customer signatures ================= */
+let SIGPAD=null; // {kind:"est"|"inv", jobId}
+function sigBlockHTML(kind){
+  const sg=S.sig&&S.sig[kind],lbl=kind==="est"?"Customer approval":"Customer signature";
+  if(sg)return `<div class="sig-show"><span class="lbl" style="margin:0">${lbl}</span><img src="${sg.data}" alt="Signature"><span class="help">${esc(sg.name||"")} · ${esc(new Date(sg.at).toLocaleString([], {month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))}</span><button class="mini del" type="button" data-sigclear="${kind}">Remove</button></div>`;
+  return `<div class="copyrow"><button class="btn sig-btn" type="button" data-sigopen="${kind}">✍️ ${kind==="est"?"Customer signs to approve":"Get customer signature"}</button></div>`;
+}
+function sigModalHTML(){
+  if(!SIGPAD)return "";const j=APP.jobs.find(x=>x.id===SIGPAD.jobId);if(!j)return "";
+  const est=SIGPAD.kind==="est",t=totals(j);
+  return `<div class="sig-ov" role="dialog" aria-modal="true" aria-label="Signature"><div class="sig-box">
+    <strong>${est?"Approve this estimate":"Customer signature"}</strong>
+    <p class="help" style="margin:0">${est?`I approve the work on this estimate for ${money(t.total)}. Nothing extra will be done without my OK.`:`The work was completed${j.invoice.paid?" and paid":""}. Total ${money(t.total)}.`}</p>
+    <canvas id="sigCv" aria-label="Sign here"></canvas><span class="help sig-hint">Sign above with your finger</span>
+    <input id="sigName" value="${esc(j.info.customer||"")}" placeholder="Printed name" autocomplete="off">
+    <div class="acts"><button class="btn primary" type="button" data-act="sigsave">Save signature</button><button class="btn" type="button" data-act="sigclr">Clear</button><button class="btn" type="button" data-act="sigcancel">Cancel</button></div>
+  </div></div>`;
+}
+let SIG_DRAWN=false;
+function initSigPad(){
+  const cv=document.getElementById("sigCv");if(!cv)return;SIG_DRAWN=false;
+  const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;
+  const g=cv.getContext("2d");g.scale(dpr,dpr);g.fillStyle="#fff";g.fillRect(0,0,w,h);g.lineWidth=2.4;g.lineCap="round";g.lineJoin="round";g.strokeStyle="#111";
+  let last=null;const pt=e=>{const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];};
+  cv.onpointerdown=e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);last=pt(e);g.beginPath();g.arc(last[0],last[1],1.1,0,7);g.fillStyle="#111";g.fill();SIG_DRAWN=true;};
+  cv.onpointermove=e=>{if(!last)return;e.preventDefault();const p=pt(e);g.beginPath();g.moveTo(last[0],last[1]);g.lineTo(p[0],p[1]);g.stroke();last=p;SIG_DRAWN=true;};
+  cv.onpointerup=cv.onpointercancel=()=>{last=null;};
+}
+
+/* ================= review requests ================= */
+function reviewText(j){const st=APP.settings,first=(j.info.customer||"").trim().split(/\s+/)[0]||"there";
+  const tpl=(st.reviewMsg||"").trim()||"Hi {first}, thanks for choosing {business}! If you were happy with the work, would you leave a quick review? It really helps a small business like mine. {link}";
+  return tpl.replace(/\{first\}/g,first).replace(/\{business\}/g,bizName()).replace(/\{link\}/g,(st.reviewLink||"").trim()).trim();}
+function reviewBtnHTML(j){
+  if(!j.invoice.paid)return "";const st=APP.settings;
+  if(!(st.reviewLink||"").trim())return `<p class="help" style="margin:6px 0 0">⭐ Add your Google review link in Settings → Invoices to ask happy customers for a review.</p>`;
+  const can=j.info.phone&&CAN_CAL;
+  return `<div class="copyrow">${can?`<a class="btn review-btn" href="${esc(smsHref(j.info.phone,reviewText(j)))}" data-reviewsent="${j.id}">⭐ Ask for a review</a>`:`<button class="btn review-btn" type="button" data-reviewcopy="${j.id}">⭐ Copy review request</button>`}${j.reviewAt?`<span class="help">Asked ${esc(fmtDate(isoDay(new Date(j.reviewAt)),{month:"short",day:"numeric"}))}</span>`:""}</div>`;
+}
+
+/* ================= route planning ================= */
+let ROUTE=null; // {day,state,order:[{j,lat,lon,leg}],start,total,missing}
+async function planRoute(day,useHere){
+  const js=APP.jobs.filter(j=>j.info.date===day&&j.status!=="done");
+  ROUTE={day,state:"loading",n:js.length,done:0};rerenderKeep();
+  let start=null,startName="";
+  if(useHere){const h=await herePos();if(h){start=h;startName="Your location";}}
+  if(!start&&hasHQ()){start={lat:APP.settings.hqLat,lon:APP.settings.hqLon};startName="Home base";}
+  const pts=[],missing=[];
+  for(const j of js){if(!j.info.location){missing.push(j);continue;}
+    const cached=APP.geo&&APP.geo[j.info.location.trim().toLowerCase().replace(/\s+/g," ")];
+    const g=cached||await geocode(j.info.location).catch(()=>null);if(!cached)await new Promise(r=>setTimeout(r,1100));
+    if(g)pts.push({j,lat:g.lat,lon:g.lon});else missing.push(j);
+    if(ROUTE&&ROUTE.day===day){ROUTE.done++;const el=document.getElementById("routeProg");if(el)el.textContent=`Finding ${ROUTE.done} of ${js.length} addresses…`;}}
+  if(!ROUTE||ROUTE.day!==day)return;
+  const order=[];let cur=start||(pts[0]&&{lat:pts[0].lat,lon:pts[0].lon});const left=[...pts];let total=0;
+  while(left.length){let bi=0,bd=Infinity;left.forEach((p,k)=>{const dd=crowMiles(cur,p);if(dd<bd){bd=dd;bi=k;}});const p=left.splice(bi,1)[0];const leg=Math.round(bd*1.25*10)/10;
+    order.push({...p,leg:start||order.length?leg:0});total+=start||order.length>1?leg:0;cur=p;}
+  save();ROUTE={day,state:"ready",order,start,startName,total:Math.round(total*10)/10,missing};rerenderKeep();
+}
+function routeHTML(){
+  if(!ROUTE)return "";
+  if(ROUTE.state==="loading")return `<div class="route-box"><strong>🗺 Planning the route…</strong><p class="help" id="routeProg" style="margin:0">Finding addresses on the map…</p></div>`;
+  const o=ROUTE.order,timed=o.some(x=>x.j.info.time);
+  const gUrl=o.length?`https://www.google.com/maps/dir/?api=1${ROUTE.start?`&origin=${ROUTE.start.lat},${ROUTE.start.lon}`:""}&destination=${encodeURIComponent(o[o.length-1].j.info.location)}${o.length>1?`&waypoints=${encodeURIComponent(o.slice(0,-1).map(x=>x.j.info.location).join("|"))}`:""}&travelmode=driving`:"";
+  return `<div class="route-box"><div class="dc-h"><h3 style="margin:0">🗺 Best driving order</h3><button class="xbtn" type="button" data-act="routeclose" aria-label="Close route">×</button></div>
+    <p class="help" style="margin:0">${esc(fmtDate(ROUTE.day,{weekday:"long",month:"short",day:"numeric"}))} · starting from ${esc(ROUTE.startName||"the first job")} · about ${ROUTE.total} mi of driving</p>
+    <ol class="route-list">${o.map((x,k)=>`<li><span class="rt-n">${k+1}</span><span class="rt-w"><strong>${esc(x.j.info.customer||"Job")}</strong>${x.j.info.time?` <span class="tag">${esc(fmtTime(x.j.info.time))}</span>`:""}<small>${esc(x.j.info.location)}${x.leg?` · ~${x.leg} mi`:""}</small></span>${dirLink(x.j.info.location)}</li>`).join("")}</ol>
+    ${ROUTE.missing.length?`<p class="help vin-warn" style="margin:0">Not on the route (no address found): ${esc(ROUTE.missing.map(j=>j.info.customer||"job").join(", "))}</p>`:""}
+    ${timed?`<p class="help" style="margin:0">Your booked times aren't changed. Use this order to plan, or call customers to adjust.</p>`:""}
+    <div class="acts">${gUrl?`<a class="btn primary" href="${esc(gUrl)}" target="_blank" rel="noopener">Open full route in Google Maps</a>`:""}</div></div>`;
 }
 
 /* ================= dashboard ================= */
@@ -1644,9 +1738,10 @@ function renderJobs(){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&j.status!=="done").length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Back up your jobs.</strong> ${APP.lastBackup?"Your last backup was "+esc(fmtDate(APP.lastBackup))+".":"You haven't made a backup yet."}</span>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
+  ${routeHTML()}
   <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
   ${APP.schedMode==="month"?renderMonthCal():`${renderFollowups()}
   ${strip}
@@ -1724,6 +1819,7 @@ function jobCard(j){
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
+      ${j.status==="done"&&j.invoice.paid&&!j.reviewAt&&(APP.settings.reviewLink||"").trim()&&i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,reviewText(j)))}" data-reviewsent="${j.id}">⭐ Review</a>`:""}
       ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
       ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
       ${j.status!=="done"&&i.location?dirLink(i.location):""}
@@ -1870,6 +1966,8 @@ function renderSettings(){
   </div>
   <div class="form" id="setInvoices">
     <p class="formh">Invoices</p>
+    ${f("reviewLink","Google review link",'placeholder="Paste your Google review link" autocapitalize="off" inputmode="url"',"full","Google Business Profile → Ask for reviews → copy the link. Used by the ⭐ Ask for a review button after a job is paid.")}
+    <label class="full">Review request message<textarea data-set="reviewMsg" rows="2" placeholder="Hi {first}, thanks for choosing {business}! If you were happy with the work, would you leave a quick review? {link}">${esc(s.reviewMsg||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first}, {business}, {link}.</span></label>
     ${f("prefix","Invoice number prefix")}
     ${f("next","Next invoice number",'inputmode="numeric"')}
     ${f("estPrefix","Estimate number prefix")}
@@ -1884,6 +1982,8 @@ function renderSettings(){
     ${f("payCard","Card payment link","","full",'Square, Stripe or Clover pay link (optional)')}
     <label class="full">Other payment notes<textarea id="s-pay" data-set="pay" rows="2" placeholder="Cash or check accepted on site">${esc(s.pay)}</textarea></label>
     ${f("terms","Payment terms","","full")}
+    <label class="full">Warranty / fine print on service invoices<textarea data-set="warranty" rows="2" placeholder="e.g. 12 months / 12,000 miles on parts and labor I supply. Customer-supplied parts are not covered.">${esc(s.warranty||"")}</textarea><span class="help">Prints at the bottom of service estimates and invoices. Leave blank for none.</span></label>
+    <label class="full">PPI report disclaimer<textarea data-set="ppiDisc" rows="4">${esc(s.ppiDisc||"")}</textarea><span class="help">Prints at the bottom of every pre-purchase inspection report. Have a lawyer or your insurance agent review your wording.</span></label>
   </div>
   <div class="form" id="setReminders">
     <p class="formh">Reminders &amp; directions</p>
@@ -2138,6 +2238,7 @@ function renderReport(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfReport">Save report PDF</button><button class="btn" type="button" data-act="copyReport">Copy report text</button></div>
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the report text instead, or update the Claude app.</p>
     <textarea class="copybox" id="copybox" hidden readonly></textarea>
+    ${(APP.settings.ppiDisc||"").trim()?`<p class="fineprint">${esc(APP.settings.ppiDisc.trim())}</p>`:""}
     <div class="madewith">Prepared with Honestech Mobile Mechanic App</div>
   </div>`;
 }
@@ -2161,6 +2262,7 @@ function reportText(){
   grp("bad","NEEDS REPAIR");grp("mon","MONITOR");
   L.push("");L.push("FULL CHECKLIST");
   SECTIONS.forEach(sec=>{const si=secItems(sec);if(!si.length)return;L.push(`[${sec.title}]`);si.forEach(it=>{const x=S.results[it.id];const m=measText(it,x);L.push(`  ${(x?.r?RLABEL[x.r]:"—").padEnd(8)} ${it.label}${m?` (${m})`:""}`)})});
+  if((APP.settings.ppiDisc||"").trim()){L.push("");L.push(APP.settings.ppiDisc.trim());}
   L.push("");L.push("Prepared with Honestech Mobile Mechanic App");
   return L.join("\n");
 }
@@ -2405,9 +2507,12 @@ function renderService(){
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
       ${payBoxHTML(t.total)}
+      ${reviewBtnHTML(S)}
     </div>
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>`}
+    ${sigBlockHTML(mode==="est"?"est":"inv")}
+    ${(st.warranty||"").trim()?`<p class="fineprint"><strong>Warranty:</strong> ${esc(st.warranty.trim())}</p>`:""}
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the text instead.</p>
   </div></div>
   <div class="svc-b">${renderMedia()}
@@ -2539,6 +2644,7 @@ function estimateText(){
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row("ESTIMATED TOTAL",t.total);
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
+  if((st.warranty||"").trim())L.push("Warranty: "+st.warranty.trim());
   if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
   return L.join("\n");
 }
@@ -2591,6 +2697,8 @@ function renderInvoice(){
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the invoice text instead, or update the Claude app.</p>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>
+    ${sigBlockHTML("inv")}
+    ${reviewBtnHTML(S)}
     <div class="madewith">Prepared with Honestech Mobile Mechanic App</div>
   </div>`;
 }
@@ -2621,6 +2729,7 @@ function invoiceText(){
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
   if(t.svc&&nextServiceLine(S)){L.push("");L.push("NEXT SERVICE: "+nextServiceLine(S));}
   if(t.svc&&(S.media||[]).length){const nv=S.media.filter(m=>m.kind==="video").length,np=S.media.length-nv;L.push("");L.push(`Photos/videos: ${np} photo${np===1?"":"s"}${nv?`, ${nv} video${nv===1?"":"s"}`:""} (sent separately)`);}
+  if(t.svc&&(st.warranty||"").trim()){L.push("");L.push("WARRANTY: "+st.warranty.trim());}
   if(inv.paid)L.push(`Paid by ${inv.paidVia}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
   else{ const pl=payTextLines(t.total);if(pl.length){L.push("");L.push("How to pay:");L.push(...pl);} if(st.terms)L.push(st.terms); }
   return L.join("\n");
@@ -2783,7 +2892,7 @@ function buildReportPdf(job){
   }
   // disclaimer
   P.need(50);P.y+=8;P.rule(P.y);P.y+=12;P.font(7.5,"normal",PC.muted);
-  P.text(P.wrap("This report describes the vehicle's condition at the time of inspection, based on a visual and operational check without disassembly. It is not a warranty or guarantee of future condition. Some problems may not be detectable during a single inspection.",PW-2*PM),PM,P.y);
+  if((APP.settings.ppiDisc||"").trim())P.text(P.wrap(APP.settings.ppiDisc.trim(),PW-2*PM),PM,P.y);
   pdfFooters(P,"Pre-Purchase Inspection  ·  "+(vehOf(i)||""));
   return doc.output("blob");
   }finally{S=prev;}
@@ -2830,8 +2939,10 @@ function buildInvoicePdf(job,est){
     P.y+=8;P.need(120);P.font(9,"normal",PC.muted);
     const nl=P.wrap(`This estimate is good until ${fmtDate(estValidUntil(job.est),{month:"long",day:"numeric",year:"numeric"})}. If more work turns out to be needed, I'll check with you first. Nothing beyond this estimate is done without your OK.`,PW-2*PM);
     P.text(nl,PM,P.y);P.y+=nl.length*12+30;
+    const sg=job.sig&&job.sig.est;
+    if(sg){P.y+=30;P.need(70);try{doc.addImage(sg.data,"JPEG",PM,P.y-52,180,48);}catch(e){}P.font(10,"normal",PC.ink);P.text(fmtDate(isoDay(new Date(sg.at)),{month:"short",day:"numeric",year:"numeric"}),PM+300,P.y-6);}
     doc.setDrawColor(...PC.ink);doc.setLineWidth(.75);doc.line(PM,P.y,PM+260,P.y);doc.line(PM+300,P.y,PW-PM,P.y);
-    P.font(8,"bold",PC.muted);P.text("APPROVED BY (CUSTOMER)",PM,P.y+12);P.text("DATE",PM+300,P.y+12);P.y+=28;
+    P.font(8,"bold",PC.muted);P.text(sg&&sg.name?"APPROVED BY "+sg.name.toUpperCase():"APPROVED BY (CUSTOMER)",PM,P.y+12);P.text("DATE",PM+300,P.y+12);P.y+=28;
   }else if(inv.paid){
     P.y+=6;doc.setDrawColor(...PC.good);doc.setLineWidth(2);doc.roundedRect(PM,P.y-6,150,40,5,5,"S");
     P.font(20,"bold",PC.good);P.text("PAID",PM+75,P.y+20,{align:"center"});
@@ -2847,6 +2958,9 @@ function buildInvoicePdf(job,est){
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
   if(svc&&!est&&nextServiceLine(job)){P.y+=12;P.need(46);doc.setFillColor(...PC.paper);const nl=P.wrap(nextServiceLine(job),PW-2*PM-24);doc.roundedRect(PM,P.y-4,PW-2*PM,22+nl.length*13,5,5,"F");
     P.font(8,"bold",PC.accent);P.text("NEXT SERVICE",PM+12,P.y+9);P.font(10,"bold");P.text(nl,PM+12,P.y+23);P.y+=26+nl.length*13;}
+  if(!est&&job.sig&&job.sig.inv){const sg=job.sig.inv;P.y+=14;P.need(80);try{doc.addImage(sg.data,"JPEG",PM,P.y,180,48);}catch(e){}P.y+=52;
+    doc.setDrawColor(...PC.ink);doc.setLineWidth(.75);doc.line(PM,P.y,PM+260,P.y);P.font(8,"bold",PC.muted);P.text(`CUSTOMER SIGNATURE${sg.name?" · "+sg.name.toUpperCase():""} · ${fmtDate(isoDay(new Date(sg.at)),{month:"short",day:"numeric",year:"numeric"})}`,PM,P.y+12);P.y+=24;}
+  if(svc&&(s.warranty||"").trim()){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("WARRANTY",PM,P.y);P.y+=12;P.font(9,"normal",PC.muted);const wl=P.wrap(s.warranty.trim(),PW-2*PM);P.text(wl,PM,P.y);P.y+=wl.length*12;}
   const media=svc&&!est?(job.media||[]):[];
   if(media.length){
     const tagName=Object.fromEntries(MTAGS),photos=media.filter(m=>m.kind==="photo"),vids=media.filter(m=>m.kind==="video");
@@ -2904,7 +3018,7 @@ function render(){applyTheme();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
   else{const s=STAGES[S.step];
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
-  $("#main").innerHTML=html;
+  $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
   renderChrome();
 }
 function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sched"&&S.step>0)S.status="active";save();render();window.scrollTo(0,0);}
@@ -2933,6 +3047,8 @@ function saveDraft(){
 document.addEventListener("click",e=>{
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
+  const rv=e.target.closest&&e.target.closest("a[data-reviewsent]");
+  if(rv){const j=APP.jobs.find(x=>x.id===rv.dataset.reviewsent);if(j){j.reviewAt=Date.now();save();setTimeout(rerenderKeep,800);}return;}
   const sh=e.target.closest&&e.target.closest("a[data-sheetsent]");
   if(sh){const j=APP.jobs.find(x=>x.id===sh.dataset.sheetsent);if(j){j.sheetAt=Date.now();save();setTimeout(rerenderKeep,800);}return;}
   const rd=e.target.closest&&e.target.closest("a[data-reqdecl]");
@@ -3004,6 +3120,17 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};render();setTimeout(initSigPad,30);return;}
+  if(d.act==="sigcancel"){SIGPAD=null;rerenderKeep();return;}
+  if(d.act==="sigclr"){initSigPad();return;}
+  if(d.act==="sigsave"){if(!SIG_DRAWN){toast("Sign in the box first");return;}const cv=document.getElementById("sigCv");const j=APP.jobs.find(x=>x.id===SIGPAD.jobId);
+    const c=drawTo(cv,cv.width,cv.height,600);const data=c.toDataURL("image/jpeg",0.7);j.sig=j.sig||{};j.sig[SIGPAD.kind]={data,name:(document.getElementById("sigName")?.value||"").trim(),at:Date.now()};
+    if(SIGPAD.kind==="est"){ensureEst();Object.assign(j.est,{status:"approved",approvedDate:TODAY,total:jobTotal(j)});}
+    const k=SIGPAD.kind;SIGPAD=null;save();rerenderKeep();toast(k==="est"?"Signed and approved":"Signature saved");return;}
+  if(d.sigclear){if(S.sig){delete S.sig[d.sigclear];save();rerenderKeep();}return;}
+  if(d.reviewcopy){const j=APP.jobs.find(x=>x.id===d.reviewcopy);if(j){copyText(reviewText(j));j.reviewAt=Date.now();save();}return;}
+  if(d.routeplan!==undefined){planRoute(d.routeplan||TODAY,true);return;}
+  if(d.act==="routeclose"){ROUTE=null;rerenderKeep();return;}
   if(d.helpk!==undefined){HELP_OPEN=HELP_OPEN===+d.helpk?null:+d.helpk;rerenderKeep();return;}
   if(d.helpgo!==undefined){const [v,el]=d.helpgo.split("|");if(!v)return;APP.view=v;HELP_Q="";render();window.scrollTo(0,0);
     if(el)setTimeout(()=>{const x=document.getElementById(el);if(x){x.scrollIntoView({behavior:"smooth",block:"start"});x.classList.add("flash-hl");setTimeout(()=>x.classList.remove("flash-hl"),1800);}},60);return;}

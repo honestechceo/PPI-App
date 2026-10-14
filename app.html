@@ -581,6 +581,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
 body.gated nav.tabs{display:none}
 .seat-pick{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:6px 0 2px}.seat-pick select{width:auto;min-width:64px}
+.tech-step{display:flex;align-items:center;gap:12px}.tech-step span{flex:1}.tech-step strong{min-width:28px;text-align:center;font-size:20px}.tech-step .mini{min-width:44px;font-size:20px;line-height:1}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -857,11 +858,26 @@ async function cloudSignIn(email,pw,create){
   try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
   SYNC.state="idle";await fetchPlan();await syncNow(true);
 }
-function cloudSignOut(){PLAN=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+function cloudSignOut(){PLAN=null;TECHS.extra=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
 /* ================= plans & subscriptions (Stripe) ================= */
 // Checkout and the billing page are opened by the "billing" server function (Supabase Edge Function).
 const BILLING={terms:"terms.html",privacy:"privacy.html"};
 let BUY_BUSY="",TEAM_SEATS=0;
+let TECHS={extra:null,want:null,interval:"month",loading:false,busy:false,err:""};
+async function loadTechs(){if(TECHS.loading)return;TECHS.loading=true;TECHS.err="";
+  try{const r=await supa("/functions/v1/billing",{method:"POST",body:{action:"seats"}});TECHS.extra=r.extra||0;TECHS.want=TECHS.extra;TECHS.interval=r.interval||"month";}
+  catch(e){TECHS.err=(e&&e.msg)||"Couldn't load technicians";TECHS.extra=-1;}
+  TECHS.loading=false;if(APP.view==="plan")rerenderKeep();}
+function techsCardHTML(){
+  if(TECHS.extra===null){setTimeout(loadTechs,0);return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3></div><p class="help" style="margin:0">Loading…</p></div>`;}
+  if(TECHS.extra<0)return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3></div><p class="help vin-warn" style="margin:0">${esc(TECHS.err)}</p><div class="acts"><button class="mini" type="button" data-act="techsreload">Try again</button></div></div>`;
+  const yr=TECHS.interval==="year",each=yr?100:10,diff=TECHS.want-TECHS.extra;
+  return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3><span class="ts">${2+TECHS.extra} technicians</span></div>
+    <p class="help" style="margin:0 0 8px">Your plan includes you + 2 technicians. Extra technicians are $${each}/${yr?"yr":"mo"} each.</p>
+    <div class="tech-step"><span>Extra technicians</span><button class="mini" type="button" data-act="techminus" ${TECHS.want<=0||TECHS.busy?"disabled":""} aria-label="One less">−</button><strong>${TECHS.want}</strong><button class="mini" type="button" data-act="techplus" ${TECHS.want>=20||TECHS.busy?"disabled":""} aria-label="One more">+</button></div>
+    ${diff?`<p class="help" style="margin:8px 0 0">${diff>0?`Adds $${diff*each}/${yr?"yr":"mo"}. ${PLAN&&PLAN.status==="trialing"?"Billing starts when your free trial ends.":"You're charged today only for the rest of this billing period."}`:`Lowers your bill by $${-diff*each}/${yr?"yr":"mo"}. Unused time is credited to your next bill.`}</p>
+    <div class="acts"><button class="btn primary" type="button" data-act="techsave" ${TECHS.busy?"disabled":""}>${TECHS.busy?"Updating…":"Update technicians"}</button><button class="btn" type="button" data-act="techcancel" ${TECHS.busy?"disabled":""}>Cancel</button></div>`:""}</div>`;
+}
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
 async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
@@ -893,7 +909,8 @@ function renderPlan(){
     <p style="margin:0;font-size:17px"><strong>${esc(planStatusLine())}</strong></p>
     ${a.kind==="paid"?`<div class="acts" style="margin-top:8px"><button class="btn" type="button" data-act="portal" ${busy?"disabled":""}>${BUY_BUSY==="portal"?"Opening…":"Manage subscription"}</button></div>`:""}
     ${signed?`<div class="acts" style="margin-top:8px"><button class="mini" type="button" data-act="planrefresh">Refresh</button></div>`:`<p class="help" style="margin:8px 0 0">Make a free account in Settings → Cloud sync to subscribe and use the app on all your devices.</p>`}</div>
-  ${a.kind==="comp"?"":a.kind==="paid"?`<p class="help">To switch plans, add technicians, update your card or cancel, tap Manage subscription.</p>`:`<div class="plan-grid">
+  ${a.kind==="paid"&&a.plan==="team"&&(!PLAN||PLAN.role==="owner"||!PLAN.role)?techsCardHTML():""}
+  ${a.kind==="comp"?"":a.kind==="paid"?`<p class="help">To switch plans, update your card or cancel, tap Manage subscription.${a.plan==="team"?" Change technicians above.":""}</p>`:`<div class="plan-grid">
     <div class="plan-card"><div class="pc-h"><strong>Solo</strong><span class="ts">For one mechanic</span></div>
       <div class="pc-price">${PRICES.soloM}</div><div class="help">or ${PRICES.soloY}, 2 months free</div>
       <ul><li>Unlimited PPIs, service jobs, estimates & invoices</li><li>PDF reports with your logo</li><li>Customers, reminders, requests inbox</li><li>Expenses, mileage & job times</li><li>Cloud sync on all your devices</li></ul>
@@ -3350,7 +3367,14 @@ document.addEventListener("click",e=>{
     openBilling(d.act==="portal"?{action:"portal"}:{action:"checkout",plan:d.plan,interval:d.int,seats:d.plan==="team"?TEAM_SEATS:0})
       .catch(e=>{BUY_BUSY="";rerenderKeep();toast(e&&e.code==="offline"?"You're offline. Try again when you have signal.":(e&&e.msg)||"Couldn't open checkout");});
     setTimeout(()=>{if(BUY_BUSY){BUY_BUSY="";if(APP.view==="plan")rerenderKeep();}},15000);return;}
-  if(d.act==="planrefresh"){fetchPlan().then(()=>{rerenderKeep();toast(access().kind==="paid"?"Your plan is active. Thank you!":"Plan checked");});return;}
+  if(d.act==="techplus"||d.act==="techminus"){TECHS.want=Math.max(0,Math.min(20,TECHS.want+(d.act==="techplus"?1:-1)));rerenderKeep();return;}
+  if(d.act==="techcancel"){TECHS.want=TECHS.extra;rerenderKeep();return;}
+  if(d.act==="techsreload"){TECHS.extra=null;rerenderKeep();return;}
+  if(d.act==="techsave"){TECHS.busy=true;rerenderKeep();
+    supa("/functions/v1/billing",{method:"POST",body:{action:"seats",seats:TECHS.want}})
+      .then(r=>{TECHS.extra=TECHS.want=r.extra;TECHS.busy=false;rerenderKeep();toast("Technicians updated");setTimeout(()=>fetchPlan(),4000);})
+      .catch(e=>{TECHS.busy=false;rerenderKeep();toast(e&&e.code==="offline"?"You're offline. Try again when you have signal.":(e&&e.msg)||"Couldn't update technicians");});return;}
+  if(d.act==="planrefresh"){TECHS.extra=null;fetchPlan().then(()=>{rerenderKeep();toast(access().kind==="paid"?"Your plan is active. Thank you!":"Plan checked");});return;}
   if(d.act==="syncnow"){syncNow(true);return;}
   if(d.act==="signout"){cloudSignOut();rerenderKeep();toast("Signed out. Your data stays on this device.");return;}
   if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};render();setTimeout(initSigPad,30);return;}

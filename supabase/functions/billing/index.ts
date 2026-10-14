@@ -47,6 +47,31 @@ Deno.serve(async (req) => {
       const s = await stripe.billingPortal.sessions.create({ customer: sub.stripe_customer, return_url: ret });
       return out({ url: s.url });
     }
+    if (body.action === "seats") {
+      // Read (no seats given) or change the number of extra technicians on a Team plan.
+      const { data: row } = await db.from("subscriptions").select("stripe_subscription").eq("shop_id", shopId).maybeSingle();
+      if (!paying || !row?.stripe_subscription) return out({ error: "No active Team plan" }, 400);
+      const live = await stripe.subscriptions.retrieve(row.stripe_subscription, { expand: ["items.data.price.product"] });
+      const its = live.items.data;
+      const pname = (i: Stripe.SubscriptionItem) => ((i.price.product as Stripe.Product)?.name || "");
+      const techItem = its.find((i) => /technician/i.test(pname(i)));
+      const teamItem = its.find((i) => /team/i.test(pname(i)) && !/technician/i.test(pname(i)));
+      if (!teamItem) return out({ error: "Extra technicians are part of the Team plan" }, 400);
+      const current = techItem?.quantity || 0;
+      if (body.seats === undefined || body.seats === null) return out({ extra: current, interval: teamItem.price.recurring?.interval || "month" });
+      const want = Math.max(0, Math.min(20, Math.floor(Number(body.seats) || 0)));
+      if (want === current) return out({ extra: current });
+      let change: Stripe.SubscriptionUpdateParams.Item[];
+      if (techItem && want === 0) change = [{ id: techItem.id, deleted: true }];
+      else if (techItem) change = [{ id: techItem.id, quantity: want }];
+      else {
+        const tech = await findPrice("tech", (teamItem.price.recurring?.interval as "month" | "year") || "month");
+        if (!tech) return out({ error: "The extra technician price isn't set up in Stripe yet" }, 500);
+        change = [{ price: tech.id, quantity: want }];
+      }
+      await stripe.subscriptions.update(live.id, { items: change, proration_behavior: "always_invoice" });
+      return out({ extra: want });
+    }
     if (body.action !== "checkout") return out({ error: "Unknown action" }, 400);
 
     const plan = body.plan === "team" ? "team" : "solo";

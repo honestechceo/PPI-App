@@ -887,7 +887,7 @@ function renderPlan(){
     <p class="when">${a.ok?"":"Your free trial has ended. Your jobs, customers and invoices are safe. Pick a plan to unlock the app again."}</p></div>
   <div class="dash-card plan-now"><div class="dc-h"><h3>Right now</h3><span class="ts">${PLAN&&PLAN.at?"checked "+esc(new Date(PLAN.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})):""}</span></div>
     <p style="margin:0;font-size:17px"><strong>${esc(planStatusLine())}</strong></p>
-    ${a.kind==="paid"&&BILLING.portal?`<div class="acts" style="margin-top:8px"><a class="btn" href="${esc(BILLING.portal)}" target="_blank" rel="noopener">Manage subscription</a></div>`:""}
+    ${a.kind==="paid"&&BILLING.portal?`<div class="acts" style="margin-top:8px"><a class="btn" href="${esc(BILLING.portal+(AUTH&&AUTH.email?"?prefilled_email="+encodeURIComponent(AUTH.email):""))}" target="_blank" rel="noopener">Manage subscription</a></div>`:""}
     ${signed?`<div class="acts" style="margin-top:8px"><button class="mini" type="button" data-act="planrefresh">Refresh</button></div>`:`<p class="help" style="margin:8px 0 0">Make a free account in Settings → Cloud sync to subscribe and use the app on all your devices.</p>`}</div>
   ${a.kind==="comp"?"":a.kind==="paid"?`<p class="help">To switch plans, add technicians, update your card or cancel, tap Manage subscription.</p>`:`<div class="plan-grid">
     <div class="plan-card"><div class="pc-h"><strong>Solo</strong><span class="ts">For one mechanic</span></div>

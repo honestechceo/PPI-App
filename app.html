@@ -579,6 +579,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .cal-dayhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 10px;flex-wrap:wrap}
 .cal-dayhead strong{font-family:var(--f-display);font-size:20px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
+body.gated nav.tabs{display:none}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -864,6 +865,7 @@ let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null"
 async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
 const dayDiff=(a,b)=>Math.round((new Date(a+"T12:00:00")-new Date(b+"T12:00:00"))/864e5);
 function access(){
+  if(!AUTH&&!IN_CLAUDE)return {ok:false,kind:"account"};
   if(APP.sample)return {ok:true,kind:"sample"};
   if(PLAN&&AUTH&&PLAN.shop_id===AUTH.shop_id){
     if(PLAN.comp)return {ok:true,kind:"comp"};
@@ -875,7 +877,7 @@ function access(){
 }
 function payLink(base){if(!base)return "";const u=new URL(base);if(AUTH&&AUTH.shop_id)u.searchParams.set("client_reference_id",AUTH.shop_id);if(AUTH&&AUTH.email)u.searchParams.set("prefilled_email",AUTH.email);return u.toString();}
 function planStatusLine(){const a=access();
-  return a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
+  return a.kind==="account"?"No account yet":a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
     :a.kind==="sample"?"Sample data":a.left>=0?`Free trial · ${a.left} day${a.left===1?"":"s"} left`:"Free trial ended";}
 function trialBannerHTML(){const a=access();if(a.kind!=="trial"||a.left>10)return "";
   return `<button type="button" class="dash-card dash-link trial-ban" data-nav="plan"><span><strong>${a.left>0?`${a.left} day${a.left===1?"":"s"} left in your free trial`:"Your free trial ends today"}</strong> · choose a plan to keep going</span><span>›</span></button>`;}
@@ -899,6 +901,15 @@ function renderPlan(){
       <div class="acts">${btn(BILLING.teamMonthly,"Start Team monthly")}${BILLING.teamYearly?btn(BILLING.teamYearly,"Start Team yearly"):""}</div></div></div>`}
   <p class="help">Cancel anytime from Manage subscription. Payments are handled securely by Stripe; the app never sees your card.
     <a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p>`;
+}
+function renderJoin(){
+  return `<div class="stage-head"><div class="eyebrow">Welcome</div><h2>Create your account</h2>
+    <p class="when">Start your ${PRICES.trialDays}-day free trial. No card needed. Your jobs are backed up to your account and you can use the app on your phone, iPad or computer.</p></div>
+  ${cloudSettingsHTML()}
+  <div class="dash-card"><div class="dc-h"><h3>What you get</h3></div>
+    <ul style="margin:0;padding-left:20px;line-height:1.6"><li>Pre-purchase inspections with PDF reports</li><li>Service jobs, estimates & invoices with your logo</li><li>Schedule, customers, reminders & requests inbox</li><li>Expenses, mileage & job times</li><li>Dispatch for your technicians (Team plan)</li></ul>
+    <p class="help" style="margin:10px 0 0">After the trial: Solo ${PRICES.soloM} or Team ${PRICES.team}. Cancel anytime.</p></div>
+  <p class="help"><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p><div class="acts"><button class="mini" type="button" data-nav="help">How the app works</button></div>`;
 }
 function localRecords(){
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
@@ -974,10 +985,11 @@ function cloudSettingsHTML(){
     <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
     <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
-  return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
+  const gate=!AUTH&&!IN_CLAUDE;
+  return `<div class="form cloud-set" id="setCloud"><p class="formh">${gate?"Sign in or create your account":"☁️ Cloud sync"}</p>
     ${RECOVERY&&RECOVERY.err?`<p class="full help vin-warn" style="margin:0">${esc(RECOVERY.err)}</p>`:""}
-    <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
-    <p class="help full" style="margin:0">Make a free account to keep your data safe in the cloud and use the app on more than one device: phone, iPad or computer. ${APP.sample?"The sample jobs won't be uploaded.":"Everything already on this phone is uploaded when you first sign in."}</p>
+    ${AUTH||IN_CLAUDE?`<div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>`:""}
+    ${gate?"":`<p class="help full" style="margin:0">Make a free account to keep your data safe in the cloud and use the app on more than one device: phone, iPad or computer. ${APP.sample?"The sample jobs won't be uploaded.":"Everything already on this phone is uploaded when you first sign in."}</p>`}
     <label class="full">Email<input id="cEmail" data-cloud="email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(CLOUD_FORM.email)}"></label>
     <label class="full">Password<input id="cPw" data-cloud="pw" type="password" autocomplete="current-password" value="${esc(CLOUD_FORM.pw)}"></label>
     ${CLOUD_FORM.msg?`<p class="full help ${/created|Signed|Check your email/.test(CLOUD_FORM.msg)?"":"vin-warn"}" style="margin:0">${esc(CLOUD_FORM.msg)}</p>`:""}
@@ -1848,7 +1860,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -3196,7 +3208,10 @@ async function savePdf(kind){
 
 /* ================= render & navigation ================= */
 function render(){applyTheme();
-  if(!access().ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
+  const acc=access();document.body.classList.toggle("gated",acc.kind==="account");
+  if(acc.kind==="account"){if(!["join","help"].includes(APP.view))APP.view="join";}
+  else if(APP.view==="join")APP.view="dash";
+  else if(!acc.ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
   syncActive();
   let html;
   if(APP.view==="settings")html=renderSettings();
@@ -3206,6 +3221,7 @@ function render(){applyTheme();
   else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="help")html=renderHelp();
   else if(APP.view==="plan")html=renderPlan();
+  else if(APP.view==="join")html=renderJoin();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}

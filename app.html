@@ -504,6 +504,19 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .job-c:last-child{border-bottom:0}
 .jc-t{font-family:var(--f-mono);font-size:12px;color:var(--muted)}.jc-w{min-width:0}.jc-w strong,.jc-w small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jc-w small{color:var(--muted);font-size:12px}.jc-go{color:var(--muted)}
 @media (min-width:860px){.jobs-c{display:grid;grid-template-columns:1fr 1fr}.job-c:nth-last-child(2):nth-child(odd){border-bottom:0}}
+@media (max-width:420px){.brand h1 small{display:none}}
+.help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
+.help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
+.help-list{display:flex;flex-direction:column;gap:6px}
+.help-item{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}.help-item.open{border-color:var(--accent)}
+.help-t{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;background:transparent;border:0;padding:12px 14px;min-height:46px;font-weight:600;color:var(--ink)}
+.help-b{padding:0 14px 12px}.help-b ol{margin:0 0 10px;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.hc-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden;margin:2px 0 8px}.hc-bar i{display:block;height:100%;background:var(--good)}
+.hc-list{display:flex;flex-direction:column}
+.hc-row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);padding:9px 0;color:var(--ink)}
+.hc-row.ok span:first-child{color:var(--good);font-weight:700}
+.flash-hl{box-shadow:0 0 0 3px var(--accent)!important;transition:box-shadow .3s}
+@media (min-width:860px){.help-list{display:grid;grid-template-columns:1fr 1fr;align-items:start}}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -537,7 +550,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span></div>
+    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -1118,6 +1131,57 @@ function jobTimesHTML(){
     ${cats.map(c=>`<div class="jt-row"><span>${esc(c.cat)}</span><span class="ts">${c.n} job${c.n===1?"":"s"}</span><strong>${c.avg} hr</strong><span class="ts">${c.rate?money(c.rate)+"/hr":""}</span></div>`).join("")}<p class="help" style="margin:8px 0 0">$/hr = labor charged ÷ your actual time (parts not counted).</p></div>`;
 }
 
+/* ================= in-app help ================= */
+const HELP=[
+ ["Getting started","Set up your business info",["Go to Settings → Business.","Add your business name, your name, phone, email and website.","Tap Upload logo to put your logo on reports and invoices.","Everything saves by itself as you type."],"settings|setBusiness"],
+ ["Getting started","Set your prices",["Settings → Pricing.","Set your PPI fee and labor rate per hour.","Set free travel miles and the rate per mile after that.","Turn on sales tax if you charge it."],"settings|setPricing"],
+ ["Getting started","Add your payment options",["Settings → Invoices → Payment options.","Fill in your Cash App, Venmo, Zelle, PayPal or card link.","They print on every invoice. Cash App, Venmo and PayPal links open with the amount filled in."],"settings|setInvoices"],
+ ["Getting started","Auto-calculate travel distance",["Settings → Pricing → Home base address.","Type the address you drive from. It's private and never printed.","When you book a job, the distance and travel fee fill in by themselves."],"settings|setPricing"],
+ ["Getting started","Put the app on your home screen",["Open the app's link in Safari.","Tap the Share button, then Add to Home Screen.","Open it from the icon. It works full screen and offline."],""],
+ ["Getting started","Back up your data",["Your data lives on this phone. Back it up often.","Settings → Backup & restore → Save backup file, and save it to iCloud Drive.","To move to a new phone, open the backup file there with Restore."],"settings|backup"],
+ ["Jobs","Book a job",["Schedule → + Book a job.","Pick Pre-purchase inspection or Service / repair.","Start typing the customer's name. If they've been here before, tap their name to fill in everything.","Add the date, time and address, then Save job."],"jobs|"],
+ ["Jobs","Fill in a car from the VIN",["Type or paste the 17-character VIN when booking or on the job.","The year, make, model, trim and engine fill in by themselves.","If it doesn't match what you typed, tap Use VIN details."],""],
+ ["Jobs","Send a booking confirmation",["On the job card, tap 💬 Text confirmation (or Copy confirmation).","If you agreed on a price, put it in Agreed price when booking. It shows in the confirmation.","Tap Add to Calendar to get an iPhone reminder before the job."],"jobs|"],
+ ["Jobs","Text the customer you're on the way",["On the job card, tap 🚗 On my way.","The app works out your ETA from where you are.","Adjust the time if needed, then tap Open in Messages and send."],"jobs|"],
+ ["Jobs","See your calendar",["Schedule → Month.","Blue dots are booked jobs, green are done, orange are service reminders.","Tap a day to see its jobs, or + Book this day."],"jobs|"],
+ ["Jobs","Shrink long lists",["On Schedule, tap any section header (Today, Completed…) to minimize it.","Use Collapse all / Expand all.","Check Compact to show one line per job."],"jobs|"],
+ ["Inspections","Do a pre-purchase inspection",["Open the job and tap Start inspection.","Go stage by stage with Next. Mark each item Good, Monitor, Repair or N/A.","Type tread depth and pad thickness for each wheel. Low readings are flagged for you.","Tap ＋ Photo or ＋ Note on any item."],"jobs|"],
+ ["Inspections","Send the PPI report",["After the last stage, review the report and pick a verdict.","Write a short summary for the buyer.","Tap Save report PDF (or Copy report text) and send it."],""],
+ ["Inspections","Add or hide checklist items",["Settings → Checklist.","Add your own items to any stage, or turn off ones you don't check.","You can also tap ＋ Add an item to this section during an inspection."],"settings|checklist"],
+ ["Service jobs","Build an estimate",["Open a service job. The Estimate tab is selected for new jobs.","Add labor, flat fee, parts or fees, or tap 📋 Service menu.","Tap 💬 Text estimate or Save estimate PDF.","When they say yes, tap ✓ Customer approved: turn into invoice."],""],
+ ["Service jobs","Use your service menu",["On a service job, tap 📋 Service menu and pick a job. All its lines are added.","Change prices any time in Settings → Service menu.","Tap ☆ Save to menu on a job to save its lines for next time."],"settings|menuSet"],
+ ["Service jobs","Add a discount",["On the estimate or invoice, tap ＋ Discount.","Choose % or $, or tap 10% off, $20 off…","It comes off before tax and shows on the PDF."],""],
+ ["Service jobs","Add photos and videos",["On a service job, go to Photos & videos.","Take before / after / finding photos and short videos.","Share them with the customer with one tap."],""],
+ ["Service jobs","Time a job",["On a service job, tap ⏱ Start timer. Pause for parts runs.","Tap Stop when done, or just Finish job.","The app shows your average time for that kind of job next time."],""],
+ ["Service jobs","Set a next-service reminder",["On a service job, fill in Next service reminder (what and when).","It shows on your Schedule when it's due.","Tap Text reminder to message the customer and Book it to schedule it."],""],
+ ["Getting paid","Mark an invoice paid",["On the invoice, tap how they paid: Cash, Card, Zelle…","Tap Save invoice PDF to send them a receipt that says PAID.","Unpaid invoices show on Home so nothing slips."],""],
+ ["Requests","Turn an email request into a job",["Copy the request email.","Schedule → 📥 Requests → Paste request → Read it.","Check the details and your schedule for that day.","Tap Book it, Send a quote, or Can't do it."],"requests|"],
+ ["Money","Track expenses",["Expenses → + Add expense.","Pick Parts, Tools, Supplies, Fuel or Other. Add the amount, store and a receipt photo.","Link parts to a job to see that job's real profit."],"expenses|"],
+ ["Money","Mileage for taxes",["Expenses → Business miles.","Job miles are counted for you. Tap ＋ Add a trip for parts runs.","Save mileage log (CSV) at tax time."],"expenses|mileCard"],
+ ["Money","Read your Home screen",["Billed, unpaid, jobs done, expenses and profit for the week, month or year.","Tap Unpaid to see who owes you.","Your job times shows your average hours and $/hr per job type."],"dash|"],
+ ["Team","Add technicians and dispatch",["Settings → Team & dispatch → ＋ Add a technician.","A 🧭 Dispatch button appears on Schedule.","Assign jobs, text job sheets, and track On the way / On site."],"settings|teamSet"],
+ ["App","Change colors and dark mode",["Settings → Appearance.","Pick Auto, Light or Dark, an app color, and a background."],"settings|setAppear"],
+ ["App","Where is my data saved?",["Everything saves on this phone as you go. The ✓ Saved time shows at the top.","The app keeps daily copies for 14 days on the phone.","Save a backup file to iCloud Drive so you never lose your jobs."],"settings|backup"]];
+let HELP_Q="",HELP_OPEN=null;
+function helpChecklist(){const s=APP.settings;
+  return [["Business name",!!(s.biz||"").trim(),"settings|setBusiness"],["Logo",!!s.logo,"settings|setBusiness"],["Prices",!!(num(s.fee)&&String(s.laborRate||"").trim()),"settings|setPricing"],
+    ["Payment options",!!(s.payCashapp||s.payVenmo||s.payZelle||s.payPaypal||s.payCard||s.pay),"settings|setInvoices"],["Home base",!!s.hq,"settings|setPricing"],["First backup",!!APP.lastBackup,"settings|backup"]];}
+function renderHelp(){
+  const q=HELP_Q.trim().toLowerCase(),list=HELP.map((h,k)=>({h,k})).filter(({h})=>!q||(h[1]+" "+h[2].join(" ")+" "+h[0]).toLowerCase().includes(q));
+  const ck=helpChecklist(),nDone=ck.filter(x=>x[1]).length;
+  const secs=[...new Set(list.map(x=>x.h[0]))];
+  return `<div class="stage-head"><div class="eyebrow">How to</div><h2>Help</h2><p class="when">Tap a topic for the steps. <strong>Take me there</strong> jumps to that screen.</p></div>
+  ${q?"":`<div class="dash-card"><div class="dc-h"><h3>Getting set up</h3><span class="ts">${nDone} of ${ck.length} done</span></div>
+    <div class="hc-bar"><i style="width:${(nDone/ck.length*100).toFixed(0)}%"></i></div>
+    <div class="hc-list">${ck.map(([l,ok,go])=>`<button type="button" class="hc-row${ok?" ok":""}" data-helpgo="${go}"><span>${ok?"✓":"○"}</span><span>${esc(l)}</span><span class="ts">${ok?"Done":"Set up ›"}</span></button>`).join("")}</div></div>`}
+  <input class="help-q" id="helpQ" data-helpq="1" value="${esc(HELP_Q)}" placeholder="Search help, e.g. discount, VIN, backup" autocomplete="off">
+  ${list.length?secs.map(sec=>`<div class="group-h">${esc(sec)}</div><div class="help-list">${list.filter(x=>x.h[0]===sec).map(({h,k})=>{const open=HELP_OPEN===k||!!q;
+    return `<div class="help-item${open?" open":""}"><button type="button" class="help-t" data-helpk="${k}" aria-expanded="${open}"><span>${esc(h[1])}</span><span>${open?"▾":"▸"}</span></button>
+      ${open?`<div class="help-b"><ol>${h[2].map(x=>`<li>${esc(x)}</li>`).join("")}</ol>${h[3]?`<button class="mini go" type="button" data-helpgo="${h[3]}">Take me there ›</button>`:""}</div>`:""}</div>`;}).join("")}</div>`).join("")
+    :`<div class="emptybox">Nothing found for "${esc(HELP_Q)}". Try another word.</div>`}
+  <p class="help" style="margin:16px 0 0">Still stuck? Every screen saves as you go, so it's safe to tap around and explore.</p>`;
+}
+
 /* ================= dashboard ================= */
 const jDate=j=>(j.invoice&&j.invoice.date)||j.info.date||"";
 function periodStart(p){const d=new Date(TODAY+"T12:00:00");
@@ -1501,7 +1565,7 @@ function renderChrome(){
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -1760,7 +1824,7 @@ function themeSectionHTML(){
   const s=APP.settings,mode=s.themeMode||"auto",acc=(s.themeAccent||ACCENTS[0][1]).toLowerCase(),bgK=BGS[s.themeBg]?s.themeBg:"steel";
   const isPreset=ACCENTS.some(a=>a[1]===acc);
   const sw=k=>{const t=themeColors({...s,themeBg:k},isDark());return `<button type="button" class="bg-sw" data-themebg="${k}" aria-pressed="${bgK===k}"><span class="bg-prev" style="background:${rgb2hex(t.bg)}"><i style="background:${rgb2hex(t.surf)};border-color:${rgb2hex(t.line)}"></i><b style="background:${rgb2hex(t.acc)}"></b></span>${esc(BGS[k].name)}</button>`;};
-  return `<div class="form">
+  return `<div class="form" id="setAppear">
     <p class="formh">Appearance</p>
     <div class="full"><span class="lbl">Mode</span><div class="seg seg3" role="group" aria-label="Light or dark">${[["auto","Auto"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button type="button" data-thememode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div><span class="help">Auto follows your phone's light/dark setting.</span></div>
     <div class="full"><span class="lbl">App color</span><div class="acc-row">${ACCENTS.map(([n,h])=>`<button type="button" class="acc-sw" data-themeacc="${h}" aria-pressed="${acc===h}" aria-label="${n}" title="${n}" style="--c:${h}"></button>`).join("")}
@@ -1778,7 +1842,7 @@ function renderSettings(){
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Your business</div><h2>Settings</h2><p class="when">This information appears on your reports, invoices, and booking confirmations.</p></div>
-  <div class="form">
+  <div class="form" id="setBusiness">
     <p class="formh">Business</p>
     <div class="full logo-row">
       <div class="logo-box">${s.logo?`<img src="${s.logo}" alt="Business logo">`:`<span>No logo</span>`}</div>
@@ -1791,7 +1855,7 @@ function renderSettings(){
     ${f("email","Email",'inputmode="email"')}
     ${f("web","Website")}
   </div>
-  <div class="form">
+  <div class="form" id="setPricing">
     <p class="formh">Pricing</p>
     ${f("fee","PPI fee ($)",'inputmode="decimal"')}
     ${f("laborRate","Labor rate ($ per hour)",'inputmode="decimal" placeholder="e.g. 100"',"","Filled in when you add a labor line")}
@@ -1804,7 +1868,7 @@ function renderSettings(){
     <label class="check full"><input type="checkbox" id="s-taxOn" data-setc="taxOn" ${s.taxOn?"checked":""}> Charge sales tax by default</label>
     ${f("taxRate","Tax rate (%)",'inputmode="decimal"',"","Check with your accountant whether inspections are taxable in your state")}
   </div>
-  <div class="form">
+  <div class="form" id="setInvoices">
     <p class="formh">Invoices</p>
     ${f("prefix","Invoice number prefix")}
     ${f("next","Next invoice number",'inputmode="numeric"')}
@@ -1821,7 +1885,7 @@ function renderSettings(){
     <label class="full">Other payment notes<textarea id="s-pay" data-set="pay" rows="2" placeholder="Cash or check accepted on site">${esc(s.pay)}</textarea></label>
     ${f("terms","Payment terms","","full")}
   </div>
-  <div class="form">
+  <div class="form" id="setReminders">
     <p class="formh">Reminders &amp; directions</p>
     <label class="full">"On my way" text<textarea id="s-omwTpl" data-set="omwTpl" rows="3" placeholder="${esc(OMW_DEFAULT)}">${esc(s.omwTpl||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first} customer's first name, {tech}, {business}, {eta} arrival time, {minutes}, {vehicle}.</span></label>
     <label>Job alert in Calendar<select id="s-jobAlert" data-set="jobAlert">${[["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]].map(([v,l])=>`<option value="${v}" ${String(s.jobAlert||"60")===v?"selected":""}>${l}</option>`).join("")}</select></label>
@@ -2834,6 +2898,7 @@ function render(){applyTheme();
   else if(APP.view==="dash")html=renderDash();
   else if(APP.view==="requests")html=renderRequests();
   else if(APP.view==="dispatch")html=renderDispatch();
+  else if(APP.view==="help")html=renderHelp();
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
@@ -2939,6 +3004,9 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.helpk!==undefined){HELP_OPEN=HELP_OPEN===+d.helpk?null:+d.helpk;rerenderKeep();return;}
+  if(d.helpgo!==undefined){const [v,el]=d.helpgo.split("|");if(!v)return;APP.view=v;HELP_Q="";render();window.scrollTo(0,0);
+    if(el)setTimeout(()=>{const x=document.getElementById(el);if(x){x.scrollIntoView({behavior:"smooth",block:"start"});x.classList.add("flash-hl");setTimeout(()=>x.classList.remove("flash-hl"),1800);}},60);return;}
   if(d.grp){APP.col=APP.col||{};APP.col[d.grp]=!isCol(d.grp);save();rerenderKeep();return;}
   if(d.grpall!==undefined){APP.col=APP.col||{};const keys=["fu","done",...[...document.querySelectorAll("[data-grp]")].map(b=>b.dataset.grp)];keys.forEach(k=>APP.col[k]=d.grpall==="0");save();rerenderKeep();return;}
   if(d.tmr){const t=S.timer||(S.timer={segs:[],run:0});const k=d.tmr;
@@ -3118,6 +3186,7 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}
   if(d.techf){const [id,f]=d.techf.split(":");const tm=APP.settings.techs.find(x=>x.id===id);if(tm){tm[f]=e.target.value;
     if(f==="name")APP.jobs.forEach(j=>{if(j.techId===id)j.info.tech=e.target.value;});clearTimeout(window.__tf);window.__tf=setTimeout(save,400);}return;}

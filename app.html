@@ -504,7 +504,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .job-c:last-child{border-bottom:0}
 .jc-t{font-family:var(--f-mono);font-size:12px;color:var(--muted)}.jc-w{min-width:0}.jc-w strong,.jc-w small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jc-w small{color:var(--muted);font-size:12px}.jc-go{color:var(--muted)}
 @media (min-width:860px){.jobs-c{display:grid;grid-template-columns:1fr 1fr}.job-c:nth-last-child(2):nth-child(odd){border-bottom:0}}
-@media (max-width:420px){.brand h1 small{display:none}}
+@media (max-width:420px){.brand h1 small{display:none}.saved{font-size:10px;max-width:58px;line-height:1.15;text-align:right}.cloud-dot,.help-btn{width:30px;height:30px;margin-left:4px}}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -534,6 +534,10 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .rt-n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:13px}
 .rt-w small{display:block;color:var(--muted);font-size:12px}
 .route-box .acts{display:flex;flex-wrap:wrap;gap:8px}
+.cloud-dot{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:16px;margin-left:6px;display:grid;place-items:center;padding:0;color:var(--muted)}
+.cloud-dot.c-ok{color:var(--good)}.cloud-dot.c-syncing{color:var(--accent)}.cloud-dot.c-offline,.cloud-dot.c-error{color:var(--bad)}
+.cloud-set{border-color:var(--accent)}
+.sync-st{font-size:14px;font-weight:600}.sync-st.s-ok{color:var(--good)}.sync-st.s-error,.sync-st.s-offline{color:var(--bad)}.sync-st.s-syncing{color:var(--accent)}
 .dist-msg{display:block}.dist-msg.ok{color:var(--good,#1b7a3d)}.dist-msg.bad{color:var(--bad,#b3261e)}.dist-btn{margin-top:6px;align-self:flex-start}.dist-row{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:4px}
 .sched-seg{margin:0 0 12px}
 .cal{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
@@ -567,7 +571,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
+    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -797,6 +801,114 @@ function save(){
   try{syncCustomers();}catch(e){console.error(e);}
   try{ localStorage.setItem(KEY,JSON.stringify(APP)); markSaved(true); }
   catch(e){ markSaved(false); if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
+  try{scheduleSync();}catch(e){}
+}
+
+/* ================= cloud sync (Supabase) ================= */
+const SUPA_URL="https://dvgjrqbrqvizbvszubdh.supabase.co";
+const SUPA_KEY="sb_publishable_T39xUFe617tYMHUTqCLBrg_NPc-NAWl";
+const AUTH_KEY="honestech-auth",META_KEY="honestech-sync";
+let AUTH=null;try{AUTH=JSON.parse(localStorage.getItem(AUTH_KEY)||"null");}catch(e){}
+let SMETA={};try{SMETA=JSON.parse(localStorage.getItem(META_KEY)||"{}");}catch(e){}
+const SYNC={busy:false,state:AUTH?"idle":"off",err:"",last:SMETA.lastAt||0,timer:null,again:false};
+const saveAuth=()=>{try{AUTH?localStorage.setItem(AUTH_KEY,JSON.stringify(AUTH)):localStorage.removeItem(AUTH_KEY);}catch(e){}};
+const saveMeta=()=>{try{localStorage.setItem(META_KEY,JSON.stringify(SMETA));}catch(e){}};
+function h32(str){let h=0x811c9dc5;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,0x01000193);}return (h>>>0).toString(36)+":"+str.length;}
+async function supa(path,{method="GET",body,auth=true,headers={}}={}){
+  const hd={"apikey":SUPA_KEY,"Content-Type":"application/json",...headers};
+  if(auth){await freshToken();if(!AUTH)throw {code:"signedout",msg:"Signed out"};hd.Authorization="Bearer "+AUTH.access_token;}
+  let r;try{r=await fetch(SUPA_URL+path,{method,headers:hd,body:body===undefined?undefined:JSON.stringify(body)});}
+  catch(e){throw {code:"offline",msg:"No connection"};}
+  const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null;}catch(e){}
+  if(!r.ok){const m=(j&&(j.msg||j.message||j.error_description||j.error))||("Error "+r.status);throw {code:r.status===401?"auth":"http",status:r.status,msg:String(m)};}
+  return j;
+}
+function setAuth(j,email){AUTH={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+((j.expires_in||3600)-60)*1000,email:(j.user&&j.user.email)||email||AUTH&&AUTH.email||"",user_id:(j.user&&j.user.id)||(AUTH&&AUTH.user_id)||"",shop_id:AUTH&&AUTH.shop_id||""};saveAuth();}
+async function freshToken(){
+  if(!AUTH||Date.now()<AUTH.expires_at)return;
+  try{const j=await supa("/auth/v1/token?grant_type=refresh_token",{method:"POST",auth:false,body:{refresh_token:AUTH.refresh_token}});const shop=AUTH.shop_id;setAuth(j);AUTH.shop_id=shop;saveAuth();}
+  catch(e){if(e.code==="offline")throw e;AUTH=null;saveAuth();SYNC.state="off";throw {code:"signedout",msg:"Please sign in again"};}
+}
+async function cloudSignIn(email,pw,create){
+  email=String(email||"").trim().toLowerCase();if(!email||!pw)throw {msg:"Enter your email and a password"};
+  if(create&&pw.length<6)throw {msg:"Use a password with at least 6 characters"};
+  let j;
+  if(create){j=await supa("/auth/v1/signup",{method:"POST",auth:false,body:{email,password:pw}});
+    if(!j||!j.access_token){if(j&&(j.id||(j.user&&j.user.id)))throw {msg:"Account created. Check your email to confirm it, then sign in. (Or turn off Confirm email in Supabase.)"};throw {msg:"Couldn't create the account"};}}
+  else j=await supa("/auth/v1/token?grant_type=password",{method:"POST",auth:false,body:{email,password:pw}});
+  setAuth(j,email);
+  const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:(shop&&shop.my_shop)||shop;saveAuth();
+  // first time on this device: samples are never uploaded
+  if(APP.sample){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
+  SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
+  try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
+  SYNC.state="idle";await syncNow(true);
+}
+function cloudSignOut(){AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+function localRecords(){
+  const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
+  add("job",APP.jobs);add("customer",APP.customers);add("expense",APP.expenses);add("trip",APP.trips);add("request",APP.requests);
+  const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});return out;
+}
+function scheduleSync(){if(!AUTH||APP.sample)return;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(()=>syncNow(),3500);}
+async function syncNow(full){
+  if(!AUTH||APP.sample)return;if(SYNC.busy){SYNC.again=true;return;}
+  SYNC.busy=true;SYNC.state="syncing";syncLabel();
+  try{
+    if(!AUTH.shop_id){const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:shop;saveAuth();}
+    const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{}};}
+    SMETA.h=SMETA.h||{};
+    const first=!SMETA.cursor;
+    // local fingerprints: what's changed here since the last sync ("dirty")
+    const loc=localRecords(),lh={};loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
+    const dirty=k=>k in lh&&SMETA.h[k]!==lh[k];
+    // 1) pull what changed elsewhere. Unsent local edits win; on a device's first sync, the account's settings win.
+    let changed=0;
+    for(let guard=0;guard<40;guard++){
+      const q=`/rest/v1/records?select=kind,id,data,deleted,updated_at&shop_id=eq.${shopId}${SMETA.cursor?`&updated_at=gt.${encodeURIComponent(SMETA.cursor)}`:""}&order=updated_at.asc&limit=500`;
+      const rows=await supa(q);if(!rows||!rows.length)break;
+      rows.forEach(r=>{const k=r.kind+":"+r.id;SMETA.cursor=r.updated_at;
+        if(dirty(k)&&!(first&&r.kind==="settings"))return;          // keep my newer edit; it gets pushed below
+        if(!(k in lh)&&k in SMETA.h&&!r.deleted)return;               // I deleted it here; the delete gets pushed below
+        const c=applyRemote(r);changed+=c;if(k in lh||r.deleted)delete lh[k];});
+      saveMeta();if(rows.length<500)break;}
+    // 2) push what changed here (and deletions)
+    const now=localRecords(),seen=new Set(),push=[];
+    now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
+    Object.keys(SMETA.h).forEach(k=>{if(!seen.has(k)&&!k.startsWith("settings:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
+    for(let i=0;i<push.length;i+=25){const chunk=push.slice(i,i+25);
+      await supa("/rest/v1/records?on_conflict=shop_id,kind,id",{method:"POST",body:chunk.map(x=>x.row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+      chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
+    if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
+    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();SMETA.lastAt=SYNC.last;saveMeta();
+  }catch(e){SYNC.state=e.code==="offline"?"offline":e.code==="signedout"?"off":"error";SYNC.err=e.msg||"Sync failed";}
+  finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
+}
+function applyRemote(r){
+  const k=r.kind+":"+r.id,mapK={job:"jobs",customer:"customers",expense:"expenses",trip:"trips",request:"requests"}[r.kind];
+  if(r.kind==="settings"){if(r.deleted)return 0;const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
+  if(!mapK)return 0;const arr=APP[mapK]||(APP[mapK]=[]);const i=arr.findIndex(x=>String(x.id)===String(r.id));
+  if(r.deleted){if(i>-1){arr.splice(i,1);if(APP.active===r.id&&APP.view==="job"){APP.view="jobs";}}delete SMETA.h[k];return i>-1?1:0;}
+  const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh&&i>-1)return 0;
+  if(i>-1){const o=arr[i];Object.keys(o).forEach(x=>delete o[x]);Object.assign(o,r.data);}else arr.push(r.data);SMETA.h[k]=hh;return 1;
+}
+function syncLabel(){const el=document.getElementById("syncLbl");if(el)el.innerHTML=syncStatusHTML();const hb=document.getElementById("cloudDot");if(hb){hb.className="cloud-dot c-"+SYNC.state;hb.hidden=!AUTH;hb.title=syncStatusText();}}
+function syncStatusText(){const t=SYNC.last?new Date(SYNC.last).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"";
+  return {off:"Not signed in",idle:"Waiting to sync",syncing:"Syncing…",ok:`Up to date${t?" · "+t:""}`,offline:`Offline. Will sync when you're back online${t?" · last "+t:""}`,error:`Sync problem: ${SYNC.err}`}[SYNC.state]||"";}
+function syncStatusHTML(){return `<span class="sync-st s-${SYNC.state}">${SYNC.state==="ok"?"☁︎ ✓":SYNC.state==="syncing"?"☁︎ ↻":SYNC.state==="offline"?"☁︎ ✕":SYNC.state==="error"?"☁︎ !":"☁︎"} ${esc(syncStatusText())}</span>`;}
+let CLOUD_FORM={email:"",pw:"",busy:false,msg:""};
+function cloudSettingsHTML(){
+  if(AUTH)return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
+    <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
+    <div class="full" id="syncLbl">${syncStatusHTML()}</div>
+    <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
+    <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
+  return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
+    <p class="help full" style="margin:0">Make a free account to keep your data safe in the cloud and use the app on more than one device: phone, iPad or computer. ${APP.sample?"The sample jobs won't be uploaded.":"Everything already on this phone is uploaded when you first sign in."}</p>
+    <label class="full">Email<input id="cEmail" data-cloud="email" type="email" inputmode="email" autocapitalize="off" autocomplete="username" value="${esc(CLOUD_FORM.email)}"></label>
+    <label class="full">Password<input id="cPw" data-cloud="pw" type="password" autocomplete="current-password" value="${esc(CLOUD_FORM.pw)}"></label>
+    ${CLOUD_FORM.msg?`<p class="full help ${/created|Signed/.test(CLOUD_FORM.msg)?"":"vin-warn"}" style="margin:0">${esc(CLOUD_FORM.msg)}</p>`:""}
+    <div class="formacts full"><button class="btn primary" type="button" data-act="signin" ${CLOUD_FORM.busy?"disabled":""}>${CLOUD_FORM.busy?"Working…":"Sign in"}</button><button class="btn" type="button" data-act="signup" ${CLOUD_FORM.busy?"disabled":""}>Create account</button></div></div>`;
 }
 
 /* ================= expenses (parts, tools, supplies…) ================= */
@@ -1181,12 +1293,13 @@ const HELP=[
  ["Money","Mileage for taxes",["Expenses → Business miles.","Job miles are counted for you. Tap ＋ Add a trip for parts runs.","Save mileage log (CSV) at tax time."],"expenses|mileCard"],
  ["Money","Read your Home screen",["Billed, unpaid, jobs done, expenses and profit for the week, month or year.","Tap Unpaid to see who owes you.","Your job times shows your average hours and $/hr per job type."],"dash|"],
  ["Team","Add technicians and dispatch",["Settings → Team & dispatch → ＋ Add a technician.","A 🧭 Dispatch button appears on Schedule.","Assign jobs, text job sheets, and track On the way / On site."],"settings|teamSet"],
+ ["App","Use the app on more than one device (cloud sync)",["Settings → ☁️ Cloud sync → enter your email and a password → Create account.","Everything on this phone uploads. The ☁︎ button at the top turns green when it's up to date.","On a computer or iPad, open the app link in any browser, go to Settings and Sign in with the same email.","Changes sync by themselves when you're online. Offline changes catch up when you're back.","Photos, videos and receipt pictures stay on the device that took them for now."],"settings|setCloud"],
  ["App","Change colors and dark mode",["Settings → Appearance.","Pick Auto, Light or Dark, an app color, and a background."],"settings|setAppear"],
  ["App","Where is my data saved?",["Everything saves on this phone as you go. The ✓ Saved time shows at the top.","The app keeps daily copies for 14 days on the phone.","Save a backup file to iCloud Drive so you never lose your jobs."],"settings|backup"]];
 let HELP_Q="",HELP_OPEN=null;
 function helpChecklist(){const s=APP.settings;
   return [["Business name",!!(s.biz||"").trim(),"settings|setBusiness"],["Logo",!!s.logo,"settings|setBusiness"],["Prices",!!(num(s.fee)&&String(s.laborRate||"").trim()),"settings|setPricing"],
-    ["Payment options",!!(s.payCashapp||s.payVenmo||s.payZelle||s.payPaypal||s.payCard||s.pay),"settings|setInvoices"],["Home base",!!s.hq,"settings|setPricing"],["First backup",!!APP.lastBackup,"settings|backup"]];}
+    ["Payment options",!!(s.payCashapp||s.payVenmo||s.payZelle||s.payPaypal||s.payCard||s.pay),"settings|setInvoices"],["Home base",!!s.hq,"settings|setPricing"],["First backup",!!APP.lastBackup||!!AUTH,"settings|backup"],["Cloud account",!!AUTH,"settings|setCloud"]];}
 function renderHelp(){
   const q=HELP_Q.trim().toLowerCase(),list=HELP.map((h,k)=>({h,k})).filter(({h})=>!q||(h[1]+" "+h[2].join(" ")+" "+h[0]).toLowerCase().includes(q));
   const ck=helpChecklist(),nDone=ck.filter(x=>x[1]).length;
@@ -1650,7 +1763,7 @@ function totals(job){
 function jobTotal(job){return totals(job).total;}
 
 /* ================= chrome ================= */
-function renderChrome(){
+function renderChrome(){try{syncLabel();}catch(e){}
   const inJob=APP.view==="job"&&S;
   $("#jobChrome").hidden=!inJob; $("#plainPad").hidden=!!inJob;
   $("#navJobs").setAttribute("aria-current",APP.view==="jobs"?"page":"false");
@@ -1938,6 +2051,7 @@ function renderSettings(){
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Your business</div><h2>Settings</h2><p class="when">This information appears on your reports, invoices, and booking confirmations.</p></div>
+  ${cloudSettingsHTML()}
   <div class="form" id="setBusiness">
     <p class="formh">Business</p>
     <div class="full logo-row">
@@ -3120,6 +3234,12 @@ document.addEventListener("click",e=>{
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
+  if(d.act==="signin"||d.act==="signup"){const create=d.act==="signup";CLOUD_FORM.email=document.getElementById("cEmail")?.value||CLOUD_FORM.email;CLOUD_FORM.pw=document.getElementById("cPw")?.value||CLOUD_FORM.pw;
+    CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
+    cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
+      .catch(e=>{CLOUD_FORM.busy=false;let m=e&&e.msg||"Couldn't sign in";if(/invalid login|invalid_credentials/i.test(m))m="Wrong email or password.";if(/already registered|already been registered|exists/i.test(m))m="That email already has an account. Tap Sign in.";if(e.code==="offline")m="No internet connection. Try again when you're online.";CLOUD_FORM.msg=m;rerenderKeep();});return;}
+  if(d.act==="syncnow"){syncNow(true);return;}
+  if(d.act==="signout"){cloudSignOut();rerenderKeep();toast("Signed out. Your data stays on this device.");return;}
   if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};render();setTimeout(initSigPad,30);return;}
   if(d.act==="sigcancel"){SIGPAD=null;rerenderKeep();return;}
   if(d.act==="sigclr"){initSigPad();return;}
@@ -3313,6 +3433,7 @@ document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="jobF
 document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
+  if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}
   if(d.techf){const [id,f]=d.techf.split(":");const tm=APP.settings.techs.find(x=>x.id===id);if(tm){tm[f]=e.target.value;
@@ -3425,7 +3546,10 @@ try{syncCustomers();}catch(e){console.error(e);}
 render();
 if(RESUMED_DRAFT)setTimeout(()=>toast("Your unfinished booking was restored"),400);
 setTimeout(()=>autoSnapshot(),1500);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")autoSnapshot();});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){autoSnapshot();if(AUTH)syncNow();}else if(AUTH)syncNow();});
+window.addEventListener("online",()=>{if(AUTH)syncNow();});
+setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
+setTimeout(()=>{syncLabel();if(AUTH)syncNow();},800);
 /* Show save buttons only where this view can save files */
 document.body.classList.add("dl-checking");
 document.body.classList.toggle("no-cal",!CAN_CAL);

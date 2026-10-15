@@ -621,6 +621,14 @@ body.gated main{max-width:1060px}
 .lp-foot p{margin:0 0 10px}.lp-foot a{color:var(--accent)}.lp-foot p:last-child{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
 @media(max-width:420px){.lp-chip{padding:7px 8px;font-size:12px}}
 .cust-info{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0 0;font-size:15px}.cust-info dt{color:var(--muted)}.cust-info dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.garage-h{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
+.veh-card{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:var(--surface)}
+.veh-top{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;background:none;border:0;padding:0;text-align:left;color:var(--ink);font:inherit;cursor:pointer}
+.veh-name{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.veh-body{margin:8px 0 4px}
+.unit-tag,.fleet-tag{display:inline-block;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 7px;font-size:12px;font-weight:600}
+.fleet-tag{vertical-align:2px;margin-left:4px}.veh-notes{margin:0 0 6px;white-space:pre-wrap;color:var(--muted)}
+.fleet-box{display:grid;gap:10px;border-left:3px solid var(--accent);padding-left:12px}
+.cust-filter{margin:8px 0}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -1691,13 +1699,28 @@ function syncCustomers(){
       put("name",i.customer.trim());put("phone",i.phone);put("location",i.location);put("dist",i.dist);c.last=i.date||c.last;
     }
     if(i.make||i.model||i.vin){
-      const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||""},k=vehKey(v);
-      let ex=c.vehicles.find(x=>x.key===k)||(v.vin&&c.vehicles.find(x=>!x.vin&&x.key===vehKey({...v,vin:""})));
-      if(ex){for(const f of ["year","make","model","trim","vin","color"])if(v[f])ex[f]=v[f];if(v.miles&&num(v.miles)>=num(ex.miles))ex.miles=v.miles;ex.key=vehKey(ex);}
-      else c.vehicles.push({...v,key:k});
+      const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||"",unit:i.unit||"",plate:i.plate||""},k=vehKey(v);
+      let ex=c.vehicles.find(x=>x.key===k||(x.alias||[]).includes(k)||(v.unit&&x.unit&&normName(x.unit)===normName(v.unit)))||(v.vin&&c.vehicles.find(x=>!x.vin&&x.key===vehKey({...v,vin:""})));
+      if(ex){if(!ex.manual){for(const f of ["year","make","model","trim","vin","color"])if(v[f])ex[f]=v[f];const ok=ex.key;ex.key=vehKey(ex);if(ok!==ex.key)ex.alias=[...new Set([...(ex.alias||[]),ok])];}
+        for(const f of ["unit","plate"])if(v[f]&&!ex[f])ex[f]=v[f];
+        if(v.miles&&num(v.miles)>=num(ex.miles))ex.miles=v.miles;}
+      else if(!(c.vehHidden||[]).includes(k))c.vehicles.push({...v,key:k});
     }
   }
 }
+const split2=x=>{const i=String(x).indexOf("|");return [x.slice(0,i),x.slice(i+1)];};
+const split3=x=>{const a=String(x).indexOf("|"),b=String(x).lastIndexOf("|");return [x.slice(0,a),x.slice(a+1,b),x.slice(b+1)];};
+const jobCust=j=>j&&j.custId?(APP.customers||[]).find(c=>c.id===j.custId)||null:null;
+const vehMatch=(v,info)=>{const k=vehKey(info);return k===v.key||(v.alias||[]).includes(k)||!!(v.unit&&info.unit&&normName(v.unit)===normName(info.unit));};
+const vehJobs=(c,v)=>custJobs(c).filter(j=>vehMatch(v,j.info));
+const TERMS=[["","Use my normal terms"],["receipt","Due on receipt"],["net15","Net 15"],["net30","Net 30"],["net45","Net 45"]];
+const termDays=t=>({net15:15,net30:30,net45:45})[t]||0;
+function fleetTermsLine(job,invDate){const c=jobCust(job);if(!c||!c.fleet||!c.terms)return "";
+  const d=termDays(c.terms);return d?`Payment terms: Net ${d}. Due ${fmtDate(addDays(invDate||TODAY,d),{month:"short",day:"numeric",year:"numeric"})}.`:"Payment terms: Due on receipt.";}
+function poWarnHTML(job){const c=jobCust(job);if(!c||!c.fleet||!c.poReq||job.info.po)return "";
+  return `<p class="vin-warn" style="margin:0 0 8px">${esc(c.name)} needs a PO number on every invoice. Add it in the PO # box${isSvc(job)?" under Customer &amp; vehicle":" when you edit the job"}.</p>`;}
+function billToLines(job){const i=job.info,c=jobCust(job);return [i.customer,c&&c.fleet&&c.contact?"Attn: "+c.contact:"",i.phone].filter(Boolean);}
+function fleetRows(job){const i=job.info;return [["Unit #",i.unit],["Plate",i.plate],["PO #",i.po]].filter(r=>r[1]);}
 const custJobs=c=>APP.jobs.filter(j=>j.custId===c.id).sort((a,b)=>((a.info.date||"")>(b.info.date||"")?-1:1));
 function custMatches(q,limit=6){
   q=String(q||"").trim();if(q.length<2)return [];
@@ -1719,7 +1742,7 @@ function sugHTML(target,q){
 }
 function fillFromCustomer(obj,c,v,withVehicle=true){
   Object.assign(obj,{customer:c.name,phone:c.phone||"",location:c.location||"",dist:c.dist||""});
-  if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color}:{});}
+  if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",unit:"",plate:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color,unit:v.unit||"",plate:v.plate||"",miles:v.miles||""}:{});}
 }
 let CUST_OPEN=null,CUST_DEL=null,CUST_EDIT=null;
 function renderCustomers(){
@@ -1728,23 +1751,65 @@ function renderCustomers(){
   <div class="stage-head"><div class="eyebrow">Your customers</div><h2>Customers</h2>
   <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p></div>
   <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
+  ${(APP.customers||[]).some(c=>c.fleet&&!c.hidden)?`<div class="seg cust-filter" role="group" aria-label="Show"><button type="button" data-custf="" aria-pressed="${!APP.custF}">All</button><button type="button" data-custf="fleet" aria-pressed="${APP.custF==="fleet"}">Fleet accounts</button></div>`:""}
   <div class="jobs" id="custList">${custListHTML(q)}</div>`;
 }
 function custListHTML(q){
   const nq=normName(q),dq=digits(q);
-  const list=(APP.customers||[]).filter(c=>!c.hidden&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
+  const list=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet)&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
     .sort((a,b)=>((a.last||"")>(b.last||"")?-1:1));
   if(!list.length)return `<div class="emptybox">${q?"No customers match.":"No customers yet. They're added automatically when you book a job."}</div>`;
   return list.map(c=>{
     const js=custJobs(c),billed=js.filter(j=>j.status==="done").reduce((a,j)=>a+jobTotal(j),0),open=CUST_OPEN===c.id;
     return `<div class="job cust${open?" open":""}">
       <button type="button" class="cust-head" data-copen="${c.id}" aria-expanded="${open}">
-        <span class="who">${esc(c.name)}</span>
-        <span class="meta">${esc([c.phone,c.vehicles.map(vehName).filter(Boolean).join(", ")].filter(Boolean).join(" · ")||"No details yet")}</span>
+        <span class="who">${esc(c.name)}${c.fleet?` <span class="fleet-tag">Fleet</span>`:""}</span>
+        <span class="meta">${esc([c.fleet&&c.contact,c.phone,c.vehicles.length>2?c.vehicles.length+" vehicles":c.vehicles.map(vehName).filter(Boolean).join(", ")].filter(Boolean).join(" · ")||"No details yet")}</span>
         <span class="meta">${js.length} job${js.length===1?"":"s"}${c.last?" · last "+esc(fmtDate(c.last,{month:"short",day:"numeric",year:"numeric"})):""}${billed?" · "+money(billed)+" billed":""}</span>
       </button>
       ${open?custDetailHTML(c,js):""}
     </div>`;}).join("");
+}
+let VEH_EDIT=null,VEH_OPEN=null,VEH_DEL=null,GARAGE_Q="";
+function vehFormHTML(c,v){
+  const val=k=>esc(v?(v[k]||""):"");
+  const f=(k,label,extra="",full=false)=>`<label${full?' class="full"':""}>${label}<input id="ve-${k}" value="${val(k)}" ${extra}></label>`;
+  return `<div class="form veh-form" style="margin:8px 0">
+    <p class="formh">${v?"Edit vehicle":"Add a vehicle"}</p>
+    ${f("unit","Fleet unit #",'autocomplete="off" placeholder="Optional"')}${f("plate","License plate",'autocapitalize="characters" autocomplete="off"')}
+    <label class="full">VIN<input id="ve-vin" class="mono" maxlength="17" autocapitalize="characters" autocomplete="off" value="${val("vin")}"><span class="help">17 characters. Tap Look up to fill in the vehicle.</span></label>
+    <div class="full acts" style="margin-top:-4px"><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
+    ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("trim","Trim")}
+    ${f("miles","Mileage",'inputmode="numeric"')}${f("color","Color")}
+    <label class="full">Notes<textarea id="ve-notes" rows="2" placeholder="Oil type, tire size, known issues">${val("notes")}</textarea></label>
+    <div class="formacts full"><button class="btn primary" type="button" data-vsave="${c.id}|${v?v.key:""}">${v?"Save vehicle":"Add vehicle"}</button><button class="btn" type="button" data-vcancel="1">Cancel</button></div>
+    ${v?`<div class="formacts full"><button class="mini del" type="button" data-vdel="${c.id}|${v.key}">${VEH_DEL===v.key?"Tap again to remove":"Remove from garage"}</button></div>`:""}
+  </div>`;
+}
+function garageHTML(c){
+  const n=c.vehicles.length,q=normName(GARAGE_Q);
+  const list=c.vehicles.filter(v=>!q||normName([vehName(v),v.unit,v.plate,v.vin].join(" ")).includes(q))
+    .sort((a,b)=>(a.unit&&b.unit)?String(a.unit).localeCompare(String(b.unit),undefined,{numeric:true}):a.unit?-1:b.unit?1:vehName(a).localeCompare(vehName(b)));
+  const card=v=>{
+    if(VEH_EDIT===c.id+"|"+v.key)return vehFormHTML(c,v);
+    const hist=vehJobs(c,v),last=hist[0],open=VEH_OPEN===v.key;
+    return `<div class="veh-card${open?" open":""}">
+      <button type="button" class="veh-top" data-vopen="${v.key}" aria-expanded="${open}">
+        <span class="veh-name">${v.unit?`<span class="unit-tag">Unit ${esc(v.unit)}</span>`:""}<strong>${esc(vehName(v)||"Vehicle")}</strong></span>
+        <span class="meta">${[v.plate&&"Plate "+v.plate,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")||"&nbsp;"}</span>
+        <span class="meta">${hist.length?`${hist.length} job${hist.length===1?"":"s"} · last ${esc(fmtDate(last.info.date,{month:"short",day:"numeric",year:"numeric"}))}`:"No jobs yet"}</span>
+      </button>
+      ${open?`<div class="veh-body">
+        ${v.vin?`<p class="meta mono" style="margin:0 0 6px">VIN ${esc(v.vin)}</p>`:""}${v.notes?`<p class="veh-notes">${esc(v.notes)}</p>`:""}
+        ${hist.length?hist.map(j=>`<button type="button" class="hist-row" data-open="${j.id}"><span>${esc(fmtDate(j.info.date,{month:"short",day:"numeric",year:"numeric"}))}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="hist-what">${esc(isSvc(j)?(j.info.work||"Service"):"Inspection")}</span><span class="hist-amt">${j.status==="done"?money(jobTotal(j)):esc(j.status==="active"?"In progress":"Booked")}</span></button>`).join(""):`<p class="empty">No jobs on this vehicle yet.</p>`}
+      </div>`:""}
+      <div class="acts"><button class="mini go" type="button" data-cbook="${c.id}|${v.key}|service">Book service</button><button class="mini" type="button" data-cbook="${c.id}|${v.key}|ppi">Book PPI</button><button class="mini" type="button" data-vedit="${c.id}|${v.key}">Edit</button></div>
+    </div>`;};
+  return `<div class="garage-h"><div class="group-h">Garage${n?` · ${n} vehicle${n===1?"":"s"}`:""}</div><button class="mini" type="button" data-vadd="${c.id}">+ Add vehicle</button></div>
+    ${VEH_EDIT===c.id+"|new"?vehFormHTML(c,null):""}
+    ${n>4?`<label class="search" style="margin:6px 0"><input id="garage-q" data-garageq="${c.id}" value="${esc(GARAGE_Q)}" placeholder="Search unit, plate, make or VIN" autocomplete="off"></label>`:""}
+    <div id="garageList">${list.length?list.map(card).join(""):`<p class="empty">${n?"No vehicles match.":"No vehicles yet. They're added when you book a job, or tap Add vehicle."}</p>`}</div>
+    <div class="acts" style="margin-top:6px"><button class="mini" type="button" data-cbook="${c.id}||service">Book service, other vehicle</button></div>`;
 }
 function custEditHTML(c){
   const f=(k,label,extra="",full=false)=>`<label${full?' class="full"':""}>${label}<input id="ce-${k}" value="${esc(c[k]||"")}" ${extra}></label>`;
@@ -1753,7 +1818,14 @@ function custEditHTML(c){
     ${f("name","Name",'autocomplete="off"')}${f("phone","Phone",'inputmode="tel" autocomplete="off"')}
     ${f("email","Email",'inputmode="email" autocomplete="off"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
     ${f("location","Address",'autocomplete="off"',true)}
-    <label class="full">Notes<textarea id="ce-notes" rows="3" placeholder="Gate code, preferred times, fleet account">${esc(c.notes||"")}</textarea></label>
+    <label class="check full"><input type="checkbox" id="ce-fleet" ${c.fleet?"checked":""} onchange="document.getElementById('ceFleet').hidden=!this.checked"> Fleet or business account</label>
+    <div class="full fleet-box" id="ceFleet" ${c.fleet?"":"hidden"}>
+      <label>Contact person<input id="ce-contact" value="${esc(c.contact||"")}" autocomplete="off" placeholder="Fleet manager"></label>
+      <label>Payment terms<select id="ce-terms">${TERMS.map(([v,l])=>`<option value="${v}" ${(c.terms||"")===v?"selected":""}>${l}</option>`).join("")}</select></label>
+      <label class="check"><input type="checkbox" id="ce-poreq" ${c.poReq?"checked":""}> Needs a PO number on every invoice</label>
+      <p class="help" style="margin:0">Use the customer name above for the company. Give each vehicle a unit number in the garage.</p>
+    </div>
+    <label class="full">Notes<textarea id="ce-notes" rows="3" placeholder="Gate code, preferred times, billing contact">${esc(c.notes||"")}</textarea></label>
     <p class="help full" style="margin:0">Changes also update this customer's upcoming jobs. Finished invoices stay as they were.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-csave="${c.id}">Save changes</button><button class="btn" type="button" data-ccancel="1">Cancel</button></div>
     <div class="formacts full"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>
@@ -1761,15 +1833,11 @@ function custEditHTML(c){
 }
 function custDetailHTML(c,js){
   if(CUST_EDIT===c.id)return `<div class="cust-body">${custEditHTML(c)}</div>`;
-  const info=[c.phone&&["Phone",c.phone],c.email&&["Email",c.email],c.location&&["Address",c.location],c.dist&&["Distance",c.dist+" mi"],c.notes&&["Notes",c.notes]].filter(Boolean);
+  const info=[c.fleet&&["Account","Fleet"+(c.terms?" · "+TERMS.find(t=>t[0]===c.terms)[1]:"")+(c.poReq?" · PO required":"")],c.fleet&&c.contact&&["Contact",c.contact],c.phone&&["Phone",c.phone],c.email&&["Email",c.email],c.location&&["Address",c.location],c.dist&&["Distance",c.dist+" mi"],c.notes&&["Notes",c.notes]].filter(Boolean);
   return `<div class="cust-body">
     <div class="acts"><button class="mini go" type="button" data-cedit="${c.id}">Edit info</button>${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.email?`<a class="mini" href="mailto:${esc(c.email)}">Email</a>`:""}${c.location?dirLink(c.location):""}</div>
     ${info.length?`<dl class="cust-info">${info.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:`<p class="empty">No phone, email or address yet. Tap Edit info to add them.</p>`}
-    <div class="group-h" style="margin-top:10px">Vehicles</div>
-    ${c.vehicles.length?c.vehicles.map(v=>`<div class="veh-row"><div><strong>${esc(vehName(v)||"Vehicle")}</strong><span class="meta">${[v.vin&&"VIN "+v.vin,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")}</span></div>
-      <div class="acts"><button class="mini go" type="button" data-cbook="${c.id}|${v.key}|service">Book service</button><button class="mini" type="button" data-cbook="${c.id}|${v.key}|ppi">Book PPI</button></div></div>`).join("")
-      :`<p class="empty">No vehicles saved yet.</p>`}
-    <div class="acts" style="margin-top:6px"><button class="mini" type="button" data-cbook="${c.id}||service">Book service, other vehicle</button></div>
+    ${garageHTML(c)}
     ${js.length?`<div class="group-h" style="margin-top:12px">Past jobs</div>${js.map(j=>`<button type="button" class="hist-row" data-open="${j.id}">
       <span>${esc(fmtDate(j.info.date,{month:"short",day:"numeric",year:"numeric"}))}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span>
       <span class="hist-what">${esc(isSvc(j)?(j.info.work||vehOf(j.info)):vehOf(j.info))}</span><span class="hist-amt">${j.status==="done"?money(jobTotal(j)):esc(j.status==="active"?"In progress":"Booked")}</span></button>`).join("")}`:""}
@@ -2179,6 +2247,8 @@ function renderJobForm(){
     ${f("model","Model")}
     ${f("trim","Trim")}
     ${f("engine","Engine","","full")}
+    ${f("plate","License plate",'autocapitalize="characters"')}${f("unit","Fleet unit #")}
+    ${(()=>{const c=d.custId&&(APP.customers||[]).find(x=>x.id===d.custId);return c&&c.fleet||d.po?f("po",`PO #${c&&c.poReq?" (required)":""}`,"","full"):"";})()}
     <label class="full">Notes<textarea id="d-notes" data-draft="notes" rows="2" placeholder="${svc?"Gate code, parking, parts to pick up":"Seller name, listing link, gate code"}">${esc(d.notes)}</textarea></label>
     <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button><button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
   </form>`;
@@ -2809,6 +2879,8 @@ function renderService(){
     <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
     ${f("miles","Mileage",'inputmode="numeric"')}
     ${f("color","Color")}
+    ${f("plate","License plate",'autocapitalize="characters"')}${f("unit","Fleet unit #")}
+    ${(()=>{const c=jobCust(S);return c&&c.fleet||i.po?f("po",`PO #${c&&c.poReq?" (required)":""}`,"","full"):"";})()}
   </div>
   <div class="form">
     <p class="formh">Work</p>
@@ -2821,6 +2893,7 @@ function renderService(){
   <div class="report">
     ${mode==="est"?bizHead("Estimate",`<strong>${esc((S.est&&S.est.num)||"New estimate")}</strong><br>${esc(fmtDate((S.est&&S.est.date)||TODAY,{month:"short",day:"numeric",year:"numeric"}))}${S.est&&S.est.status!=="draft"?`<br><span class="eststamp est-${S.est.status}">${esc((EST_ST.find(x=>x[0]===S.est.status)||[0,""])[1])}</span>`:""}`)
       :bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
+    ${poWarnHTML(S)}${(()=>{const fr=fleetRows(S);const c=jobCust(S);return fr.length||(c&&c.fleet&&c.contact)?`<p class="help fleet-line" style="margin:0 0 8px">${esc(billToLines(S).slice(0,2).join(" · "))}${fr.length?" · "+fr.map(([k,v])=>esc(k+" "+v)).join(" · "):""}</p>`:"";})()}
     ${mode==="inv"&&S.est&&S.est.status==="approved"?`<p class="help" style="margin:0 0 6px">From estimate ${esc(S.est.num)}, approved ${esc(fmtDate(S.est.approvedDate||S.est.date,{month:"short",day:"numeric"}))} for ${money(S.est.total||0)}.</p>`:""}
     ${i.tech?`<p class="help" style="margin:0 0 6px"><strong>Technician:</strong> ${esc(i.tech)}</p>`:""}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
@@ -2941,9 +3014,9 @@ function payOptions(amount){
 }
 function payBoxHTML(amount){
   const s=APP.settings,opts=payOptions(amount);
-  if(!opts.length&&!s.pay&&!s.terms)return `<p class="empty">Add your payment options in Settings so they show on the invoice.</p>`;
+  if(!opts.length&&!s.pay&&!s.terms&&!(S&&fleetTermsLine(S)))return `<p class="empty">Add your payment options in Settings so they show on the invoice.</p>`;
   return `<div class="paybox">${opts.map(o=>`<div class="payrow"><span class="payk">${esc(o.k)}</span>${o.href?`<a href="${esc(o.href)}" target="_blank" rel="noopener">${esc(o.v)}</a>`:`<span>${esc(o.v)}</span>`}</div>`).join("")}
-    ${s.pay?`<div class="paynote">${esc(s.pay)}</div>`:""}${s.terms?`<div class="paynote">${esc(s.terms)}</div>`:""}</div>`;
+    ${s.pay?`<div class="paynote">${esc(s.pay)}</div>`:""}${(S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||s.terms?`<div class="paynote">${esc((S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||s.terms)}</div>`:""}</div>`;
 }
 function payTextLines(amount){
   const s=APP.settings,L=payOptions(amount).map(o=>`${o.k}: ${o.v}${o.href&&o.k!=="Card"?" — "+o.href:o.k==="Card"?" — "+o.href:""}`);
@@ -2961,7 +3034,7 @@ function estimateText(){
   const L=[`${bizName().toUpperCase()} — ESTIMATE ${e.num}`];
   if(bizContact())L.push(bizContact());
   L.push(`Date: ${fmtDate(e.date,{month:"short",day:"numeric",year:"numeric"})} · Valid until ${fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"})}`);
-  L.push(`For: ${i.customer||"—"}`);
+  L.push(`For: ${billToLines(S).join(", ")||"—"}`);fleetRows(S).forEach(([k,v])=>L.push(`${k}: ${v}`));
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
   if(i.tech)L.push(`Technician: ${i.tech}`);
   if(i.work){L.push("");L.push("WORK REQUESTED");L.push(i.work);}
@@ -3002,11 +3075,12 @@ function renderInvoice(){
   <div class="report">
     ${bizHead("Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
     <dl class="kv">
-      <div><dt>Bill to</dt><dd>${esc(i.customer||"—")}${i.phone?`<br><span style="font-weight:400">${esc(i.phone)}</span>`:""}</dd></div>
+      <div><dt>Bill to</dt><dd>${billToLines(S).map((x,n)=>n?`<br><span style="font-weight:400">${esc(x)}</span>`:esc(x)).join("")||"—"}</dd></div>
+      ${fleetRows(S).map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}
       <div><dt>Vehicle</dt><dd>${esc(vehOf(i)||"—")}</dd></div>
       <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
       ${i.tech?`<div><dt>Technician</dt><dd>${esc(i.tech)}</dd></div>`:""}
-    </dl>
+    </dl>${poWarnHTML(S)}
     <div style="overflow-x:auto"><table class="inv-table">
       <thead><tr><th>Description</th><th>Amount</th></tr></thead>
       <tbody>
@@ -3040,7 +3114,7 @@ function invoiceText(){
   const L=[`${bizName().toUpperCase()} — ${t.svc?"SERVICE ":""}INVOICE ${inv.num}`];
   if(bizContact())L.push(bizContact());
   L.push(`Date: ${fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"})}`);
-  L.push(`Bill to: ${i.customer||"—"}`);
+  L.push(`Bill to: ${billToLines(S).join(", ")||"—"}`);fleetRows(S).forEach(([k,v])=>L.push(`${k}: ${v}`));
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
   if(i.tech)L.push(`Technician: ${i.tech}`);
   L.push("");
@@ -3060,7 +3134,7 @@ function invoiceText(){
   if(t.svc&&(S.media||[]).length){const nv=S.media.filter(m=>m.kind==="video").length,np=S.media.length-nv;L.push("");L.push(`Photos/videos: ${np} photo${np===1?"":"s"}${nv?`, ${nv} video${nv===1?"":"s"}`:""} (sent separately)`);}
   if(t.svc&&(st.warranty||"").trim()){L.push("");L.push("WARRANTY: "+st.warranty.trim());}
   if(inv.paid)L.push(`Paid by ${inv.paidVia}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
-  else{ const pl=payTextLines(t.total);if(pl.length){L.push("");L.push("How to pay:");L.push(...pl);} if(st.terms)L.push(st.terms); }
+  else{ const pl=payTextLines(t.total);if(pl.length){L.push("");L.push("How to pay:");L.push(...pl);} const ft=fleetTermsLine(S,inv.date);if(ft)L.push(ft);else if(st.terms)L.push(st.terms); }
   return L.join("\n");
 }
 
@@ -3234,7 +3308,7 @@ function buildInvoicePdf(job,est){
   const svc=t.svc;
   if(est)pdfHeader(P,"Estimate",[job.est.num,fmtDate(job.est.date,{month:"long",day:"numeric",year:"numeric"}),"Valid until "+fmtDate(estValidUntil(job.est),{month:"short",day:"numeric",year:"numeric"})]);
   else pdfHeader(P,svc?"Service Invoice":"Invoice",[inv.num,fmtDate(inv.date,{month:"long",day:"numeric",year:"numeric"})]);
-  pdfKV(P,[["Bill to",[i.customer,i.phone].filter(Boolean).join("\n")],["Vehicle",vehOf(i)+(svc&&i.engine?"\n"+i.engine:"")],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[]),...(i.tech?[["Technician",i.tech]]:[])]);
+  pdfKV(P,[["Bill to",billToLines(job).join("\n")],...fleetRows(job),["Vehicle",vehOf(i)+(svc&&i.engine?"\n"+i.engine:"")],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[]),...(i.tech?[["Technician",i.tech]]:[])]);
   if(svc&&(i.work||i.performed)){
     const para=(h,txt)=>{if(!txt)return;P.need(40);P.font(8,"bold",PC.muted);P.text(h,PM,P.y);P.y+=13;P.font(10);const l=P.wrap(txt,PW-2*PM);P.need(l.length*13);P.text(l,PM,P.y);P.y+=l.length*13+8;};
     para("WORK REQUESTED",i.work);if(!est)para("WORK PERFORMED",i.performed);
@@ -3277,12 +3351,12 @@ function buildInvoicePdf(job,est){
     P.font(20,"bold",PC.good);P.text("PAID",PM+75,P.y+20,{align:"center"});
     P.font(9,"normal",PC.muted);P.text(`${inv.paidVia}${inv.paidDate?"  ·  "+fmtDate(inv.paidDate,{month:"short",day:"numeric",year:"numeric"}):""}`,PM+165,P.y+12);
     P.text("Thank you for your business.",PM+165,P.y+26);P.y+=50;
-  }else if(payOptions(t.total).length||s.pay||s.terms){
+  }else if(payOptions(t.total).length||s.pay||s.terms||fleetTermsLine(job,inv.date)){
     P.y+=6;P.need(40);P.font(8,"bold",PC.muted);P.text("HOW TO PAY",PM,P.y);P.y+=15;
     payOptions(t.total).forEach(o=>{P.need(16);P.font(10,"bold");P.text(o.k,PM,P.y);P.font(10,"normal",o.href?PC.accent:PC.ink);
       if(o.href&&doc.textWithLink)doc.textWithLink(pdfTxt(o.v),PM+80,P.y,{url:o.href});else P.text(o.v,PM+80,P.y);P.y+=15;});
     if(s.pay){P.font(10);const l=P.wrap(s.pay,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13+4;}
-    if(s.terms){P.font(9,"normal",PC.muted);const tl2=P.wrap(s.terms,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}
+    {const tt=fleetTermsLine(job,inv.date)||s.terms;if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
   }
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
   if(svc&&!est&&nextServiceLine(job)){P.y+=12;P.need(46);doc.setFillColor(...PC.paper);const nl=P.wrap(nextServiceLine(job),PW-2*PM-24);doc.roundedRect(PM,P.y-4,PW-2*PM,22+nl.length*13,5,5,"F");
@@ -3361,7 +3435,7 @@ function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=nul
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;
   const b=job?job.info:{};
-  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",tech:b.tech||"",engine:b.engine||"",agreed:b.agreed||"",agreedTravel:b.agreedTravel!==false};
+  APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",unit:b.unit||"",plate:b.plate||"",po:b.po||"",tech:b.tech||"",engine:b.engine||"",agreed:b.agreed||"",agreedTravel:b.agreedTravel!==false};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(){
@@ -3610,19 +3684,47 @@ document.addEventListener("click",e=>{
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}
   if(d.gocust){APP.view="customers";CUST_OPEN=d.gocust;render();window.scrollTo(0,0);return;}
   if(d.sugpick){if(SUG_DONE===d.sugpick&&Date.now()-SUG_AT<800)return;sugPick(d.sugpick);return;}
+  if(d.custf!==undefined){APP.custF=d.custf;save();render();return;}
+  const relist=()=>{const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");};
+  if(d.vopen){VEH_OPEN=VEH_OPEN===d.vopen?null:d.vopen;relist();return;}
+  if(d.vadd){VEH_EDIT=d.vadd+"|new";VEH_DEL=null;relist();setTimeout(()=>document.getElementById("ve-unit")?.focus(),50);return;}
+  if(d.vedit){VEH_EDIT=d.vedit;VEH_DEL=null;relist();return;}
+  if(d.vcancel){VEH_EDIT=null;VEH_DEL=null;relist();return;}
+  if(d.vdecode){const vin=(document.getElementById("ve-vin")?.value||"").trim().toUpperCase();const msg=document.getElementById("veDec");
+    if(!vinReady(vin)){if(msg)msg.textContent="Enter all 17 characters of the VIN.";return;}
+    if(msg)msg.textContent="Looking up…";
+    decodeVin(vin).then(x=>{if(!x){if(msg)msg.textContent="Couldn't find that VIN. Fill it in by hand.";return;}
+      for(const k of ["year","make","model","trim"]){const el=document.getElementById("ve-"+k);if(el&&x[k])el.value=x[k];}
+      if(msg)msg.textContent="Filled in: "+[x.year,x.make,x.model,x.trim].filter(Boolean).join(" ");})
+      .catch(()=>{if(msg)msg.textContent="No connection. Fill it in by hand.";});return;}
+  if(d.vsave){const [cid,key]=split2(d.vsave);const c=APP.customers.find(x=>x.id===cid);if(!c)return;
+    const g=k=>(document.getElementById("ve-"+k)?.value||"").trim();
+    const nv={unit:g("unit"),plate:g("plate").toUpperCase(),vin:g("vin").toUpperCase(),year:g("year"),make:g("make"),model:g("model"),trim:g("trim"),miles:g("miles"),color:g("color"),notes:document.getElementById("ve-notes")?.value||""};
+    if(!nv.make&&!nv.model&&!nv.vin&&!nv.unit){toast("Add a make and model, a VIN or a unit number");return;}
+    let v=key?c.vehicles.find(x=>x.key===key):null;
+    if(v){const oldInfo={...v};Object.assign(v,nv);v.manual=true;const nk=vehKey(v);if(nk!==v.key){v.alias=[...new Set([...(v.alias||[]),v.key])];v.key=nk;}
+      for(const j of APP.jobs)if(j.custId===c.id&&j.status!=="done"&&vehMatch(oldInfo,j.info))Object.assign(j.info,{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,unit:v.unit,plate:v.plate,color:v.color});
+      if(VEH_OPEN===key)VEH_OPEN=v.key;}
+    else{v={...nv,manual:true};v.key=vehKey(v);if(c.vehicles.some(x=>x.key===v.key))v.key+="#"+uid();c.vehicles.push(v);c.vehHidden=(c.vehHidden||[]).filter(k=>k!==v.key);}
+    VEH_EDIT=null;save();relist();toast(key?"Vehicle saved":"Vehicle added");return;}
+  if(d.vdel){const [cid,key]=split2(d.vdel);if(VEH_DEL!==key){VEH_DEL=key;relist();return;}
+    const c=APP.customers.find(x=>x.id===cid);const v=c&&c.vehicles.find(x=>x.key===key);
+    if(v){c.vehicles=c.vehicles.filter(x=>x!==v);c.vehHidden=[...new Set([...(c.vehHidden||[]),v.key,...(v.alias||[])])];}
+    VEH_EDIT=null;VEH_DEL=null;save();relist();toast("Vehicle removed from garage");return;}
   if(d.cedit){CUST_EDIT=d.cedit;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");setTimeout(()=>document.getElementById("ce-name")?.focus(),50);return;}
   if(d.ccancel){CUST_EDIT=null;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
   if(d.csave){const c=APP.customers.find(x=>x.id===d.csave);if(!c)return;
     const val=k=>(document.getElementById("ce-"+k)?.value||"").trim();
-    const nv={name:val("name"),phone:val("phone"),email:val("email"),dist:val("dist"),location:val("location"),notes:document.getElementById("ce-notes")?.value||""};
+    const nv={name:val("name"),phone:val("phone"),email:val("email"),dist:val("dist"),location:val("location"),notes:document.getElementById("ce-notes")?.value||"",
+      fleet:!!document.getElementById("ce-fleet")?.checked,contact:val("contact"),terms:document.getElementById("ce-terms")?.value||"",poReq:!!document.getElementById("ce-poreq")?.checked};
     if(!nv.name){toast("Add a name for this customer");document.getElementById("ce-name")?.focus();return;}
     c.lock=c.lock||{};
     for(const k of ["name","phone","email","dist","location"])if(nv[k]!==(c[k]||""))c.lock[k]=true;
     const jobField={name:"customer",phone:"phone",location:"location",dist:"dist"};
     for(const j of APP.jobs)if(j.custId===c.id&&j.status!=="done")for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
-    Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer saved");return;}
-  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
-  if(d.cbook){const [cid,vk,type]=d.cbook.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
+    Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Customer saved");return;}
+  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;VEH_EDIT=null;VEH_OPEN=null;GARAGE_Q="";const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.cbook){const [cid,vk,type]=split3(d.cbook);const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
     APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
   if(d.cdel){if(CUST_DEL!==d.cdel){CUST_DEL=d.cdel;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
     const c=APP.customers.find(x=>x.id===d.cdel);c.hidden=true;CUST_DEL=null;CUST_OPEN=null;CUST_EDIT=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer removed");return;}
@@ -3667,7 +3769,7 @@ document.addEventListener("toggle",e=>{const el=e.target;if(el&&el.dataset&&el.d
    Pick on pointerup and keep the list open while a finger is down. */
 let SUG_HOLD=null,SUG_DONE=null,SUG_AT=0;
 function sugPick(val){
-  const [cid,vk,target]=val.split("|");const c=(APP.customers||[]).find(x=>x.id===cid);if(!c)return;const v=vk?c.vehicles.find(x=>x.key===vk):null;
+  const [cid,vk,target]=split3(val);const c=(APP.customers||[]).find(x=>x.id===cid);if(!c)return;const v=vk?c.vehicles.find(x=>x.key===vk):null;
     if(target==="draft"){fillFromCustomer(APP.draft,c,v);APP.draft.custId=c.id;render();toast(`Filled from ${c.name}`);if(APP.draft.location&&!APP.draft.dist)calcDist("draft",true);}
     else{fillFromCustomer(S.info,c,v);S.custId=c.id;save();const y=window.scrollY;render();window.scrollTo(0,y);if(isSvc(S))refreshTotals();toast(`Filled from ${c.name}`);if(S.info.location&&!S.info.dist)calcDist("info",true);}
 }
@@ -3708,6 +3810,8 @@ document.addEventListener("input",e=>{
   if(d.menuname){const it=APP.settings.menu.find(x=>x.id===d.menuname);if(it){it.name=t.value;clearTimeout(window.__mn);window.__mn=setTimeout(save,400);}return;}
   if(d.omwtext&&OMW){OMW.text=t.value;OMW.edited=true;const a=document.getElementById("omwSend");const j=APP.jobs.find(x=>x.id===OMW.id);if(a&&j)a.href=smsHref(j.info.phone,t.value);return;}
   if(d.themecustom){APP.settings.themeAccent=t.value.toLowerCase();applyTheme();const l=t.closest(".acc-custom");if(l)l.style.setProperty("--c",t.value);clearTimeout(window.__thm);window.__thm=setTimeout(save,300);return;}
+  if(d.garageq){GARAGE_Q=t.value;const c=APP.customers.find(x=>x.id===d.garageq);const box=document.getElementById("garageList");
+    if(c&&box){const tmp=document.createElement("div");tmp.innerHTML=garageHTML(c);const nb=tmp.querySelector("#garageList");if(nb)box.innerHTML=nb.innerHTML;}return;}
   if(d.custq){APP.custQ=t.value;const l=$("#custList");if(l)l.innerHTML=custListHTML(t.value);return;}
   if(d.cf){const c=(APP.customers||[]).find(x=>x.id===d.cid);if(c){c[d.cf]=t.value;try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}return;}
   if(d.draft==="customer"){const b=$("#sug-draft");if(b)b.innerHTML=sugHTML("draft",t.value);}

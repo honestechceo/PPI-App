@@ -274,6 +274,28 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .mdel{border:1px solid var(--line);background:var(--surface);border-radius:999px;min-width:32px;height:30px;color:var(--bad);font-weight:700}
 .mdel.sure{background:var(--bad);color:#fff;border-color:var(--bad);padding:0 10px}
 .mcap{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:7px 8px;font-size:13px;width:100%;min-width:0}
+.inst-ban{display:flex;align-items:center;gap:12px;background:var(--card,#fff);border:1px solid var(--line,#ddd);border-left:4px solid var(--accent,#e2620f);border-radius:12px;padding:12px;margin-bottom:14px}
+.inst-ban .ib-ic{flex:0 0 44px;height:44px;border-radius:11px;background:var(--accent,#e2620f);display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px}
+.inst-ban .ib-t{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.inst-ban .ib-b{display:flex;flex-direction:column;gap:6px}
+.inst-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:flex;align-items:flex-end;justify-content:center}
+.inst-sh{background:var(--bg,#fff);color:var(--ink,#111);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom))}
+@media(min-width:600px){.inst-ov{align-items:center}.inst-sh{border-radius:18px}}
+.inst-sh h3{margin:0 0 4px;font-size:20px}
+.inst-sh .why{margin:0 0 12px;color:var(--muted,#666);font-size:14px}
+.inst-tabs{display:flex;gap:6px;margin:0 0 12px;flex-wrap:wrap}
+.inst-tabs button{flex:1;min-width:90px;padding:8px 6px;border-radius:9px;border:1px solid var(--line,#ccc);background:transparent;color:inherit;font-weight:600;font-size:13px}
+.inst-tabs button.on{background:var(--accent,#e2620f);border-color:var(--accent,#e2620f);color:#fff}
+.inst-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.inst-steps li{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line,#ddd);border-radius:12px;padding:12px}
+.inst-steps .n{flex:0 0 28px;height:28px;border-radius:50%;background:var(--accent,#e2620f);color:#fff;display:grid;place-items:center;font-weight:800;font-size:14px}
+.inst-steps .tx{flex:1;font-size:15px;line-height:1.4}
+.inst-steps .tx small{display:block;color:var(--muted,#666);font-size:13px;margin-top:3px}
+.inst-steps .pic{flex:0 0 auto;display:grid;place-items:center;min-width:46px;height:46px;border-radius:10px;background:var(--mon-soft,#f1f1f1);color:var(--accent,#e2620f)}
+.inst-steps .pic svg{width:26px;height:26px}
+.inst-key{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;border:1px solid var(--line,#ccc);font-weight:700;white-space:nowrap}
+.inst-key svg{width:15px;height:15px}
+.inst-done{margin-top:12px;font-size:14px;color:var(--muted,#666)}
 .viewer{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:50;display:grid;place-items:center;padding:16px}
 .vbox{display:flex;flex-direction:column;gap:10px;align-items:center;max-width:100%;max-height:100%}
 .vbox img,.vbox video{max-width:100%;max-height:75vh;border-radius:8px;background:#000}
@@ -1064,7 +1086,7 @@ function renderJoin(){
     <h3 class="lp-h2">Questions</h3>
     <details><summary>Do I need a credit card for the trial?</summary><p>No. Make an account and use everything for ${PRICES.trialDays} days. Pick a plan when you're ready.</p></details>
     <details><summary>Does it work without signal?</summary><p>Yes. Jobs save on your phone and sync to your account when you're back online.</p></details>
-    <details><summary>Do I need to install anything?</summary><p>No. Open honestechmobileapp.com in your browser. On iPhone, tap Share, then Add to Home Screen to use it like an app.</p></details>
+    <details><summary>Do I need to install anything?</summary><p>No. Open honestechmobileapp.com in your browser. On iPhone, tap Share, then Add to Home Screen. On Android, tap the ⋮ menu, then Install app. The app walks you through it the first time you open it.</p></details>
     <details><summary>What happens to my data if I cancel?</summary><p>Your jobs, customers and invoices stay in your account. Pick a plan again any time to pick up where you left off.</p></details>
     <details><summary>Can my technicians use it?</summary><p>Yes, on the Team plan. Assign jobs, send job sheets and track each tech's work.</p></details>
   </section>
@@ -1450,7 +1472,7 @@ let TEAM={at:0,list:[],busy:"",msg:""};
 function inviteTech(t){if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
     supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
       const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
-      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link}`;
+      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link} Then add it to your home screen (the app shows you how) so you get job alerts.`;
       TEAM.busy="";TEAM.at=0;loadTeam();
       if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
       else{copyText(msg);toast("Invite link copied. Paste it in a text to "+t.name+".");}
@@ -1566,7 +1588,7 @@ const HELP=[
  ["Getting started","Set your prices",["Settings → Pricing.","Set your PPI fee and labor rate per hour.","Set free travel miles and the rate per mile after that.","Turn on sales tax if you charge it."],"settings|setPricing"],
  ["Getting started","Add your payment options",["Settings → Invoices → Payment options.","Fill in your Cash App, Venmo, Zelle, PayPal or card link.","They print on every invoice. Cash App, Venmo and PayPal links open with the amount filled in."],"settings|setInvoices"],
  ["Getting started","Auto-calculate travel distance",["Settings → Pricing → Home base address.","Type the address you drive from. It's private and never printed.","When you book a job, the distance and travel fee fill in by themselves."],"settings|setPricing"],
- ["Getting started","Put the app on your home screen",["Open the app's link in Safari.","Tap the Share button, then Add to Home Screen.","Open it from the icon. It works full screen and offline."],""],
+ ["Getting started","Put the app on your home screen",["iPhone: open the app's link in Safari, tap Share, then Add to Home Screen.","Android: in Chrome tap the ⋮ menu, then Install app or Add to Home screen.","Open it from the icon. It works full screen, offline, and can send job alerts."],"install"],
  ["Getting started","Back up your data",["Your data lives on this phone. Back it up often.","Settings → Backup & restore → Save backup file, and save it to iCloud Drive.","To move to a new phone, open the backup file there with Restore."],"settings|backup"],
  ["Jobs","Book a job",["Schedule → + Book a job.","Pick Pre-purchase inspection or Service / repair.","Start typing the customer's name. If they've been here before, tap their name to fill in everything.","Add the date, time and address, then Save job."],"jobs|"],
  ["Jobs","Fill in a car from the VIN",["Type or paste the 17-character VIN when booking or on the job.","The year, make, model, trim and engine fill in by themselves.","If it doesn't match what you typed, tap Use VIN details."],""],
@@ -1612,7 +1634,7 @@ function renderHelp(){
   <input class="help-q" id="helpQ" data-helpq="1" value="${esc(HELP_Q)}" placeholder="Search help, e.g. discount, VIN, backup" autocomplete="off">
   ${list.length?secs.map(sec=>`<div class="group-h">${esc(sec)}</div><div class="help-list">${list.filter(x=>x.h[0]===sec).map(({h,k})=>{const open=HELP_OPEN===k||!!q;
     return `<div class="help-item${open?" open":""}"><button type="button" class="help-t" data-helpk="${k}" aria-expanded="${open}"><span>${esc(h[1])}</span><span>${open?"▾":"▸"}</span></button>
-      ${open?`<div class="help-b"><ol>${h[2].map(x=>`<li>${esc(x)}</li>`).join("")}</ol>${h[3]?`<button class="mini go" type="button" data-helpgo="${h[3]}">Take me there ›</button>`:""}</div>`:""}</div>`;}).join("")}</div>`).join("")
+      ${open?`<div class="help-b"><ol>${h[2].map(x=>`<li>${esc(x)}</li>`).join("")}</ol>${h[3]?`<button class="mini go" type="button" data-helpgo="${h[3]}">${h[3]==="install"?"Show me how ›":"Take me there ›"}</button>`:""}</div>`:""}</div>`;}).join("")}</div>`).join("")
     :`<div class="emptybox">Nothing found for "${esc(HELP_Q)}". Try another word.</div>`}
   <p class="help" style="margin:16px 0 0">Still stuck? Every screen saves as you go, so it's safe to tap around and explore.</p>`;
 }
@@ -2235,7 +2257,7 @@ function renderJobs(){
   const done=APP.jobs.filter(j=>j.status==="done"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
-  return `${sampleBanner()}${isTech()?pushCardHTML(true):""}
+  return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true):""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
   <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&j.status!=="done").length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
@@ -3740,6 +3762,71 @@ document.addEventListener("input",mpiInput,true);document.addEventListener("chan
 
 /* ================= notifications: push + "text the tech" prompt ================= */
 const IS_STANDALONE=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+/* ================= install guide: put the app on the home screen ================= */
+const INST_KEY="honestech-inst-later";let INST_PROMPT=null,INST_TAB="";
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();INST_PROMPT=e;try{if(APP.view==="jobs"){const y=window.scrollY;render();window.scrollTo(0,y);}}catch(x){}});
+window.addEventListener("appinstalled",()=>{INST_PROMPT=null;try{localStorage.setItem(INST_KEY,String(Date.now()+3650*864e5));}catch(e){}closeInstall();toast("Installed. Open Honestech from your home screen.");});
+function instPlatform(){const ua=navigator.userAgent;
+  if(IS_IOS)return /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua)?"ios-other":"ios";
+  if(/Android/i.test(ua))return /SamsungBrowser/i.test(ua)?"samsung":"android";
+  return "desktop";}
+const IS_PHONE=IS_IOS||/Android/i.test(navigator.userAgent);
+function showInstallBanner(){
+  if(IS_STANDALONE||!IS_PHONE||APP.sample)return false;
+  try{if(+localStorage.getItem(INST_KEY)>Date.now())return false;}catch(e){}
+  return true;}
+function installBannerHTML(){
+  if(!showInstallBanner())return "";
+  return `<div class="inst-ban"><div class="ib-ic">H</div><div class="ib-t"><strong>Put Honestech on your home screen</strong><br>It opens full screen like a real app${isTech()?" and can alert you when you get a job":", works with no signal, and can send job alerts"}.</div>
+    <div class="ib-b">${INST_PROMPT?`<button class="mini go" type="button" data-act="instnow">Install</button>`:`<button class="mini go" type="button" data-act="instshow">Show me how</button>`}<button class="mini" type="button" data-act="instlater">Not now</button></div></div>`;}
+const ICO={
+  share:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1"/></svg>`,
+  plus:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>`,
+  dots:`<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>`,
+  lines:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
+  more:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="16" cy="12" r="1" fill="currentColor"/></svg>`,
+  down:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>`,
+  tap:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><rect x="8.5" y="6" width="3" height="3" rx=".8" fill="currentColor"/><rect x="12.5" y="6" width="3" height="3" rx=".8"/><path d="M11 18h2"/></svg>`,
+  check:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>`};
+const ikey=(ic,t)=>`<span class="inst-key">${ic?ICO[ic]:""}${t}</span>`;
+const INST_STEPS={
+  ios:[["share",`Tap the ${ikey("share","Share")} button.`,"It's at the bottom of Safari (on iPad, at the top). If you don't see it, tap the address bar once or scroll up a little."],
+       ["plus",`Scroll down and tap ${ikey("plus","Add to Home Screen")}.`,"Don't see it? Scroll to the bottom of the list and tap Edit Actions to add it."],
+       ["check",`Tap ${ikey("","Add")} in the top corner.`,"Leave the name as Honestech."],
+       ["tap",`Open <strong>Honestech</strong> from your home screen.`,"Always use the icon from now on. Sign in once there; it remembers you."]],
+  "ios-other":[["share",`Tap the ${ikey("share","Share")} button next to the address bar.`,"In Chrome it's at the top right; in other browsers look for the same square-and-arrow icon, sometimes inside the ⋯ menu."],
+       ["plus",`Tap ${ikey("plus","Add to Home Screen")}.`,"If it isn't there, open this same link in Safari and use Safari's Share button instead."],
+       ["check",`Tap ${ikey("","Add")}.`,""],
+       ["tap",`Open <strong>Honestech</strong> from your home screen.`,"Sign in once there; it remembers you."]],
+  android:[["dots",`Tap the ${ikey("dots","menu")} button in Chrome.`,"Top right corner of the screen."],
+       ["down",`Tap ${ikey("down","Install app")} or ${ikey("plus","Add to Home screen")}.`,"The name depends on your phone. Either one works."],
+       ["check",`Tap ${ikey("","Install")} to confirm.`,""],
+       ["tap",`Open <strong>Honestech</strong> from your home screen or app drawer.`,"Sign in once there; it remembers you."]],
+  samsung:[["lines",`Tap the ${ikey("lines","menu")} button.`,"Bottom right in Samsung Internet."],
+       ["plus",`Tap ${ikey("plus","Add page to")}, then ${ikey("","Home screen")}.`,""],
+       ["check",`Tap ${ikey("","Add")}.`,""],
+       ["tap",`Open <strong>Honestech</strong> from your home screen.`,"Sign in once there; it remembers you."]],
+  desktop:[["down",`In Chrome or Edge, click the ${ikey("down","Install")} icon at the right end of the address bar.`,"Or open the ⋮ menu and choose Cast, save and share → Install page as app."],
+       ["check",`Click ${ikey("","Install")}.`,""],
+       ["tap",`Open Honestech from your dock, Start menu or desktop.`,"On a Mac with Safari: File → Add to Dock."]]};
+const INST_TABS=[["ios","iPhone (Safari)"],["ios-other","iPhone (Chrome)"],["android","Android"],["samsung","Samsung Internet"],["desktop","Computer"]];
+function installGuideHTML(){
+  const here=instPlatform(),tab=INST_TAB||here,steps=INST_STEPS[tab]||INST_STEPS.ios;
+  return `<div class="inst-sh" role="dialog" aria-modal="true" aria-label="Add the app to your home screen">
+    <h3>Add Honestech to your home screen</h3>
+    <p class="why">Takes 20 seconds. Nothing to download from the App Store. You get a real app icon, full screen, it works with no signal, and it can send job alerts.</p>
+    ${INST_PROMPT&&tab===here?`<button class="btn primary" type="button" data-act="instnow" style="width:100%;margin-bottom:12px">Install now</button><p class="why" style="margin-top:-4px">Or do it by hand:</p>`:""}
+    <div class="inst-tabs">${INST_TABS.map(([k,l])=>`<button type="button" data-insttab="${k}" class="${k===tab?"on":""}">${l}${k===here?" ✓":""}</button>`).join("")}</div>
+    <ol class="inst-steps">${steps.map(([ic,t,sm],i)=>`<li><span class="n">${i+1}</span><span class="tx">${t}${sm?`<small>${sm}</small>`:""}</span><span class="pic">${ICO[ic]}</span></li>`).join("")}</ol>
+    ${tab==="ios"||tab==="ios-other"?`<p class="inst-done"><strong>Job alerts on iPhone</strong> only work from the home screen icon. After you open it from there, go to Settings → Notifications and turn them on.</p>`:""}
+    <p class="inst-done">✓ marks the phone you're using now. Helping someone else? Pick their phone above.</p>
+    <button class="btn" type="button" data-act="instclose" style="width:100%;margin-top:8px">Done</button></div>`;}
+function openInstall(tab){INST_TAB=tab||"";closeInstall();const ov=document.createElement("div");ov.className="inst-ov";ov.id="instOv";ov.innerHTML=installGuideHTML();
+  ov.addEventListener("click",e=>{if(e.target===ov)closeInstall();});document.body.appendChild(ov);}
+function closeInstall(){document.getElementById("instOv")?.remove();}
+function refreshInstall(){const ov=document.getElementById("instOv");if(ov){const sc=ov.firstElementChild?ov.firstElementChild.scrollTop:0;ov.innerHTML=installGuideHTML();if(ov.firstElementChild)ov.firstElementChild.scrollTop=sc;}}
+async function instNow(){if(!INST_PROMPT){openInstall();return;}const e=INST_PROMPT;INST_PROMPT=null;try{await e.prompt();const r=await e.userChoice;if(r&&r.outcome==="accepted")toast("Installing…");}catch(x){openInstall();}const y=window.scrollY;render();window.scrollTo(0,y);refreshInstall();}
+
 let PUSH={state:"",busy:false,msg:""};
 function pushState(){
   if(!("serviceWorker" in navigator)||!navigator.serviceWorker.controller&&!/github\.io$|honestechmobileapp\.com$/.test(location.hostname))return "unsupported";
@@ -3767,7 +3854,7 @@ function pushCardHTML(compact){
   const why=isTech()?"Get a notification on this phone when a job is assigned to you or changes.":"Get a notification when a technician finishes a job.";
   if(st==="unsupported")return compact?"":`<div class="form push-card"><p class="formh">Notifications</p><p class="help full" style="margin:0">This browser can't show notifications. Open the app from your phone's home screen to use them.</p></div>`;
   const body=st==="on"?`<p class="full" style="margin:0"><strong>✓ Notifications are on for this phone.</strong></p><div class="full acts"><button class="mini" type="button" data-act="pushTest">Send a test</button><button class="mini" type="button" data-act="pushOff">Turn off</button></div>`
-    :st==="needs-install"?`<p class="help full" style="margin:0">${why} On iPhone, add the app to your home screen first: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open Honestech from the home screen and come back here.</p>`
+    :st==="needs-install"?`<p class="help full" style="margin:0">${why} On iPhone, add the app to your home screen first: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open Honestech from the home screen and come back here.</p><button class="mini go" type="button" data-act="instshow">Show me how</button>`
     :st==="denied"?`<p class="help full" style="margin:0">Notifications are blocked for this app. Turn them on in your phone's <strong>Settings → Notifications</strong>, then come back here.</p>`
     :`<p class="help full" style="margin:0">${why}</p><div class="full acts"><button class="btn primary" type="button" data-act="pushOn" ${PUSH.busy?"disabled":""}>${PUSH.busy?"Turning on…":"Turn on notifications"}</button></div>`;
   if(compact&&st==="on")return "";
@@ -3930,6 +4017,11 @@ document.addEventListener("click",e=>{
   if(d.closeadd){OPEN_ADD=null;render();return;}
   if(d.act==="rmlogo"){delete APP.settings.logo;delete APP.settings.logoW;delete APP.settings.logoH;save();render();toast("Logo removed");return;}
   if(d.act==="bknow"){saveBackupFile();return;}
+  if(d.act==="instshow"){openInstall();return;}
+  if(d.act==="instnow"){instNow();return;}
+  if(d.act==="instclose"){closeInstall();return;}
+  if(d.act==="instlater"){try{localStorage.setItem(INST_KEY,String(Date.now()+7*864e5));}catch(e){}const y=window.scrollY;render();window.scrollTo(0,y);toast("OK. It's in Help any time: Put the app on your home screen.");return;}
+  if(d.insttab!==undefined){INST_TAB=d.insttab;refreshInstall();return;}
   if(d.snapask){SNAP_ASK=d.snapask;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.snapno){SNAP_ASK=null;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.snapgo){const day=d.snapgo;SNAP_ASK=null;
@@ -4010,6 +4102,7 @@ document.addEventListener("click",e=>{
   if(d.routeplan!==undefined){planRoute(d.routeplan||TODAY,true);return;}
   if(d.act==="routeclose"){ROUTE=null;rerenderKeep();return;}
   if(d.helpk!==undefined){HELP_OPEN=HELP_OPEN===+d.helpk?null:+d.helpk;rerenderKeep();return;}
+  if(d.helpgo==="install"){openInstall();return;}
   if(d.helpgo!==undefined){const [v,el]=d.helpgo.split("|");if(!v)return;APP.view=v;HELP_Q="";render();window.scrollTo(0,0);
     if(el)setTimeout(()=>{const x=document.getElementById(el);if(x){x.scrollIntoView({behavior:"smooth",block:"start"});x.classList.add("flash-hl");setTimeout(()=>x.classList.remove("flash-hl"),1800);}},60);return;}
   if(d.grp){APP.col=APP.col||{};APP.col[d.grp]=!isCol(d.grp);save();rerenderKeep();return;}

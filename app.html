@@ -582,6 +582,44 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 body.gated nav.tabs{display:none}
 .seat-pick{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:6px 0 2px}.seat-pick select{width:auto;min-width:64px}
 .tech-step{display:flex;align-items:center;gap:12px}.tech-step span{flex:1}.tech-step strong{min-width:28px;text-align:center;font-size:20px}.tech-step .mini{min-width:44px;font-size:20px;line-height:1}
+
+/* landing (signed-out) */
+body.gated main{max-width:1060px}
+.lp{display:flex;flex-direction:column;gap:56px;padding-top:8px}
+.lp-hero{display:grid;gap:28px;align-items:center}
+@media(min-width:860px){.lp-hero{grid-template-columns:1.1fr .9fr;gap:48px}}
+.lp-h1{font-family:var(--f-display);font-weight:700;font-size:clamp(40px,9vw,68px);line-height:.95;letter-spacing:-.01em;margin:0 0 16px;max-width:14ch}
+.lp-lede{font-size:18px;line-height:1.5;color:var(--muted);margin:0 0 22px;max-width:46ch}
+.lp-cta{display:flex;flex-wrap:wrap;gap:10px}.lp-cta .btn:not(.primary){color:var(--ink)}.lp-cta .btn{flex:0 0 auto;text-decoration:none;text-align:center;padding:14px 20px;font-size:16px}
+.lp-note{color:var(--muted);font-size:14px;margin:12px 0 0}
+.lp-demo{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px;box-shadow:0 18px 40px -24px rgba(21,32,43,.45)}
+.lp-demo-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:2px 2px 10px;border-bottom:1px solid var(--line)}
+.lp-demo-h strong{font-family:var(--f-display);font-size:22px}.lp-demo-h span{color:var(--muted);font-size:13px}
+.lp-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line)}
+.lp-row b{display:block;font-weight:600}.lp-row small{color:var(--muted)}
+.lp-chips{display:flex;gap:4px;flex:0 0 auto}
+.lp-chip{border:1px solid var(--line);background:var(--bg);color:var(--muted);border-radius:999px;padding:7px 10px;font:500 13px var(--f-body);min-height:36px;cursor:pointer}
+.lp-chip.good.on{background:var(--good-soft);border-color:var(--good);color:var(--good)}
+.lp-chip.mon.on{background:var(--mon-soft);border-color:var(--mon);color:var(--mon)}
+.lp-chip.bad.on{background:var(--bad-soft);border-color:var(--bad);color:var(--bad)}
+.lp-sum{display:flex;gap:14px;flex-wrap:wrap;padding:12px 2px 4px;font-weight:600;font-size:15px}
+.lp-sum-good{color:var(--good)}.lp-sum-mon{color:var(--mon)}.lp-sum-bad{color:var(--bad)}
+.lp-demo-f{color:var(--muted);font-size:13px;padding:2px}
+.lp-h2{font-family:var(--f-display);font-weight:700;font-size:clamp(30px,6vw,40px);line-height:1;margin:0 0 18px}
+.lp-cols{display:grid;gap:22px}@media(min-width:760px){.lp-cols{grid-template-columns:repeat(3,1fr);gap:28px}}
+.lp-cols h4{margin:0 0 8px;font-size:17px;padding-bottom:8px;border-bottom:3px solid var(--accent)}
+.lp-cols ul{margin:0;padding-left:18px;line-height:1.55}.lp-cols li{margin:4px 0}
+.lp-plans{display:grid;gap:14px}@media(min-width:640px){.lp-plans{grid-template-columns:1fr 1fr}}
+.lp-plan{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px}
+.lp-plan h4{margin:0;font-size:18px}.lp-plan p{margin:6px 0 0;color:var(--muted)}
+.lp-plan .lp-amt{font-family:var(--f-display);font-weight:700;font-size:40px;color:var(--ink);margin:6px 0 0;line-height:1}
+.lp-join{max-width:520px;width:100%;margin:0 auto;scroll-margin-top:90px}
+.lp-faq details{border-bottom:1px solid var(--line);padding:12px 0}.lp-faq summary{font-weight:600;cursor:pointer;font-size:16px}
+.lp-faq details p{margin:8px 0 0;color:var(--muted);max-width:60ch}
+.lp-foot{border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:14px}
+.lp-foot p{margin:0 0 10px}.lp-foot a{color:var(--accent)}.lp-foot p:last-child{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+@media(max-width:420px){.lp-chip{padding:7px 8px;font-size:12px}}
+.cust-info{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:10px 0 0;font-size:15px}.cust-info dt{color:var(--muted)}.cust-info dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -924,14 +962,71 @@ function renderPlan(){
   <p class="help">Cancel anytime from Manage subscription. Payments are handled securely by Stripe; the app never sees your card.
     <a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p>`;
 }
+const DEMO_ROWS=[["Front brake pads","3 mm left","bad"],["Battery","412 CCA, tested","good"],["Tires","5/32 tread, even wear","mon"],["Coolant","Clean, full","good"]];
+let DEMO=DEMO_ROWS.map(r=>r[2]);
+function demoSummary(){const n=k=>DEMO.filter(x=>x===k).length;
+  return `<span class="lp-sum-good">${n("good")} good</span><span class="lp-sum-mon">${n("mon")} watch</span><span class="lp-sum-bad">${n("bad")} needs repair</span>`;}
+function demoHTML(){
+  return `<div class="lp-demo" aria-label="Try an inspection">
+    <div class="lp-demo-h"><strong>2016 Honda Accord</strong><span>Pre-purchase inspection</span></div>
+    ${DEMO_ROWS.map((r,i)=>`<div class="lp-row"><div><b>${r[0]}</b><small>${r[1]}</small></div>
+      <div class="lp-chips" role="group" aria-label="${r[0]}">${[["good","Good"],["mon","Watch"],["bad","Repair"]].map(([k,l])=>`<button type="button" class="lp-chip ${k}${DEMO[i]===k?" on":""}" data-demo="${i}|${k}" aria-pressed="${DEMO[i]===k}">${l}</button>`).join("")}</div></div>`).join("")}
+    <div class="lp-sum" id="lpSum">${demoSummary()}</div>
+    <div class="lp-demo-f">Tap to change a result. The PDF report updates as you go.</div></div>`;
+}
 function renderJoin(){
-  return `<div class="stage-head"><div class="eyebrow">Welcome</div><h2>Create your account</h2>
-    <p class="when">Start your ${PRICES.trialDays}-day free trial. No card needed. Your jobs are backed up to your account and you can use the app on your phone, iPad or computer.</p></div>
-  ${cloudSettingsHTML()}
-  <div class="dash-card"><div class="dc-h"><h3>What you get</h3></div>
-    <ul style="margin:0;padding-left:20px;line-height:1.6"><li>Pre-purchase inspections with PDF reports</li><li>Service jobs, estimates & invoices with your logo</li><li>Schedule, customers, reminders & requests inbox</li><li>Expenses, mileage & job times</li><li>Dispatch for your technicians (Team plan)</li></ul>
-    <p class="help" style="margin:10px 0 0">After the trial: Solo ${PRICES.soloM} or Team ${PRICES.team}. Cancel anytime.</p></div>
-  <p class="help"><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> · <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a></p><div class="acts"><button class="mini" type="button" data-nav="help">How the app works</button></div>`;
+  return `<div class="lp">
+  <section class="lp-hero">
+    <div class="lp-hero-t">
+      <h2 class="lp-h1">Run your mobile repair business from your phone</h2>
+      <p class="lp-lede">Book the job, inspect the car, send the estimate and get paid, right from the driveway. Built for mechanics who work out of a van, not a shop.</p>
+      <div class="lp-cta"><a class="btn primary" href="#lpJoin" data-lpjump="1">Start ${PRICES.trialDays}-day free trial</a><a class="btn" href="#lpJoin" data-lpjump="1">Sign in</a></div>
+      <p class="lp-note">No card needed to try it. Works on iPhone, Android, iPad and computer.</p>
+    </div>
+    ${demoHTML()}
+  </section>
+
+  <section class="lp-day">
+    <h3 class="lp-h2">Everything a mobile job needs</h3>
+    <div class="lp-cols">
+      <div><h4>Before you roll</h4><ul>
+        <li>Schedule and calendar with reminders</li><li>Requests inbox for quotes that come in by email</li>
+        <li>Travel charge worked out from your home base</li><li>"On my way" text with your ETA</li></ul></div>
+      <div><h4>At the car</h4><ul>
+        <li>Pre-purchase inspections with photos and notes</li><li>VIN decoder fills in year, make and model</li>
+        <li>Service menu with your prices, one tap to add</li><li>Job timer to learn how long work really takes</li></ul></div>
+      <div><h4>After the job</h4><ul>
+        <li>Estimates and invoices with your logo</li><li>Customer signature on the spot</li>
+        <li>Parts, tools and mileage tracked for taxes</li><li>Review requests and follow-up reminders</li></ul></div>
+    </div>
+  </section>
+
+  <section class="lp-price">
+    <h3 class="lp-h2">Simple pricing</h3>
+    <div class="lp-plans">
+      <div class="lp-plan"><h4>Solo</h4><p class="lp-amt">${PRICES.soloM}</p><p>or ${PRICES.soloY} (2 months free)</p><p>For one mechanic. Every feature included.</p></div>
+      <div class="lp-plan"><h4>Team</h4><p class="lp-amt">${PRICES.team}</p><p>or ${PRICES.teamY} (2 months free)</p><p>You plus 2 technicians, with dispatch and job assignments. Extra techs ${PRICES.seat}.</p></div>
+    </div>
+    <p class="lp-note">Every account starts with ${PRICES.trialDays} days free. Cancel anytime from the app.</p>
+  </section>
+
+  <section class="lp-join" id="lpJoin">
+    ${cloudSettingsHTML()}
+  </section>
+
+  <section class="lp-faq">
+    <h3 class="lp-h2">Questions</h3>
+    <details><summary>Do I need a credit card for the trial?</summary><p>No. Make an account and use everything for ${PRICES.trialDays} days. Pick a plan when you're ready.</p></details>
+    <details><summary>Does it work without signal?</summary><p>Yes. Jobs save on your phone and sync to your account when you're back online.</p></details>
+    <details><summary>Do I need to install anything?</summary><p>No. Open honestechmobileapp.com in your browser. On iPhone, tap Share, then Add to Home Screen to use it like an app.</p></details>
+    <details><summary>What happens to my data if I cancel?</summary><p>Your jobs, customers and invoices stay in your account. Pick a plan again any time to pick up where you left off.</p></details>
+    <details><summary>Can my technicians use it?</summary><p>Yes, on the Team plan. Assign jobs, send job sheets and track each tech's work.</p></details>
+  </section>
+
+  <footer class="lp-foot">
+    <p>Made by a working mobile mechanic in New Jersey. Questions? <a href="mailto:info@honestechservice.com">info@honestechservice.com</a></p>
+    <p><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a> <button class="mini" type="button" data-nav="help">How the app works</button></p>
+  </footer></div>`;
 }
 function localRecords(){
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
@@ -1591,7 +1686,8 @@ function syncCustomers(){
     let c=j.custId&&byId[j.custId];
     if(!c){c=findCustomer(i);if(!c){c={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:""};cs.push(c);}byId[c.id]=c;j.custId=c.id;}
     if(!c.last||(i.date||"")>=c.last){
-      c.name=i.customer.trim();if(i.phone)c.phone=i.phone;if(i.location)c.location=i.location;if(i.dist)c.dist=i.dist;c.last=i.date||c.last;
+      const lk=c.lock||{},put=(f,v)=>{if(v&&(!lk[f]||!c[f]))c[f]=v;};
+      put("name",i.customer.trim());put("phone",i.phone);put("location",i.location);put("dist",i.dist);c.last=i.date||c.last;
     }
     if(i.make||i.model||i.vin){
       const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||""},k=vehKey(v);
@@ -1624,7 +1720,7 @@ function fillFromCustomer(obj,c,v,withVehicle=true){
   Object.assign(obj,{customer:c.name,phone:c.phone||"",location:c.location||"",dist:c.dist||""});
   if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color}:{});}
 }
-let CUST_OPEN=null,CUST_DEL=null;
+let CUST_OPEN=null,CUST_DEL=null,CUST_EDIT=null;
 function renderCustomers(){
   const q=APP.custQ||"";
   return `${sampleBanner()}
@@ -1649,10 +1745,25 @@ function custListHTML(q){
       ${open?custDetailHTML(c,js):""}
     </div>`;}).join("");
 }
+function custEditHTML(c){
+  const f=(k,label,extra="",full=false)=>`<label${full?' class="full"':""}>${label}<input id="ce-${k}" value="${esc(c[k]||"")}" ${extra}></label>`;
+  return `<div class="form cust-edit" style="margin:10px 0 0">
+    <p class="formh">Edit customer</p>
+    ${f("name","Name",'autocomplete="off"')}${f("phone","Phone",'inputmode="tel" autocomplete="off"')}
+    ${f("email","Email",'inputmode="email" autocomplete="off"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
+    ${f("location","Address",'autocomplete="off"',true)}
+    <label class="full">Notes<textarea id="ce-notes" rows="3" placeholder="Gate code, preferred times, fleet account">${esc(c.notes||"")}</textarea></label>
+    <p class="help full" style="margin:0">Changes also update this customer's upcoming jobs. Finished invoices stay as they were.</p>
+    <div class="formacts full"><button class="btn primary" type="button" data-csave="${c.id}">Save changes</button><button class="btn" type="button" data-ccancel="1">Cancel</button></div>
+    <div class="formacts full"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>
+  </div>`;
+}
 function custDetailHTML(c,js){
-  const f=(k,label,extra="")=>`<label>${label}<input id="cf-${k}" data-cf="${k}" data-cid="${c.id}" value="${esc(c[k]||"")}" ${extra}></label>`;
+  if(CUST_EDIT===c.id)return `<div class="cust-body">${custEditHTML(c)}</div>`;
+  const info=[c.phone&&["Phone",c.phone],c.email&&["Email",c.email],c.location&&["Address",c.location],c.dist&&["Distance",c.dist+" mi"],c.notes&&["Notes",c.notes]].filter(Boolean);
   return `<div class="cust-body">
-    <div class="acts">${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.location?dirLink(c.location):""}</div>
+    <div class="acts"><button class="mini go" type="button" data-cedit="${c.id}">Edit info</button>${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.email?`<a class="mini" href="mailto:${esc(c.email)}">Email</a>`:""}${c.location?dirLink(c.location):""}</div>
+    ${info.length?`<dl class="cust-info">${info.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:`<p class="empty">No phone, email or address yet. Tap Edit info to add them.</p>`}
     <div class="group-h" style="margin-top:10px">Vehicles</div>
     ${c.vehicles.length?c.vehicles.map(v=>`<div class="veh-row"><div><strong>${esc(vehName(v)||"Vehicle")}</strong><span class="meta">${[v.vin&&"VIN "+v.vin,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")}</span></div>
       <div class="acts"><button class="mini go" type="button" data-cbook="${c.id}|${v.key}|service">Book service</button><button class="mini" type="button" data-cbook="${c.id}|${v.key}|ppi">Book PPI</button></div></div>`).join("")
@@ -1661,14 +1772,6 @@ function custDetailHTML(c,js){
     ${js.length?`<div class="group-h" style="margin-top:12px">Past jobs</div>${js.map(j=>`<button type="button" class="hist-row" data-open="${j.id}">
       <span>${esc(fmtDate(j.info.date,{month:"short",day:"numeric",year:"numeric"}))}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span>
       <span class="hist-what">${esc(isSvc(j)?(j.info.work||vehOf(j.info)):vehOf(j.info))}</span><span class="hist-amt">${j.status==="done"?money(jobTotal(j)):esc(j.status==="active"?"In progress":"Booked")}</span></button>`).join("")}`:""}
-    <div class="form" style="margin:12px 0 0">
-      <p class="formh">Details</p>
-      ${f("name","Name")}${f("phone","Phone",'inputmode="tel"')}
-      ${f("email","Email",'inputmode="email"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
-      <label class="full">Address<input id="cf-location" data-cf="location" data-cid="${c.id}" value="${esc(c.location||"")}"></label>
-      <label class="full">Notes<textarea id="cf-notes" data-cf="notes" data-cid="${c.id}" rows="2" placeholder="Gate code, preferred times, fleet account">${esc(c.notes||"")}</textarea></label>
-      <div class="formacts"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>
-    </div>
   </div>`;
 }
 
@@ -3276,6 +3379,12 @@ function saveDraft(){
 
 /* ================= events ================= */
 document.addEventListener("click",e=>{
+  const dm=e.target.closest&&e.target.closest("[data-demo]");
+  if(dm){const [i,k]=dm.dataset.demo.split("|");DEMO[+i]=k;const row=dm.parentElement;
+    row.querySelectorAll(".lp-chip").forEach(b=>{const on=b===dm;b.classList.toggle("on",on);b.setAttribute("aria-pressed",on);});
+    const sm=document.getElementById("lpSum");if(sm)sm.innerHTML=demoSummary();return;}
+  const lj=e.target.closest&&e.target.closest("[data-lpjump]");
+  if(lj){e.preventDefault();const f=document.getElementById("lpJoin");if(f){f.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});setTimeout(()=>document.getElementById("cEmail")?.focus({preventScroll:true}),400);}return;}
   const g=e.target.closest&&e.target.closest("g[data-bar]");
   if(g){document.querySelectorAll("g.bar").forEach(x=>x.classList.toggle("cur",x===g));const c=document.getElementById("barCap");if(c)c.textContent=g.dataset.cap;return;}
   const rv=e.target.closest&&e.target.closest("a[data-reviewsent]");
@@ -3500,11 +3609,22 @@ document.addEventListener("click",e=>{
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}
   if(d.gocust){APP.view="customers";CUST_OPEN=d.gocust;render();window.scrollTo(0,0);return;}
   if(d.sugpick){if(SUG_DONE===d.sugpick&&Date.now()-SUG_AT<800)return;sugPick(d.sugpick);return;}
-  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.cedit){CUST_EDIT=d.cedit;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");setTimeout(()=>document.getElementById("ce-name")?.focus(),50);return;}
+  if(d.ccancel){CUST_EDIT=null;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.csave){const c=APP.customers.find(x=>x.id===d.csave);if(!c)return;
+    const val=k=>(document.getElementById("ce-"+k)?.value||"").trim();
+    const nv={name:val("name"),phone:val("phone"),email:val("email"),dist:val("dist"),location:val("location"),notes:document.getElementById("ce-notes")?.value||""};
+    if(!nv.name){toast("Add a name for this customer");document.getElementById("ce-name")?.focus();return;}
+    c.lock=c.lock||{};
+    for(const k of ["name","phone","email","dist","location"])if(nv[k]!==(c[k]||""))c.lock[k]=true;
+    const jobField={name:"customer",phone:"phone",location:"location",dist:"dist"};
+    for(const j of APP.jobs)if(j.custId===c.id&&j.status!=="done")for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
+    Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer saved");return;}
+  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
   if(d.cbook){const [cid,vk,type]=d.cbook.split("|");const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
     APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
   if(d.cdel){if(CUST_DEL!==d.cdel){CUST_DEL=d.cdel;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
-    const c=APP.customers.find(x=>x.id===d.cdel);c.hidden=true;CUST_DEL=null;CUST_OPEN=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer removed");return;}
+    const c=APP.customers.find(x=>x.id===d.cdel);c.hidden=true;CUST_DEL=null;CUST_OPEN=null;CUST_EDIT=null;save();const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");toast("Customer removed");return;}
   if(d.pick){document.getElementById(d.pick)?.click();return;}
   if(d.act==="mshare"){shareMedia();return;}
   if(d.mview){openViewer(d.mview);return;}

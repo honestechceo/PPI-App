@@ -949,13 +949,13 @@ async function loadTechs(){if(TECHS.loading)return;TECHS.loading=true;TECHS.err=
   TECHS.loading=false;if(APP.view==="plan")rerenderKeep();}
 function techsCardHTML(){
   if(TECHS.extra===null){setTimeout(loadTechs,0);return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3></div><p class="help" style="margin:0">Loading…</p></div>`;}
-  if(TECHS.extra<0)return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3></div><p class="help vin-warn" style="margin:0">${esc(TECHS.err)}</p><div class="acts"><button class="mini" type="button" data-act="techsreload">Try again</button></div></div>`;
+  if(TECHS.extra<0)return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3></div><p class="help vin-warn" style="margin:0">${esc(TECHS.err)}</p><div class="acts"><button class="mini" type="button" data-act="seatsreload">Try again</button></div></div>`;
   const yr=TECHS.interval==="year",each=yr?100:10,diff=TECHS.want-TECHS.extra;
   return `<div class="dash-card"><div class="dc-h"><h3>Technicians</h3><span class="ts">${2+TECHS.extra} technicians</span></div>
     <p class="help" style="margin:0 0 8px">Your plan includes you + 2 technicians. Extra technicians are $${each}/${yr?"yr":"mo"} each.</p>
-    <div class="tech-step"><span>Extra technicians</span><button class="mini" type="button" data-act="techminus" ${TECHS.want<=0||TECHS.busy?"disabled":""} aria-label="One less">−</button><strong>${TECHS.want}</strong><button class="mini" type="button" data-act="techplus" ${TECHS.want>=20||TECHS.busy?"disabled":""} aria-label="One more">+</button></div>
+    <div class="tech-step"><span>Extra technicians</span><button class="mini" type="button" data-act="seatminus" ${TECHS.want<=0||TECHS.busy?"disabled":""} aria-label="One less">−</button><strong>${TECHS.want}</strong><button class="mini" type="button" data-act="seatplus" ${TECHS.want>=20||TECHS.busy?"disabled":""} aria-label="One more">+</button></div>
     ${diff?`<p class="help" style="margin:8px 0 0">${diff>0?`Adds $${diff*each}/${yr?"yr":"mo"}. ${PLAN&&PLAN.status==="trialing"?"Billing starts when your free trial ends.":"You're charged today only for the rest of this billing period."}`:`Lowers your bill by $${-diff*each}/${yr?"yr":"mo"}. Unused time is credited to your next bill.`}</p>
-    <div class="acts"><button class="btn primary" type="button" data-act="techsave" ${TECHS.busy?"disabled":""}>${TECHS.busy?"Updating…":"Update technicians"}</button><button class="btn" type="button" data-act="techcancel" ${TECHS.busy?"disabled":""}>Cancel</button></div>`:""}</div>`;
+    <div class="acts"><button class="btn primary" type="button" data-act="seatsave" ${TECHS.busy?"disabled":""}>${TECHS.busy?"Updating…":"Update technicians"}</button><button class="btn" type="button" data-act="seatcancel" ${TECHS.busy?"disabled":""}>Cancel</button></div>`:""}</div>`;
 }
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
@@ -1441,6 +1441,17 @@ function dspStatus(j){if(j.status==="done")return "done";if(!techOf(j))return "u
 const DSP_LBL={unassigned:"Unassigned",assigned:"Assigned",enroute:"On the way",onsite:"On site",done:"Done"};
 let TECH_NEW=null,TECH_DEL=null;
 let TEAM={at:0,list:[],busy:"",msg:""};
+function inviteTech(t){if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
+    supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
+      const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
+      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link}`;
+      TEAM.busy="";TEAM.at=0;loadTeam();
+      if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
+      else{copyText(msg);toast("Invite link copied. Paste it in a text to "+t.name+".");}
+      rerenderKeep();})
+    .catch(e=>{TEAM.busy="";const m=(e&&e.msg)||"";const lim=/TECH_LIMIT:(\d+)/.exec(m);
+      TEAM.msg=lim?(+lim[1]?`Your plan includes ${lim[1]} technician login${+lim[1]===1?"":"s"}, and they're all in use. Add a technician seat to invite more.`:"Technician logins come with the Team plan. Switch to Team to invite technicians."):(m||"Couldn't create the invite. Check your connection.");rerenderKeep();});}
+
 async function loadTeam(quiet){if(!AUTH||isTech())return;try{const r=await supa("/rest/v1/rpc/team_status",{method:"POST",body:{}});TEAM.list=Array.isArray(r)?r:[];TEAM.at=Date.now();
   let ch=false;(APP.settings.techs||[]).forEach(t=>{const inv=TEAM.list.find(x=>x.tech_id===t.id&&x.active);const u=inv?inv.user_id:"";if((t.userId||"")!==u){t.userId=u;ch=true;}});
   if(ch){stampTechUsers();try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}scheduleSync();}
@@ -1463,7 +1474,8 @@ function teamSettingsHTML(){
       <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div>${techAccessHTML(t)}</div>`).join("")}</div>`:""}
     ${TEAM.msg?`<div class="full vin-warn">${esc(TEAM.msg)}${/limit|seat/i.test(TEAM.msg)?` <button class="mini" type="button" data-nav="plan">Add a technician seat</button>`:""}</div>`:""}
     ${TECH_NEW?`<div class="full tm-new"><input id="tmName" data-technew="name" value="${esc(TECH_NEW.name)}" placeholder="Technician name"><input data-technew="phone" value="${esc(TECH_NEW.phone)}" inputmode="tel" placeholder="Phone (for texting job sheets)">
-      <div class="acts"><button class="mini go" type="button" data-act="techsave">Add technician</button><button class="mini" type="button" data-act="techcancel">Cancel</button></div></div>`
+      <div class="acts">${AUTH?`<button class="mini go" type="button" data-act="techsave" data-andinvite="1">Add and send invite</button><button class="mini" type="button" data-act="techsave">Add without invite</button>`:`<button class="mini go" type="button" data-act="techsave">Add technician</button>`}<button class="mini" type="button" data-act="techcancel">Cancel</button></div>
+      ${AUTH?`<p class="help" style="margin:0">The invite texts them a link to set up their own login. You can also invite later from their row.</p>`:""}</div>`
       :`<div class="full"><button class="mini" type="button" data-act="techadd">＋ Add a technician</button></div>`}
   </div>`;
 }
@@ -3848,10 +3860,10 @@ document.addEventListener("click",e=>{
     openBilling(d.act==="portal"?{action:"portal"}:{action:"checkout",plan:d.plan,interval:d.int,seats:d.plan==="team"?TEAM_SEATS:0})
       .catch(e=>{BUY_BUSY="";rerenderKeep();toast(e&&e.code==="offline"?"You're offline. Try again when you have signal.":(e&&e.msg)||"Couldn't open checkout");});
     setTimeout(()=>{if(BUY_BUSY){BUY_BUSY="";if(APP.view==="plan")rerenderKeep();}},15000);return;}
-  if(d.act==="techplus"||d.act==="techminus"){TECHS.want=Math.max(0,Math.min(20,TECHS.want+(d.act==="techplus"?1:-1)));rerenderKeep();return;}
-  if(d.act==="techcancel"){TECHS.want=TECHS.extra;rerenderKeep();return;}
-  if(d.act==="techsreload"){TECHS.extra=null;rerenderKeep();return;}
-  if(d.act==="techsave"){TECHS.busy=true;rerenderKeep();
+  if(d.act==="seatplus"||d.act==="seatminus"){TECHS.want=Math.max(0,Math.min(20,TECHS.want+(d.act==="seatplus"?1:-1)));rerenderKeep();return;}
+  if(d.act==="seatcancel"){TECHS.want=TECHS.extra;rerenderKeep();return;}
+  if(d.act==="seatsreload"){TECHS.extra=null;rerenderKeep();return;}
+  if(d.act==="seatsave"){TECHS.busy=true;rerenderKeep();
     supa("/functions/v1/billing",{method:"POST",body:{action:"seats",seats:TECHS.want}})
       .then(r=>{TECHS.extra=TECHS.want=r.extra;TECHS.busy=false;rerenderKeep();toast("Technicians updated");setTimeout(()=>fetchPlan(),4000);})
       .catch(e=>{TECHS.busy=false;rerenderKeep();toast(e&&e.code==="offline"?"You're offline. Try again when you have signal.":(e&&e.msg)||"Couldn't update technicians");});return;}
@@ -3882,16 +3894,7 @@ document.addEventListener("click",e=>{
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
   if(d.act==="inviteDrop"){INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}render();return;}
-  if(d.techinv){const t=(APP.settings.techs||[]).find(x=>x.id===d.techinv);if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
-    supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
-      const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
-      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link}`;
-      TEAM.busy="";TEAM.at=0;loadTeam();
-      if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
-      else{copyText(msg);toast("Invite link copied. Paste it in a text to "+t.name+".");}
-      rerenderKeep();})
-    .catch(e=>{TEAM.busy="";const m=(e&&e.msg)||"";const lim=/TECH_LIMIT:(\d+)/.exec(m);
-      TEAM.msg=lim?(+lim[1]?`Your plan includes ${lim[1]} technician login${+lim[1]===1?"":"s"}, and they're all in use. Add a technician seat to invite more.`:"Technician logins come with the Team plan. Switch to Team to invite technicians."):(m||"Couldn't create the invite. Check your connection.");rerenderKeep();});return;}
+  if(d.techinv){inviteTech((APP.settings.techs||[]).find(x=>x.id===d.techinv));return;}
   if(d.techrm){const t=(APP.settings.techs||[]).find(x=>x.id===d.techrm);if(!t)return;const inv=TEAM.list.find(x=>x.tech_id===t.id);
     if(inv&&inv.active&&TEAM.rm!==t.id){TEAM.rm=t.id;rerenderKeep();setTimeout(()=>{if(TEAM.rm===t.id){TEAM.rm=null;rerenderKeep();}},4000);return;}
     TEAM.rm=null;TEAM.busy=t.id;rerenderKeep();
@@ -3900,7 +3903,8 @@ document.addEventListener("click",e=>{
   if(d.act==="techadd"){TECH_NEW={name:"",phone:""};rerenderKeep();setTimeout(()=>document.getElementById("tmName")?.focus(),30);return;}
   if(d.act==="techcancel"){TECH_NEW=null;rerenderKeep();return;}
   if(d.act==="techsave"){const n=(TECH_NEW.name||"").trim();if(!n){toast("Enter the technician's name");return;}const ts=APP.settings.techs;
-    ts.push({id:uid(),name:n,phone:(TECH_NEW.phone||"").trim(),color:TECH_COLORS[(ts.length+1)%TECH_COLORS.length]});TECH_NEW=null;save();rerenderKeep();toast(ts.length===1?`Added ${n}. Dispatch is now on in Schedule.`:`Added ${n}`);return;}
+    const nt={id:uid(),name:n,phone:(TECH_NEW.phone||"").trim(),color:TECH_COLORS[(ts.length+1)%TECH_COLORS.length]};ts.push(nt);TECH_NEW=null;save();rerenderKeep();
+    if(d.andinvite&&AUTH){inviteTech(nt);return;}toast(ts.length===1?`Added ${n}. Dispatch is now on in Schedule.`:`Added ${n}`);return;}
   if(d.techdel){TECH_DEL=d.techdel;rerenderKeep();return;}
   if(d.techdelno){TECH_DEL=null;rerenderKeep();return;}
   if(d.techdelgo){const t=APP.settings.techs.find(x=>x.id===d.techdelgo);APP.settings.techs=APP.settings.techs.filter(x=>x.id!==d.techdelgo);APP.jobs.forEach(j=>{if(j.techId===d.techdelgo)j.techId="";});TECH_DEL=null;save();rerenderKeep();toast(`Removed ${t?t.name:"technician"}. Their past jobs keep the name.`);return;}

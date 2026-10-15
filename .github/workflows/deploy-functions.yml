@@ -21,3 +21,5 @@ jobs:
         run: supabase functions deploy billing --project-ref "$PROJECT" --no-verify-jwt --use-api
       - name: Deploy stripe-webhook
         run: supabase functions deploy stripe-webhook --project-ref "$PROJECT" --no-verify-jwt --use-api
+      - name: Deploy notify
+        run: supabase functions deploy notify --project-ref "$PROJECT" --no-verify-jwt --use-api

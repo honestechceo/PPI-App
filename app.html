@@ -655,6 +655,9 @@ body.tech-mode #navDash,body.tech-mode #navCust,body.tech-mode #navExp{display:n
 body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [data-jump="docSeg"],body.tech-mode [data-askdel],body.tech-mode [data-edit]{display:none}
 .tm-acc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1;margin-top:6px}.tm-ok{color:var(--good);font-weight:600;font-size:14px}
 .invite-ban{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:12px;margin:0 0 14px}.invite-ban.bad{background:var(--bad-soft);border-color:var(--bad)}
+.assign-bar{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:900;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:12px;box-shadow:0 12px 30px -12px rgba(0,0,0,.45);max-width:560px;margin:0 auto}
+.assign-bar span{flex:1 1 100%;font-weight:600}.assign-bar .btn{flex:1;text-align:center;text-decoration:none}
+.push-card .btn{flex:0 0 auto}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -1116,7 +1119,7 @@ async function syncNow(full){
       chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
     if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
     if(!PLAN||Date.now()-(PLAN.at||0)>10*60000||PLAN.shop_id!==AUTH.shop_id)await fetchPlan();
-    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();SMETA.lastAt=SYNC.last;saveMeta();
+    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);SMETA.lastAt=SYNC.last;saveMeta();
   }catch(e){SYNC.state=e.code==="offline"?"offline":e.code==="signedout"?"off":"error";SYNC.err=e.msg||"Sync failed";}
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
 }
@@ -2009,7 +2012,7 @@ function techFieldHTML(target,val){
 document.addEventListener("change",e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.techpick)return;const target=t.dataset.techpick;
   const tm=teamList().find(x=>x.id===t.value);
   if(t.value==="__other"){TECH_OTHER[target]=true;if(target==="draft")APP.draft.tech="";else if(S){S.info.tech="";S.techId="";}}
-  else{TECH_OTHER[target]=false;const name=tm?tm.name:"";if(target==="draft"){APP.draft.tech=name;APP.draft.techId=tm?tm.id:"";}else if(S){S.info.tech=name;S.techId=tm?tm.id:"";if(typeof stampTechUsers==="function")stampTechUsers();}}
+  else{TECH_OTHER[target]=false;const name=tm?tm.name:"";if(target==="draft"){APP.draft.tech=name;APP.draft.techId=tm?tm.id:"";}else if(S){const pv=S.techId||"";S.info.tech=name;S.techId=tm?tm.id:"";if(typeof stampTechUsers==="function")stampTechUsers();const js=S;setTimeout(()=>afterAssign(js,pv,false),0);}}
   save();const y=window.scrollY;render();window.scrollTo(0,y);if(t.value==="__other")setTimeout(()=>document.getElementById(target==="draft"?"d-tech":"f-tech")?.focus(),50);},true);
 function bizContact(){const s=APP.settings;return [s.phone,s.email,s.web].filter(Boolean).join(" · ");}
 function copyText(txt,boxId){
@@ -2228,7 +2231,7 @@ function renderJobs(){
   const done=APP.jobs.filter(j=>j.status==="done"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
-  return `${sampleBanner()}
+  return `${sampleBanner()}${isTech()?pushCardHTML(true):""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
   <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&j.status!=="done").length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
@@ -2430,7 +2433,7 @@ function themeSectionHTML(){
 
 /* ================= settings ================= */
 function renderSettings(){
-  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${cloudSettingsHTML()}`;
+  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${pushCardHTML()}${cloudSettingsHTML()}`;
   const s=APP.settings;
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
@@ -2493,6 +2496,7 @@ function renderSettings(){
     <p class="help full" style="margin:0">Calendar alerts come from your iPhone's Calendar app. Tap <strong>Add to Calendar</strong> on a booked job, or on a service reminder. This works in the home-screen app (Safari), not inside Claude.</p>
   </div>
   ${teamSettingsHTML()}
+  ${(APP.settings.techs||[]).length?pushCardHTML():""}
   ${menuSettingsHTML()}
   ${themeSectionHTML()}
   ${renderChecklistSettings()}
@@ -3553,12 +3557,14 @@ function saveDraft(){
   const d=APP.draft;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
   const {type,custId,techId:pickedTech,...info}=d;TECH_OTHER={};
+  const _ej=APP.editing?APP.jobs.find(x=>x.id===APP.editing):null;const _prevTech=_ej?_ej.techId||"":"";const _prevKey=_ej?[_ej.info.date,_ej.info.time,_ej.info.location].join("|"):"";
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
   else{const nj=newJob(info,type);if(custId)nj.custId=custId;if(type==="service"&&APP.settings.mpiAuto)mpiStart(nj);applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
-  {const sj=APP.editing?APP.jobs.find(x=>x.id===APP.editing):APP.jobs[APP.jobs.length-1];if(sj){if(pickedTech&&techOf({techId:pickedTech,info:sj.info})&&teamList().some(t=>t.id===pickedTech&&t.name===sj.info.tech))sj.techId=pickedTech;else{sj.techId="";linkTech(sj);}}}
+  {const sj=APP.editing?APP.jobs.find(x=>x.id===APP.editing):APP.jobs[APP.jobs.length-1];if(sj){if(pickedTech&&techOf({techId:pickedTech,info:sj.info})&&teamList().some(t=>t.id===pickedTech&&t.name===sj.info.tech))sj.techId=pickedTech;else{sj.techId="";linkTech(sj);}
+    setTimeout(()=>afterAssign(sj,_prevTech,!!_ej&&_prevKey!==[sj.info.date,sj.info.time,sj.info.location].join("|")),0);}}
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
   APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
@@ -3674,6 +3680,73 @@ function mpiInput(e){const t=e.target,d=t.dataset||{};
   if(d.mpinote){mpiRes(S,d.mpinote).note=t.value;clearTimeout(window.__mpn);window.__mpn=setTimeout(save,400);return;}
 }
 document.addEventListener("input",mpiInput,true);document.addEventListener("change",e=>{if(e.target&&e.target.dataset&&e.target.dataset.mpiset)mpiInput(e);},true);
+
+
+/* ================= notifications: push + "text the tech" prompt ================= */
+const IS_STANDALONE=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+let PUSH={state:"",busy:false,msg:""};
+function pushState(){
+  if(!("serviceWorker" in navigator)||!navigator.serviceWorker.controller&&!/github\.io$|honestechmobileapp\.com$/.test(location.hostname))return "unsupported";
+  if(!("PushManager" in window)||!("Notification" in window))return IS_IOS&&!IS_STANDALONE?"needs-install":"unsupported";
+  if(Notification.permission==="denied")return "denied";
+  return PUSH.state==="on"||(Notification.permission==="granted"&&localStorage.getItem("honestech-push")==="on")?"on":"off";
+}
+const b64u=s=>{const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from([...b].map(c=>c.charCodeAt(0)));};
+async function enablePush(){
+  if(!AUTH)throw {msg:"Sign in first"};
+  const perm=await Notification.requestPermission();if(perm!=="granted")throw {msg:perm==="denied"?"Notifications are blocked. Turn them on for this app in your phone's Settings → Notifications.":"Notifications weren't allowed."};
+  const reg=await navigator.serviceWorker.ready;
+  const k=await supa("/functions/v1/notify",{method:"POST",body:{action:"key"}});if(!k||!k.key)throw {msg:"Couldn't reach the notification server"};
+  let sub=await reg.pushManager.getSubscription();
+  if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(k.key)});
+  const j=sub.toJSON();
+  await supa("/rest/v1/push_subs?on_conflict=endpoint",{method:"POST",body:[{endpoint:j.endpoint,user_id:AUTH.user_id,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent.slice(0,120)}],headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  PUSH.state="on";try{localStorage.setItem("honestech-push","on");}catch(e){}
+}
+async function disablePush(){try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+  if(sub){await supa(`/rest/v1/push_subs?endpoint=eq.${encodeURIComponent(sub.endpoint)}`,{method:"DELETE"}).catch(()=>{});await sub.unsubscribe();}}catch(e){}
+  PUSH.state="off";try{localStorage.removeItem("honestech-push");}catch(e){}}
+function pushCardHTML(compact){
+  if(!AUTH)return "";const st=pushState();
+  const why=isTech()?"Get a notification on this phone when a job is assigned to you or changes.":"Get a notification when a technician finishes a job.";
+  if(st==="unsupported")return compact?"":`<div class="form push-card"><p class="formh">Notifications</p><p class="help full" style="margin:0">This browser can't show notifications. Open the app from your phone's home screen to use them.</p></div>`;
+  const body=st==="on"?`<p class="full" style="margin:0"><strong>✓ Notifications are on for this phone.</strong></p><div class="full acts"><button class="mini" type="button" data-act="pushTest">Send a test</button><button class="mini" type="button" data-act="pushOff">Turn off</button></div>`
+    :st==="needs-install"?`<p class="help full" style="margin:0">${why} On iPhone, add the app to your home screen first: tap <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open Honestech from the home screen and come back here.</p>`
+    :st==="denied"?`<p class="help full" style="margin:0">Notifications are blocked for this app. Turn them on in your phone's <strong>Settings → Notifications</strong>, then come back here.</p>`
+    :`<p class="help full" style="margin:0">${why}</p><div class="full acts"><button class="btn primary" type="button" data-act="pushOn" ${PUSH.busy?"disabled":""}>${PUSH.busy?"Turning on…":"Turn on notifications"}</button></div>`;
+  if(compact&&st==="on")return "";
+  return `<div class="form push-card" id="pushCard"><p class="formh">🔔 Notifications</p>${body}${PUSH.msg?`<p class="full help vin-warn" style="margin:0">${esc(PUSH.msg)}</p>`:""}</div>`;
+}
+function notifySend(body){if(!AUTH)return;supa("/functions/v1/notify",{method:"POST",body:{action:"send",...body}}).catch(()=>{});}
+function jobLine(j){const i=j.info;return [i.customer||"Customer",isSvc(j)?(i.work||"Service"):"Pre-purchase inspection",fmtDate(i.date,{weekday:"short",month:"short",day:"numeric"})+(i.time?" "+fmtTime(i.time):"")].filter(Boolean).join(" · ");}
+let ASSIGN_PROMPT=null;
+function showAssignPrompt(j,t){
+  let el=document.getElementById("assignBar");if(!el){el=document.createElement("div");el.id="assignBar";el.className="assign-bar";el.setAttribute("role","status");document.body.appendChild(el);}
+  const first=t.name.split(/\s+/)[0];
+  el.innerHTML=`<span>Text ${esc(first)} about this job?</span><a class="btn primary" href="${esc(smsHref(t.phone,jobSheet(j,t)))}" data-assigndone="1">Text job sheet</a><button class="btn" type="button" data-assigndone="1">Not now</button>`;
+  el.hidden=false;clearTimeout(window.__abT);window.__abT=setTimeout(()=>{el.hidden=true;},20000);
+}
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-assigndone]");if(!b)return;const el=document.getElementById("assignBar");if(el)setTimeout(()=>{el.hidden=true;},b.tagName==="A"?600:0);},true);
+// Call after a job's technician may have changed (prev = the techId before the change).
+function afterAssign(j,prev,changedDetails){
+  if(isTech()||!j)return;const t=(APP.settings.techs||[]).find(x=>x.id===j.techId);
+  if(!t){return;}
+  const newTech=j.techId!==prev;
+  if(!newTech&&!changedDetails)return;
+  if(newTech&&t.phone&&CAN_CAL)showAssignPrompt(j,t);
+  if(t.userId){stampTechUsers();const go=()=>notifySend({user_ids:[t.userId],title:newTech?"New job assigned":"Job updated",body:jobLine(j),url:"./?job="+encodeURIComponent(j.id),tag:"job-"+j.id});
+    if(typeof syncNow==="function")syncNow().then(go,go);else go();}
+}
+// Deep link from a notification: ?job=ID
+let OPEN_JOB=null;
+(()=>{const m=/[?&]job=([^&]+)/.exec(location.search);if(m){OPEN_JOB=decodeURIComponent(m[1]);history.replaceState(null,"",location.pathname);}})();
+function tryOpenJob(){if(!OPEN_JOB)return;const j=APP.jobs.find(x=>String(x.id)===OPEN_JOB);if(j){OPEN_JOB=null;openJob(j.id);}}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type==="open"&&d.url){const m=/[?&]job=([^&]+)/.exec(d.url);if(m){OPEN_JOB=decodeURIComponent(m[1]);tryOpenJob();if(OPEN_JOB&&AUTH)syncNow().then(tryOpenJob);}}});
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("button");if(!b)return;const a=b.dataset.act;if(!/^push/.test(a||""))return;e.stopPropagation();
+  if(a==="pushOn"){PUSH.busy=true;PUSH.msg="";rerenderKeep();enablePush().then(()=>{PUSH.busy=false;rerenderKeep();toast("Notifications are on");}).catch(err=>{PUSH.busy=false;PUSH.msg=(err&&err.msg)||"Couldn't turn on notifications";rerenderKeep();});return;}
+  if(a==="pushOff"){disablePush().then(()=>{rerenderKeep();toast("Notifications are off");});return;}
+  if(a==="pushTest"){if(!AUTH)return;supa("/functions/v1/notify",{method:"POST",body:{action:"send",user_ids:[AUTH.user_id],self:true,title:"Test from Honestech",body:"Notifications are working on this phone.",url:"./"}}).then(r=>toast(r&&r.sent?"Test sent":"Sent. If nothing shows, check this phone's notification settings.")).catch(()=>toast("Couldn't send the test"));return;}
+},true);
 
 /* ================= VIN scanner (camera) ================= */
 const ZX_URL="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js";
@@ -4076,7 +4149,7 @@ $("#nextBtn").addEventListener("click",()=>{
   if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
-  if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
+  if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";const fj=S,me=(fj.info.tech||"Your technician").split(/\s+/)[0];const go=()=>notifySend({to:"managers",title:`${me} finished a job`,body:jobLine(fj),url:"./?job="+encodeURIComponent(fj.id),tag:"done-"+fj.id});setTimeout(()=>syncNow().then(go,go),0);}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
   if(isSvc(S)&&S.status!=="done"&&docMode(S)==="est"){S.docMode="inv";if(S.est&&S.est.status!=="declined"&&S.est.status!=="approved"){S.est.status="approved";S.est.approvedDate=TODAY;S.est.total=jobTotal(S);}ensureInvoice();}
   if(isSvc(S)||STAGES[S.step].id==="invoice"){if(isSvc(S)&&S.status==="done"){APP.view="jobs";save();render();window.scrollTo(0,0);return;}S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);
@@ -4176,7 +4249,7 @@ document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}
   if(d.compact){APP.compact=t.checked;save();rerenderKeep();return;}
-  if(d.assign){const j=APP.jobs.find(x=>x.id===d.assign);if(j){const tm=teamList().find(x=>x.id===t.value);j.techId=tm?tm.id:"";j.info.tech=tm?tm.name:"";if(!tm)j.dispatch="";else if(!j.dispatch)j.dispatch="assigned";save();rerenderKeep();toast(tm?`Assigned to ${tm.name}`:"Unassigned");}return;}
+  if(d.assign){const j=APP.jobs.find(x=>x.id===d.assign);if(j){const _pv=j.techId||"";const tm=teamList().find(x=>x.id===t.value);j.techId=tm?tm.id:"";setTimeout(()=>afterAssign(j,_pv,false),0);j.info.tech=tm?tm.name:"";if(!tm)j.dispatch="";else if(!j.dispatch)j.dispatch="assigned";save();rerenderKeep();toast(tm?`Assigned to ${tm.name}`:"Unassigned");}return;}
   if(d.draftc&&APP.draft){APP.draft[d.draftc]=t.checked;save();return;}
   if(d.reqc&&REQ_EDIT){REQ_EDIT[d.reqc]=t.checked;return;}
   if(d.restorefile){const f=t.files&&t.files[0];if(!f)return;
@@ -4230,6 +4303,7 @@ window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
 setTimeout(()=>{syncLabel();if(AUTH)syncNow();},800);
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist().catch(()=>{});}catch(e){}
+setTimeout(()=>{try{tryOpenJob();}catch(e){}},700);
 if(RECOVERY){APP.view="settings";render();setTimeout(()=>document.getElementById("setCloud")?.scrollIntoView({block:"center"}),300);}
 if(/[?&]paid=1/.test(location.search)){history.replaceState(null,"",location.pathname);toast("Thanks! Activating your plan…");
   let n=0;const poll=async()=>{await fetchPlan();if(access().kind==="paid"){APP.view="plan";render();toast("Your plan is active. Thank you!");return;}if(++n<10)setTimeout(poll,3000);};setTimeout(poll,1500);}

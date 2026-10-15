@@ -1,7 +1,7 @@
 // Offline support for the Honestech Mobile Mechanic App.
 // The app page is fetched fresh when online (so updates arrive) and served from cache when offline.
 // The PDF library and fonts are cached the first time they load.
-const VERSION = "ppi-v23";
+const VERSION = "ppi-v24";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -41,4 +41,28 @@ self.addEventListener("fetch", (e) => {
       return res;
     }))
   );
+});
+
+// Phone notifications (for example, "New job assigned"). Tapping one opens the app to that job.
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "Honestech", {
+    body: d.body || "",
+    tag: d.tag || undefined,
+    data: { url: d.url || "./" },
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+  }));
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const target = new URL((e.notification.data && e.notification.data.url) || "./", self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+    for (const c of list) {
+      if (c.url.startsWith(self.registration.scope)) { c.postMessage({ type: "open", url: target }); return c.focus(); }
+    }
+    return self.clients.openWindow(target);
+  }));
 });

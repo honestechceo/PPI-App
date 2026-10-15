@@ -652,6 +652,10 @@ body.scanning{overflow:hidden}
 .mpi .items .note{width:100%;margin-top:8px}
 .mpi-set-row{grid-template-columns:1fr 1fr auto}.mpi-set-row .mpi-name{grid-column:1/-1}.mpi-set-row .mpi-unit{max-width:none}
 @media(min-width:620px){.mpi-set-row{grid-template-columns:1.6fr 1.3fr 90px auto}.mpi-set-row .mpi-name{grid-column:auto}}
+body.tech-mode #navDash,body.tech-mode #navCust,body.tech-mode #navExp{display:none}
+body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [data-jump="docSeg"],body.tech-mode [data-askdel],body.tech-mode [data-edit]{display:none}
+.tm-acc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1;margin-top:6px}.tm-ok{color:var(--good);font-weight:600;font-size:14px}
+.invite-ban{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:12px;margin:0 0 14px}.invite-ban.bad{background:var(--bad-soft);border-color:var(--bad)}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -798,6 +802,7 @@ function rebuildChecklist(settings){
     return sec;
   });
   STAGES=[{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"},{id:"invoice",title:"Invoice"}];
+  if(window.__TECH)STAGES=STAGES.filter(x=>x.id!=="invoice");
   ALL_ITEMS=SECTIONS.flatMap(sec=>sec.items.map(i=>Object.assign(i,{sec})));
 }
 rebuildChecklist(null);
@@ -869,6 +874,7 @@ try{
 const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
+try{window.__TECH=(JSON.parse(localStorage.getItem("honestech-auth")||"null")||{}).role==="tech";}catch(e){window.__TECH=false;}
 rebuildChecklist(APP.settings);
 APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.requests))APP.requests=[];if(!Array.isArray(APP.settings.techs))APP.settings.techs=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
@@ -921,14 +927,17 @@ async function cloudSignIn(email,pw,create){
     if(!j||!j.access_token){if(j&&(j.id||(j.user&&j.user.id)))throw {msg:"Account created. Check your email to confirm it, then sign in. (Or turn off Confirm email in Supabase.)"};throw {msg:"Couldn't create the account"};}}
   else j=await supa("/auth/v1/token?grant_type=password",{method:"POST",auth:false,body:{email,password:pw}});
   setAuth(j,email);
+  let joined=false;
+  if(INVITE){try{await acceptInvite();joined=true;}catch(e){AUTH=null;saveAuth();throw {msg:(e&&e.msg)||"Couldn't join the shop. Ask the owner for a new invite link."};}}
+  if(joined){const keep=APP.settings;APP=blankApp(null);APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.jobs=[];APP.view="jobs";SMETA={};AUTH.role="tech";saveAuth();applyRole();}
   const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:(shop&&shop.my_shop)||shop;saveAuth();
   // first time on this device: samples are never uploaded
-  if(APP.sample){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
+  if(APP.sample&&!joined){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
   SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
   try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
   SYNC.state="idle";await fetchPlan();await syncNow(true);
 }
-function cloudSignOut(){PLAN=null;TECHS.extra=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+function cloudSignOut(){PLAN=null;if(isTech()){APP=blankApp(null);try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}window.__TECH=false;rebuildChecklist(APP.settings);TECHS.extra=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
 /* ================= plans & subscriptions (Stripe) ================= */
 // Checkout and the billing page are opened by the "billing" server function (Supabase Edge Function).
 const BILLING={terms:"terms.html",privacy:"privacy.html"};
@@ -950,7 +959,9 @@ function techsCardHTML(){
 }
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
-async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
+async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));if(AUTH&&p.role&&AUTH.role!==p.role){AUTH.role=p.role;saveAuth();applyRole(true);}}}catch(e){}}
+function applyRole(rerender){const t=!!(AUTH&&AUTH.role==="tech");if(t===window.__TECH&&!rerender)return;window.__TECH=t;rebuildChecklist(APP.settings);if(t&&["dash","customers","expenses","requests","dispatch","plan"].includes(APP.view))APP.view="jobs";if(rerender&&typeof render==="function")try{render();}catch(e){}}
+const isTech=()=>!!window.__TECH;
 const dayDiff=(a,b)=>Math.round((new Date(a+"T12:00:00")-new Date(b+"T12:00:00"))/864e5);
 function access(){
   if(!AUTH&&!IN_CLAUDE)return {ok:false,kind:"account"};
@@ -968,7 +979,7 @@ async function openBilling(body){const r=await supa("/functions/v1/billing",{met
 function planStatusLine(){const a=access();
   return a.kind==="account"?"No account yet":a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
     :a.kind==="sample"?"Sample data":a.left>=0?`Free trial · ${a.left} day${a.left===1?"":"s"} left`:"Free trial ended";}
-function trialBannerHTML(){const a=access();if(a.kind!=="trial"||a.left>10)return "";
+function trialBannerHTML(){if(isTech())return "";const a=access();if(a.kind!=="trial"||a.left>10)return "";
   return `<button type="button" class="dash-card dash-link trial-ban" data-nav="plan"><span><strong>${a.left>0?`${a.left} day${a.left===1?"":"s"} left in your free trial`:"Your free trial ends today"}</strong> · choose a plan to keep going</span><span>›</span></button>`;}
 function renderPlan(){
   const a=access(),signed=!!AUTH,busy=!!BUY_BUSY;
@@ -1007,6 +1018,7 @@ function demoHTML(){
     <div class="lp-demo-f">Tap to change a result. The PDF report updates as you go.</div></div>`;
 }
 function renderJoin(){
+  if(INVITE)return `<div class="stage-head"><div class="eyebrow">Technician invite</div><h2>Join your shop</h2></div>${inviteBannerHTML()}${cloudSettingsHTML()}`;
   return `<div class="lp">
   <section class="lp-hero">
     <div class="lp-hero-t">
@@ -1060,10 +1072,14 @@ function renderJoin(){
     <p><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a> <button class="mini" type="button" data-nav="help">How the app works</button></p>
   </footer></div>`;
 }
+function techCfg(){const s=APP.settings;const o={};["biz","owner","phone","email","web","logo","hidden","custom","mpiList","mpiAuto","omwTpl","mapsApp","ppiDisc","pdfAccent","themeAccent"].forEach(k=>{if(s[k]!==undefined)o[k]=s[k];});
+  o.techs=(s.techs||[]).map(t=>({id:t.id,name:t.name,color:t.color}));return o;}
+function stampTechUsers(){const ts=APP.settings.techs||[];APP.jobs.forEach(j=>{const t=ts.find(x=>x.id===j.techId);const u=t&&t.userId||"";if((j.techUser||"")!==u)j.techUser=u;});}
 function localRecords(){
+  if(isTech()){const me=AUTH&&AUTH.user_id;return APP.jobs.filter(j=>j&&j.id&&j.techUser&&j.techUser===me).map(j=>({kind:"job",id:String(j.id),data:j}));}
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
   add("job",APP.jobs);add("customer",APP.customers);add("expense",APP.expenses);add("trip",APP.trips);add("request",APP.requests);
-  const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});return out;
+  const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});if((APP.settings.techs||[]).length)out.push({kind:"techcfg",id:"main",data:techCfg()});return out;
 }
 function scheduleSync(){if(!AUTH||APP.sample)return;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(()=>syncNow(),3500);}
 async function syncNow(full){
@@ -1074,6 +1090,7 @@ async function syncNow(full){
     const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{}};}
     SMETA.h=SMETA.h||{};
     const first=!SMETA.cursor;
+    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();}
     // local fingerprints: what's changed here since the last sync ("dirty")
     const loc=localRecords(),lh={};loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
     const dirty=k=>k in lh&&SMETA.h[k]!==lh[k];
@@ -1090,7 +1107,11 @@ async function syncNow(full){
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
     now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
-    Object.keys(SMETA.h).forEach(k=>{if(!seen.has(k)&&!k.startsWith("settings:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
+    if(isTech()){ // jobs taken off my list disappear from this phone
+      const vis=await supa(`/rest/v1/records?select=id&kind=eq.job&deleted=eq.false&shop_id=eq.${shopId}`);const ids=new Set((vis||[]).map(x=>String(x.id)));
+      const before=APP.jobs.length;APP.jobs=APP.jobs.filter(j=>ids.has(String(j.id))||!(SMETA.h["job:"+j.id]));
+      Object.keys(SMETA.h).forEach(k=>{if(k.startsWith("job:")&&!ids.has(k.slice(4)))delete SMETA.h[k];});if(APP.jobs.length!==before){changed++;syncActive();}}
+    Object.keys(SMETA.h).forEach(k=>{if(!isTech()&&!seen.has(k)&&!k.startsWith("settings:")&&!k.startsWith("techcfg:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
     for(let i=0;i<push.length;i+=25){const chunk=push.slice(i,i+25);
       await supa("/rest/v1/records?on_conflict=shop_id,kind,id",{method:"POST",body:chunk.map(x=>x.row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
       chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
@@ -1101,6 +1122,8 @@ async function syncNow(full){
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
 }
 function applyRemote(r){
+  if(r.kind==="techcfg"){if(!isTech()||r.deleted)return 0;const k="techcfg:main",hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;
+    const keep={theme:APP.settings.theme,themeMode:APP.settings.themeMode,themeBg:APP.settings.themeBg};Object.assign(APP.settings,r.data,keep);SMETA.h[k]=hh;return 1;}
   const k=r.kind+":"+r.id,mapK={job:"jobs",customer:"customers",expense:"expenses",trip:"trips",request:"requests"}[r.kind];
   if(r.kind==="settings"){if(r.deleted)return 0;const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
   if(!mapK)return 0;const arr=APP[mapK]||(APP[mapK]=[]);const i=arr.findIndex(x=>String(x.id)===String(r.id));
@@ -1113,6 +1136,17 @@ function syncStatusText(){const t=SYNC.last?new Date(SYNC.last).toLocaleTimeStri
   return {off:"Not signed in",idle:"Waiting to sync",syncing:"Syncing…",ok:`Up to date${t?" · "+t:""}`,offline:`Offline. Will sync when you're back online${t?" · last "+t:""}`,error:`Sync problem: ${SYNC.err}`}[SYNC.state]||"";}
 function syncStatusHTML(){return `<span class="sync-st s-${SYNC.state}">${SYNC.state==="ok"?"☁︎ ✓":SYNC.state==="syncing"?"☁︎ ↻":SYNC.state==="offline"?"☁︎ ✕":SYNC.state==="error"?"☁︎ !":"☁︎"} ${esc(syncStatusText())}</span>`;}
 let CLOUD_FORM={email:"",pw:"",busy:false,msg:""};
+let INVITE=null;try{INVITE=JSON.parse(localStorage.getItem("honestech-invite")||"null");}catch(e){}
+(()=>{const m=/[?&]invite=([0-9a-f-]{36})/i.exec(location.search);if(!m)return;INVITE={token:m[1].toLowerCase()};try{localStorage.setItem("honestech-invite",JSON.stringify(INVITE));}catch(e){}
+  history.replaceState(null,"",location.pathname);})();
+async function loadInviteInfo(){if(!INVITE||INVITE.info||INVITE.loading)return;INVITE.loading=true;
+  try{const r=await supa("/rest/v1/rpc/invite_info",{method:"POST",auth:false,body:{p_token:INVITE.token}});INVITE.info=r||{bad:true};}catch(e){INVITE.info={err:true};}
+  INVITE.loading=false;if(typeof render==="function")try{render();}catch(e){}}
+function inviteBannerHTML(){if(!INVITE)return "";const i=INVITE.info;if(!i){setTimeout(loadInviteInfo,0);return `<div class="invite-ban">Checking your invite…</div>`;}
+  if(i.bad||i.used||i.expired)return `<div class="invite-ban bad"><strong>This invite link ${i.used?"was already used":i.expired?"has expired":"isn't valid"}.</strong> Ask the shop owner to send a new one. <button class="mini" type="button" data-act="inviteDrop">Dismiss</button></div>`;
+  return `<div class="invite-ban"><strong>${esc(i.shop||"A shop")} invited you${i.tech_name?", "+esc(i.tech_name):""}.</strong> Create your account (or sign in) to see the jobs assigned to you.</div>`;}
+async function acceptInvite(){const r=await supa("/rest/v1/rpc/accept_invite",{method:"POST",body:{p_token:INVITE.token}});
+  INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}return r;}
 let RECOVERY=null;
 (()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
   if(q.get("type")==="recovery"&&q.get("access_token"))RECOVERY={token:q.get("access_token"),msg:"",busy:false};
@@ -1131,7 +1165,7 @@ function cloudSettingsHTML(){
   if(AUTH)return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
     <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
     <div class="full" id="syncLbl">${syncStatusHTML()}</div>
-    <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
+    ${isTech()?"":`<div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>`}
     <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
   const gate=!AUTH&&!IN_CLAUDE;
@@ -1397,7 +1431,7 @@ function reqToDraft(r){
 
 /* ================= team & dispatch (turns on when technicians are added) ================= */
 const TECH_COLORS=["#1d5fa8","#e2620f","#2b8a3e","#6a3fc8","#c0262d","#0b7f8f","#b07d0a","#3d4651"];
-const hasTeam=()=>(APP.settings.techs||[]).length>0;
+const hasTeam=()=>!isTech()&&(APP.settings.techs||[]).length>0;
 function teamList(){const st=APP.settings;return [{id:"me",name:(st.owner||"Me").trim()||"Me",phone:st.phone||"",color:"#15202b",me:true},...(st.techs||[])];}
 function techOf(j){if(j.techId){const t=teamList().find(x=>x.id===j.techId);if(t)return t;}
   const n=String(j.info.tech||"").trim().toLowerCase();if(!n)return null;return teamList().find(x=>x.name.trim().toLowerCase()===n)||null;}
@@ -1406,15 +1440,28 @@ const DSP_ST=[["assigned","Assigned"],["enroute","On the way"],["onsite","On sit
 function dspStatus(j){if(j.status==="done")return "done";if(!techOf(j))return "unassigned";return j.dispatch||"assigned";}
 const DSP_LBL={unassigned:"Unassigned",assigned:"Assigned",enroute:"On the way",onsite:"On site",done:"Done"};
 let TECH_NEW=null,TECH_DEL=null;
+let TEAM={at:0,list:[],busy:"",msg:""};
+async function loadTeam(quiet){if(!AUTH||isTech())return;try{const r=await supa("/rest/v1/rpc/team_status",{method:"POST",body:{}});TEAM.list=Array.isArray(r)?r:[];TEAM.at=Date.now();
+  let ch=false;(APP.settings.techs||[]).forEach(t=>{const inv=TEAM.list.find(x=>x.tech_id===t.id&&x.active);const u=inv?inv.user_id:"";if((t.userId||"")!==u){t.userId=u;ch=true;}});
+  if(ch){stampTechUsers();try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}scheduleSync();}
+  if(!quiet&&APP.view==="settings")rerenderKeep();}catch(e){}}
+function techAccessHTML(t){
+  if(!AUTH)return `<div class="tm-acc help">Sign in to Cloud sync to give ${esc(t.name)} their own login.</div>`;
+  const inv=TEAM.list.find(x=>x.tech_id===t.id);const busy=TEAM.busy===t.id;
+  if(inv&&inv.active)return `<div class="tm-acc"><span class="tm-ok">✓ Has their own login${inv.email?" ("+esc(inv.email)+")":""}</span><button class="mini del" type="button" data-techrm="${t.id}" ${busy?"disabled":""}>${TEAM.rm===t.id?"Tap again to remove access":"Remove access"}</button></div>`;
+  if(inv&&!inv.accepted_at)return `<div class="tm-acc"><span class="help">Invite sent ${esc(fmtDate(String(inv.created_at).slice(0,10),{month:"short",day:"numeric"}))}. Waiting for ${esc(t.name)} to join.</span><button class="mini" type="button" data-techinv="${t.id}" ${busy?"disabled":""}>Send a new invite</button><button class="mini" type="button" data-techrm="${t.id}">Cancel invite</button></div>`;
+  return `<div class="tm-acc"><button class="mini go" type="button" data-techinv="${t.id}" ${busy?"disabled":""}>${busy?"Creating link…":"Invite to the app"}</button><span class="help">They get their own login and see only their jobs.</span></div>`;
+}
 function teamSettingsHTML(){
-  const ts=APP.settings.techs||[];
+  const ts=APP.settings.techs||[];if(AUTH&&ts.length&&!TEAM.at&&!TEAM.loading){TEAM.loading=true;setTimeout(()=>loadTeam().finally(()=>{TEAM.loading=false;}),0);}
   return `<div class="form" id="teamSet">
     <p class="formh">Team &amp; dispatch</p>
     <p class="help full" style="margin:0">Working solo? Leave this empty. Add technicians to turn on the <strong>Dispatch board</strong>, where you assign jobs, text job sheets to techs and track where everyone is. You're on the team automatically as ${esc(teamList()[0].name)}.</p>
     ${ts.length?`<div class="full team-list">${ts.map(t=>`<div class="tm-row"><span class="tm-dot" style="background:${esc(t.color)}"></span>
       <input data-techf="${t.id}:name" value="${esc(t.name)}" placeholder="Name" aria-label="Technician name"><input data-techf="${t.id}:phone" value="${esc(t.phone||"")}" inputmode="tel" placeholder="Phone" aria-label="Technician phone">
       ${TECH_DEL===t.id?`<button class="mini del" type="button" data-techdelgo="${t.id}">Remove</button><button class="mini" type="button" data-techdelno="1">Keep</button>`:`<button class="xbtn" type="button" data-techdel="${t.id}" aria-label="Remove ${esc(t.name)}">×</button>`}
-      <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div></div>`).join("")}</div>`:""}
+      <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div>${techAccessHTML(t)}</div>`).join("")}</div>`:""}
+    ${TEAM.msg?`<div class="full vin-warn">${esc(TEAM.msg)}${/limit|seat/i.test(TEAM.msg)?` <button class="mini" type="button" data-nav="plan">Add a technician seat</button>`:""}</div>`:""}
     ${TECH_NEW?`<div class="full tm-new"><input id="tmName" data-technew="name" value="${esc(TECH_NEW.name)}" placeholder="Technician name"><input data-technew="phone" value="${esc(TECH_NEW.phone)}" inputmode="tel" placeholder="Phone (for texting job sheets)">
       <div class="acts"><button class="mini go" type="button" data-act="techsave">Add technician</button><button class="mini" type="button" data-act="techcancel">Cancel</button></div></div>`
       :`<div class="full"><button class="mini" type="button" data-act="techadd">＋ Add a technician</button></div>`}
@@ -2077,11 +2124,11 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
-    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";
+    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
     return;
   }
   const svc=isSvc(S);
@@ -2107,7 +2154,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   const on=$("#steps .on"); if(on) on.scrollIntoView({block:"nearest",inline:"center"});
   $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";
   const id=STAGES[S.step].id;
-  $("#nextBtn").textContent=id==="invoice"?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
+  $("#nextBtn").textContent=id==="invoice"||(isTech()&&id==="report")?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
   $("#countLbl").textContent=`${st.done}/${st.total}`;
 }
 function sampleBanner(){
@@ -2220,25 +2267,25 @@ const COL_DEFAULT={done:true};
 const isCol=k=>{const c=APP.col||{};return k in c?!!c[k]:!!COL_DEFAULT[k];};
 function grpH(k,label,n,extra=""){const c=isCol(k);return `<button type="button" class="group-h grp-t" data-grp="${esc(k)}" aria-expanded="${!c}"><span class="grp-chev">${c?"▸":"▾"}</span>${esc(label)}<span class="grp-n">${n}</span>${extra}</button>`;}
 function jobRowCompact(j){const i=j.info,svc=isSvc(j);
-  const st=j.status==="done"?(j.invoice.paid?`<span class="st st-paid">Paid</span>`:`<span class="st st-unpaid">${money(jobTotal(j))}</span>`):j.status==="active"?`<span class="st st-active">In progress</span>`:"";
+  const st=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:j.invoice.paid?`<span class="st st-paid">Paid</span>`:`<span class="st st-unpaid">${money(jobTotal(j))}</span>`):j.status==="active"?`<span class="st st-active">In progress</span>`:"";
   return `<button type="button" class="job-c" data-open="${j.id}"><span class="jc-t">${i.time?esc(fmtTime(i.time)):"—"}</span><span class="jc-w"><strong>${esc(i.customer||"No name")}</strong> <small>${esc([vehOf(i),svc?i.work:""].filter(Boolean).join(" · "))}</small></span><span class="tag">${svc?"Svc":"PPI"}</span>${st}<span class="jc-go">›</span></button>`;}
 const cardsHTML=js=>APP.compact?`<div class="jobs-c">${js.map(jobRowCompact).join("")}</div>`:`<div class="jobs">${js.map(jobCard).join("")}</div>`;
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
-  const status=j.status==="done"?`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`
+  const status=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
     :j.status==="active"?`<span class="st st-active">In progress${svc?"":` ${st.done}/${st.total}`}</span>`:`<span class="st st-sched">Booked</span>`;
   const confirmDel=APP.confirmDel===j.id;
-  const estChip=svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
+  const estChip=!isTech()&&svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
     <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&j.status!=="done"&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
-    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
+    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
-      :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
+      :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?(isTech()?"Open job":"Open invoice"):j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"&&j.invoice.paid&&!j.reviewAt&&(APP.settings.reviewLink||"").trim()&&i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,reviewText(j)))}" data-reviewsent="${j.id}">⭐ Review</a>`:""}
-      ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${isTech()?"":j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
       ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
       ${j.status!=="done"&&i.location?dirLink(i.location):""}
       ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
@@ -2355,6 +2402,7 @@ function themeSectionHTML(){
 
 /* ================= settings ================= */
 function renderSettings(){
+  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${cloudSettingsHTML()}`;
   const s=APP.settings;
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
@@ -3440,10 +3488,12 @@ async function savePdf(kind){
 
 /* ================= render & navigation ================= */
 function render(){applyTheme();
-  const acc=access();document.body.classList.toggle("gated",acc.kind==="account");
+  const acc=access();document.body.classList.toggle("gated",acc.kind==="account");document.body.classList.toggle("tech-mode",isTech());
+  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help"].includes(APP.view))APP.view="jobs";}
+  if(isTech()&&S&&!isSvc(S)&&S.step>=STAGES.length)S.step=STAGES.length-1;
   if(acc.kind==="account"){if(!["join","help"].includes(APP.view))APP.view="join";}
   else if(APP.view==="join")APP.view="dash";
-  else if(!acc.ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
+  else if(!isTech()&&!acc.ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
   syncActive();
   let html;
   if(APP.view==="settings")html=renderSettings();
@@ -3454,6 +3504,7 @@ function render(){applyTheme();
   else if(APP.view==="help")html=renderHelp();
   else if(APP.view==="plan")html=renderPlan();
   else if(APP.view==="join")html=renderJoin();
+  else if(APP.view==="techlocked")html=`<div class="stage-head"><div class="eyebrow">Technician</div><h2>Your shop's plan isn't active</h2><p class="when">Ask ${esc(APP.settings.owner||APP.settings.biz||"the shop owner")} to renew the Honestech plan. Your jobs come back as soon as they do.</p></div>${cloudSettingsHTML()}`;
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
@@ -3812,6 +3863,22 @@ document.addEventListener("click",e=>{
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
+  if(d.act==="inviteDrop"){INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}render();return;}
+  if(d.techinv){const t=(APP.settings.techs||[]).find(x=>x.id===d.techinv);if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
+    supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
+      const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
+      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link}`;
+      TEAM.busy="";TEAM.at=0;loadTeam();
+      if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
+      else{copyText(msg);toast("Invite link copied. Paste it in a text to "+t.name+".");}
+      rerenderKeep();})
+    .catch(e=>{TEAM.busy="";const m=(e&&e.msg)||"";const lim=/TECH_LIMIT:(\d+)/.exec(m);
+      TEAM.msg=lim?(+lim[1]?`Your plan includes ${lim[1]} technician login${+lim[1]===1?"":"s"}, and they're all in use. Add a technician seat to invite more.`:"Technician logins come with the Team plan. Switch to Team to invite technicians."):(m||"Couldn't create the invite. Check your connection.");rerenderKeep();});return;}
+  if(d.techrm){const t=(APP.settings.techs||[]).find(x=>x.id===d.techrm);if(!t)return;const inv=TEAM.list.find(x=>x.tech_id===t.id);
+    if(inv&&inv.active&&TEAM.rm!==t.id){TEAM.rm=t.id;rerenderKeep();setTimeout(()=>{if(TEAM.rm===t.id){TEAM.rm=null;rerenderKeep();}},4000);return;}
+    TEAM.rm=null;TEAM.busy=t.id;rerenderKeep();
+    supa("/rest/v1/rpc/remove_tech",{method:"POST",body:{p_tech_id:t.id}}).then(()=>{TEAM.busy="";t.userId="";stampTechUsers();save();toast(inv&&inv.active?`${t.name} no longer has access`:"Invite canceled");TEAM.at=0;loadTeam();})
+      .catch(e=>{TEAM.busy="";toast((e&&e.msg)||"Couldn't remove access");rerenderKeep();});return;}
   if(d.act==="techadd"){TECH_NEW={name:"",phone:""};rerenderKeep();setTimeout(()=>document.getElementById("tmName")?.focus(),30);return;}
   if(d.act==="techcancel"){TECH_NEW=null;rerenderKeep();return;}
   if(d.act==="techsave"){const n=(TECH_NEW.name||"").trim();if(!n){toast("Enter the technician's name");return;}const ts=APP.settings.techs;
@@ -3988,6 +4055,7 @@ $("#nextBtn").addEventListener("click",()=>{
   if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
+  if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
   if(isSvc(S)&&S.status!=="done"&&docMode(S)==="est"){S.docMode="inv";if(S.est&&S.est.status!=="declined"&&S.est.status!=="approved"){S.est.status="approved";S.est.approvedDate=TODAY;S.est.total=jobTotal(S);}ensureInvoice();}
   if(isSvc(S)||STAGES[S.step].id==="invoice"){if(isSvc(S)&&S.status==="done"){APP.view="jobs";save();render();window.scrollTo(0,0);return;}S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);

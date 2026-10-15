@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const ret = ALLOWED_RETURN.test(String(body.return_url || "")) ? String(body.return_url).split(/[?#]/)[0] : "https://honestechmobileapp.com/";
 
-    const { data: mem } = await db.from("shop_members").select("shop_id, role").eq("user_id", user.id).order("created_at").limit(1).maybeSingle();
+    const { data: mem } = await db.from("shop_members").select("shop_id, role").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (!mem) return out({ error: "No shop found for this account" }, 400);
     if (mem.role !== "owner") return out({ error: "Only the shop owner can manage the plan" }, 403);
     const shopId = mem.shop_id;

@@ -1120,7 +1120,7 @@ async function syncNow(full){
       chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
     if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
     if(!PLAN||Date.now()-(PLAN.at||0)>10*60000||PLAN.shop_id!==AUTH.shop_id)await fetchPlan();
-    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);SMETA.lastAt=SYNC.last;saveMeta();
+    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);setTimeout(mediaSyncUp,0);SMETA.lastAt=SYNC.last;saveMeta();
   }catch(e){SYNC.state=e.code==="offline"?"offline":e.code==="signedout"?"off":"error";SYNC.err=e.msg||"Sync failed";}
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
 }
@@ -1169,7 +1169,7 @@ function cloudSettingsHTML(){
     <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
     <div class="full" id="syncLbl">${syncStatusHTML()}</div>
     ${isTech()?"":`<div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>`}
-    <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
+    <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures upload too, and download on another phone when you open the job.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
   const gate=!AUTH&&!IN_CLAUDE;
   return `<div class="form cloud-set" id="setCloud"><p class="formh">${gate?"Sign in or create your account":"☁️ Cloud sync"}</p>
@@ -1239,11 +1239,13 @@ function renderExpenses(){
   </div>
   ${(APP.expenses||[]).length?`<div class="copyrow"><button class="btn dl-only" type="button" data-act="expcsv">Save spreadsheet (CSV) for taxes</button><button class="btn" type="button" data-act="expcopy">Copy list</button></div>
   <textarea class="copybox" id="expbox" hidden readonly></textarea>
-  <p class="help">The spreadsheet opens in Numbers, Excel or Google Sheets. Receipt photos stay on this phone and aren't in backups, so keep paper receipts for big purchases.</p>`:""}`;
+  <p class="help">The spreadsheet opens in Numbers, Excel or Google Sheets. ${AUTH?"Receipt photos are saved to your account, so they open on any phone you sign in on.":"Receipt photos stay on this phone and aren't in backups, so keep paper receipts for big purchases."}</p>`:""}`;
 }
 async function loadReceipts(){
   const ids=[];if(EXP_DRAFT&&EXP_DRAFT.hadRc&&!RCPT[EXP_DRAFT.id])ids.push(EXP_DRAFT.id);
-  for(const id of ids){try{const v=await MDB.get("r_"+id);if(v){RCPT[id]=v;const y=window.scrollY;render();window.scrollTo(0,y);}}catch(e){}}
+  for(const id of ids){try{let v=await MDB.get("r_"+id);
+    if(!v){const e=(APP.expenses||[]).find(x=>x.id===id);if(e&&e.rcCloud){const b=await cloudGetBlob("r_"+id);if(b){v=await readAsDataURL(b);if(v)try{await MDB.put("r_"+id,v);}catch(x){}}}}
+    if(v){RCPT[id]=v;const y=window.scrollY;render();window.scrollTo(0,y);}}catch(e){}}
 }
 function expCSV(rows){
   const q=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;};
@@ -1256,10 +1258,12 @@ async function saveExpDraft(){
   const d=EXP_DRAFT;if(!num(d.amt)){toast("Enter the amount");document.getElementById("x-amt")?.focus();return;}
   const isNew=!d.id,id=d.id||uid();
   const rec={id,date:d.date||TODAY,cat:d.cat,desc:d.desc.trim(),vendor:d.vendor.trim(),amt:String(Math.round(num(d.amt)*100)/100),jobId:d.jobId||"",rc:!!(d.rcData||(d.hadRc&&!d.rcRemoved)),at:Date.now()};
+  const old=APP.expenses.find(x=>x.id===id);
   if(d.rcData){try{await MDB.put("r_"+id,d.rcData);RCPT[id]=d.rcData;}catch(e){rec.rc=false;toast("Couldn't keep the receipt photo");}}
-  else if(d.rcRemoved){try{await MDB.del("r_"+id);}catch(e){}delete RCPT[id];}
+  else if(d.rcRemoved){try{await MDB.del("r_"+id);}catch(e){}delete RCPT[id];if(old&&old.rcCloud)cloudDel(["r_"+id]);}
+  else if(rec.rc&&old&&old.rcCloud)rec.rcCloud=1;
   const ex=APP.expenses;const k=ex.findIndex(x=>x.id===id);if(k>-1)ex[k]=rec;else ex.push(rec);
-  EXP_DRAFT=null;EXP_DEL=false;save();
+  EXP_DRAFT=null;EXP_DEL=false;save();if(d.rcData)setTimeout(mediaSyncUp,0);
   if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";EXP_RET=null;render();toast(`Saved ${money(rec.amt)} to this job's costs`);document.getElementById("costBox")?.scrollIntoView({block:"center"});return;}
   EXP_RET=null;render();window.scrollTo(0,0);toast(isNew?`Saved ${money(rec.amt)} ${EXP_NAME[rec.cat].toLowerCase()} expense`:"Expense updated");
 }
@@ -2908,21 +2912,72 @@ async function addMediaFiles(job,files,kind){
       n++;
     }catch(e){console.error(e);fail++;}
   }
-  save();
+  save();setTimeout(mediaSyncUp,0);
   return {n,fail};
 }
-async function preloadMedia(job){
+async function preloadMedia(job,want){
   const list=(job&&job.media)||[];let i=0;
   for(const m of list){i++;
     if(MEDIA_FILE[m.id])continue;
-    try{const rec=await MDB.get(m.id);if(!rec)continue;
+    try{let rec=await MDB.get(m.id);
+      if(!rec&&m.cloud===1&&(m.kind!=="video"||want===m.id||want==="all")){const b=await cloudGetBlob(m.id);if(b){rec={buf:await b.arrayBuffer(),type:b.type||m.mime||"image/jpeg"};try{await MDB.put(m.id,rec);}catch(e){}}}
+      if(!rec)continue;
       const name=`${(job.info.customer||"job").replace(/[^A-Za-z0-9]+/g,"-")}-${m.tag}-${i}.${extOf(rec.type)}`;
       const blob=new Blob([rec.buf],{type:rec.type});MEDIA_FILE[m.id]=new File([blob],name,{type:rec.type});
       if(m.kind==="photo")MEDIA_URL[m.id]=await readAsDataURL(blob);
     }catch(e){console.error(e);}
   }
 }
-async function deleteJobMedia(job){for(const m of (job&&job.media)||[]){try{await MDB.del(m.id);}catch(e){} delete MEDIA_FILE[m.id];delete MEDIA_URL[m.id];}}
+async function deleteJobMedia(job){const gone=[];for(const m of (job&&job.media)||[]){try{await MDB.del(m.id);}catch(e){} delete MEDIA_FILE[m.id];delete MEDIA_URL[m.id];if(m.cloud===1)gone.push(m.id);}cloudDel(gone);}
+
+/* ---- cloud copies: a private folder per shop in Supabase Storage (bucket "media") ---- */
+const CLOUD_MAX=48*1024*1024;let MEDIA_UP=false;
+const cloudPath=id=>`${encodeURIComponent(AUTH.shop_id)}/${encodeURIComponent(id)}`;
+async function cloudHdr(){await freshToken();if(!AUTH||!AUTH.shop_id)throw {code:"signedout"};return {"apikey":SUPA_KEY,"Authorization":"Bearer "+AUTH.access_token};}
+async function cloudPut(id,blob,type){
+  const h=await cloudHdr();
+  const r=await fetch(`${SUPA_URL}/storage/v1/object/media/${cloudPath(id)}`,{method:"POST",headers:{...h,"Content-Type":type||"application/octet-stream","x-upsert":"true","cache-control":"31536000"},body:blob});
+  if(!r.ok){const t=await r.text().catch(()=>"");throw {code:"http",status:r.status,msg:t||("Upload failed "+r.status)};}
+}
+async function cloudGetBlob(id){
+  if(!AUTH||!AUTH.shop_id||!navigator.onLine)return null;
+  try{const h=await cloudHdr();const r=await fetch(`${SUPA_URL}/storage/v1/object/authenticated/media/${cloudPath(id)}`,{headers:h});
+    if(!r.ok)return null;return await r.blob();}catch(e){return null;}
+}
+async function cloudDel(ids){
+  ids=(ids||[]).filter(Boolean);if(!ids.length||!AUTH||!AUTH.shop_id||APP.sample)return;
+  try{const h=await cloudHdr();await fetch(`${SUPA_URL}/storage/v1/object/media`,{method:"DELETE",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({prefixes:ids.map(id=>`${AUTH.shop_id}/${id}`)})});}catch(e){}
+}
+function dataURLBlob(u){const m=/^data:([^;,]+)?(;base64)?,(.*)$/s.exec(u||"");if(!m)return null;
+  const raw=m[2]?atob(m[3]):decodeURIComponent(m[3]);const a=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)a[i]=raw.charCodeAt(i);return new Blob([a],{type:m[1]||"image/jpeg"});}
+const fatal=e=>e&&(e.code==="signedout"||e.status===401||e.status===403||e.status===404);
+// Upload anything this phone has that the cloud doesn't. Runs in the background after syncs and new photos.
+async function mediaSyncUp(){
+  if(MEDIA_UP||!AUTH||!AUTH.shop_id||APP.sample||!navigator.onLine)return;
+  MEDIA_UP=true;let changed=false;
+  try{
+    for(const j of APP.jobs){
+      for(const m of j.media||[]){
+        if(m.cloud)continue;
+        let rec=null;try{rec=await MDB.get(m.id);}catch(e){}
+        if(!rec)continue;                                   // taken on another phone
+        if(rec.buf.byteLength>CLOUD_MAX){m.cloud="toolarge";changed=true;continue;}
+        try{await cloudPut(m.id,new Blob([rec.buf],{type:rec.type}),rec.type);m.cloud=1;changed=true;}
+        catch(e){if(fatal(e))throw e;}
+      }
+    }
+    if(!isTech()){
+      for(const e of APP.expenses||[]){
+        if(!e.rc||e.rcCloud)continue;
+        let v=null;try{v=await MDB.get("r_"+e.id);}catch(x){}
+        const b=dataURLBlob(v);if(!b)continue;
+        try{await cloudPut("r_"+e.id,b,b.type);e.rcCloud=1;changed=true;}
+        catch(x){if(fatal(x))throw x;}
+      }
+    }
+  }catch(e){console.warn("media upload paused",e);}
+  finally{MEDIA_UP=false;if(changed)save();}
+}
 function renderMedia(){
   const ms=S.media||[],tagName=Object.fromEntries(MTAGS);
   const nv=ms.filter(m=>m.kind==="video").length,np=ms.length-nv;
@@ -2938,13 +2993,13 @@ function renderMedia(){
         <button type="button" class="mdel${MEDIA_DEL===m.id?" sure":""}" data-mdel="${m.id}" aria-label="Delete">${MEDIA_DEL===m.id?"Delete?":"×"}</button></div>
       <input class="mcap" id="mc-${m.id}" data-mcap="${m.id}" value="${esc(m.cap)}" placeholder="Caption">
     </div>`).join("")}</div>
-    <p class="help full" style="margin:0">${np} photo${np===1?"":"s"}${nv?` · ${nv} video${nv===1?"":"s"}`:""}. Full-size photos and videos stay on this phone; backups keep small previews only.</p>`:""}
+    <p class="help full" style="margin:0">${np} photo${np===1?"":"s"}${nv?` · ${nv} video${nv===1?"":"s"}`:""}. ${AUTH?(ms.some(m=>m.cloud==="toolarge")?"Saved to your account, except videos over 48 MB, which stay on this phone.":ms.every(m=>m.cloud===1)?"Saved to your account.":"Saving to your account…"):"Full-size photos and videos stay on this phone; backups keep small previews only."}</p>`:""}
   </div>`;
 }
 async function openViewer(id){
   const m=(S.media||[]).find(x=>x.id===id);if(!m)return;
-  let f=MEDIA_FILE[id];if(!f){await preloadMedia(S);f=MEDIA_FILE[id];}
-  if(!f){toast("This file isn't on this phone.");return;}
+  let f=MEDIA_FILE[id];if(!f){if(m.cloud===1)toast(m.kind==="video"?"Downloading video…":"Loading…");await preloadMedia(S,id);f=MEDIA_FILE[id];}
+  if(!f){toast(m.cloud===1?"Couldn't download it. Check your connection.":"This file is only on the phone that took it.");return;}
   const u=MEDIA_OBJ[id]||(MEDIA_OBJ[id]=URL.createObjectURL(f));
   const ov=document.createElement("div");ov.className="viewer";ov.innerHTML=`<div class="vbox">${m.kind==="video"?`<video src="${u}" controls playsinline autoplay></video>`:`<img src="${u}" alt="${esc(m.cap||"Photo")}">`}
     <div class="vcap">${esc((Object.fromEntries(MTAGS)[m.tag]||"")+(m.cap?" · "+m.cap:""))}</div><button class="btn" type="button" data-vclose="1">Close</button></div>`;
@@ -2953,6 +3008,7 @@ async function openViewer(id){
 }
 function shareMedia(){
   const ms=S.media||[],files=ms.map(m=>MEDIA_FILE[m.id]).filter(Boolean);
+  if(files.length<ms.length&&ms.some(m=>!MEDIA_FILE[m.id]&&m.cloud===1)){toast("Downloading photos and videos… tap Send again in a moment.");preloadMedia(S,"all");return;}
   if(!files.length){toast("Still loading, try again in a second.");preloadMedia(S);return;}
   if(!(navigator.canShare&&navigator.canShare({files}))){toast("Sharing photos and videos isn't supported here.");return;}
   const i=S.info,text=`${vehOf(i)||"Your vehicle"}: ${i.work||"service"} — photos and videos from ${bizName()}.`;
@@ -4017,7 +4073,7 @@ document.addEventListener("click",e=>{
   if(d.act==="explog"){EXP_DRAFT=newExpDraft({cat:"parts",jobId:S.id,desc:"Parts"+(vehOf(S.info)?" – "+vehOf(S.info):S.info.customer?" – "+S.info.customer:"")});EXP_RET=S.id;EXP_DEL=false;APP.view="expenses";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-amt")?.focus(),30);return;}
   if(d.act==="expcancel"){EXP_DRAFT=null;EXP_DEL=false;if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";}EXP_RET=null;render();return;}
   if(d.act==="expdel"){EXP_DEL=true;rerenderKeep();return;}
-  if(d.act==="expdelgo"){const id=EXP_DRAFT.id;APP.expenses=APP.expenses.filter(e=>e.id!==id);MDB.del("r_"+id).catch(()=>{});EXP_DRAFT=null;EXP_DEL=false;save();
+  if(d.act==="expdelgo"){const id=EXP_DRAFT.id;const gone=APP.expenses.find(e=>e.id===id);APP.expenses=APP.expenses.filter(e=>e.id!==id);MDB.del("r_"+id).catch(()=>{});if(gone&&gone.rcCloud)cloudDel(["r_"+id]);EXP_DRAFT=null;EXP_DEL=false;save();
     if(EXP_RET&&APP.jobs.some(j=>j.id===EXP_RET)){APP.active=EXP_RET;APP.view="job";}EXP_RET=null;render();toast("Expense deleted");return;}
   if(d.expedit){const e=APP.expenses.find(x=>x.id===d.expedit);if(!e)return;if(APP.view==="job")EXP_RET=S.id;
     EXP_DRAFT=newExpDraft({...e,hadRc:!!e.rc});EXP_DEL=false;APP.view="expenses";render();window.scrollTo(0,0);return;}
@@ -4123,7 +4179,7 @@ document.addEventListener("click",e=>{
   if(d.mview){openViewer(d.mview);return;}
   if(d.mtag){const m=S.media.find(x=>x.id===d.mtag);const k=MTAGS.findIndex(([v])=>v===m.tag);m.tag=MTAGS[(k+1)%MTAGS.length][0];save();t.className=`mtag t-${m.tag}`;t.textContent=MTAGS[(k+1)%MTAGS.length][1];return;}
   if(d.mdel){if(MEDIA_DEL!==d.mdel){MEDIA_DEL=d.mdel;const y=window.scrollY;render();window.scrollTo(0,y);setTimeout(()=>{if(MEDIA_DEL===d.mdel){MEDIA_DEL=null;}},4000);return;}
-    const id=d.mdel;S.media=S.media.filter(x=>x.id!==id);MDB.del(id).catch(()=>{});delete MEDIA_FILE[id];delete MEDIA_URL[id];MEDIA_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Deleted");return;}
+    const id=d.mdel;const gm=S.media.find(x=>x.id===id);S.media=S.media.filter(x=>x.id!==id);MDB.del(id).catch(()=>{});if(gm&&gm.cloud===1)cloudDel([id]);delete MEDIA_FILE[id];delete MEDIA_URL[id];MEDIA_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Deleted");return;}
   if(d.jobcal){const j=APP.jobs.find(x=>x.id===d.jobcal);openIcs(`job-${(j.info.customer||"job").replace(/[^A-Za-z0-9]+/g,"-")}.ics`,jobIcs(j));return;}
   if(d.fucal){const j=APP.jobs.find(x=>x.id===d.fucal);openIcs(`reminder-${(j.info.customer||"customer").replace(/[^A-Za-z0-9]+/g,"-")}.ics`,fuIcs(j));return;}
   if(d.fumonths){const f=S.followup||(S.followup={what:"",date:"",miles:"",status:"open"});

@@ -640,6 +640,22 @@ body.scanning{overflow:hidden}
 .scan-bottom{position:relative;margin-top:auto;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(transparent,rgba(0,0,0,.8) 30%)}
 .scan-msg{margin:0 0 12px;font-size:16px;line-height:1.4}.scan-tip{margin:12px 0 0;font-size:13px;opacity:.8}
 .scan-acts{display:flex;gap:10px;flex-wrap:wrap}.scan-acts .btn{flex:1;text-align:center;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
+.mpi .items{gap:8px}.mpi-item{padding:10px}.mpi-item .rate{margin-top:8px}.rate.rate2{grid-template-columns:1fr 1fr}
+.mpi-x{border:0;background:none;color:var(--muted);font-size:16px;min-width:36px;min-height:36px;margin:-6px -6px 0 0}
+.mpi-count{font-weight:400;font-size:13px;color:var(--muted);margin-left:6px}.mpi-mon{color:var(--mon);font-weight:600}.mpi-bad{color:var(--bad);font-weight:600}
+.mpi-add{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mpi-add input{flex:1 1 160px}.mpi-add select{flex:1 1 160px}
+.mpi-set{display:flex;flex-direction:column;gap:8px}.mpi-set-row{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
+.mpi-set-row input,.mpi-set-row select{min-width:0}.mpi-set-row .mpi-unit{max-width:90px}.mpi-ord{display:flex;gap:4px;justify-content:flex-end}
+.mpi .items label.meas,.mpi .items label.corner{flex-direction:row;align-items:center;gap:8px;font-size:inherit;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink)}
+.mpi .items .meas input,.mpi .items .corner input{border:0;background:transparent;padding:8px 0;border-radius:0;width:72px;font-family:var(--f-mono)}
+.mpi .items .corner input{width:100%;min-width:0}.mpi .items .meas span,.mpi .items .cunit{font-size:12px;color:var(--muted);text-transform:none}
+.mpi .items .note{width:100%;margin-top:8px}
+.mpi-set-row{grid-template-columns:1fr 1fr auto}.mpi-set-row .mpi-name{grid-column:1/-1}.mpi-set-row .mpi-unit{max-width:none}
+@media(min-width:620px){.mpi-set-row{grid-template-columns:1.6fr 1.3fr 90px auto}.mpi-set-row .mpi-name{grid-column:auto}}
+body.tech-mode #navDash,body.tech-mode #navCust,body.tech-mode #navExp{display:none}
+body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [data-jump="docSeg"],body.tech-mode [data-askdel],body.tech-mode [data-edit]{display:none}
+.tm-acc{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1;margin-top:6px}.tm-ok{color:var(--good);font-weight:600;font-size:14px}
+.invite-ban{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:12px;margin:0 0 14px}.invite-ban.bad{background:var(--bad-soft);border-color:var(--bad)}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -786,6 +802,7 @@ function rebuildChecklist(settings){
     return sec;
   });
   STAGES=[{id:"intake",title:"Vehicle & Customer"},...SECTIONS,{id:"report",title:"Report"},{id:"invoice",title:"Invoice"}];
+  if(window.__TECH)STAGES=STAGES.filter(x=>x.id!=="invoice");
   ALL_ITEMS=SECTIONS.flatMap(sec=>sec.items.map(i=>Object.assign(i,{sec})));
 }
 rebuildChecklist(null);
@@ -857,6 +874,7 @@ try{
 const RESUMED_DRAFT=!!(APP.adding&&APP.draft);
 if(!RESUMED_DRAFT){APP.adding=false;APP.editing=null;APP.draft=null;}
 if(RESUMED_DRAFT)APP.view="jobs";else if(APP.view!=="job")APP.view="dash";
+try{window.__TECH=(JSON.parse(localStorage.getItem("honestech-auth")||"null")||{}).role==="tech";}catch(e){window.__TECH=false;}
 rebuildChecklist(APP.settings);
 APP.settings={...defaultSettings(),...APP.settings};if(!Array.isArray(APP.expenses))APP.expenses=[];if(!Array.isArray(APP.trips))APP.trips=[];if(!Array.isArray(APP.requests))APP.requests=[];if(!Array.isArray(APP.settings.techs))APP.settings.techs=[];if(!Array.isArray(APP.settings.menu))APP.settings.menu=[];
 try{applyTheme();}catch(e){}
@@ -909,14 +927,17 @@ async function cloudSignIn(email,pw,create){
     if(!j||!j.access_token){if(j&&(j.id||(j.user&&j.user.id)))throw {msg:"Account created. Check your email to confirm it, then sign in. (Or turn off Confirm email in Supabase.)"};throw {msg:"Couldn't create the account"};}}
   else j=await supa("/auth/v1/token?grant_type=password",{method:"POST",auth:false,body:{email,password:pw}});
   setAuth(j,email);
+  let joined=false;
+  if(INVITE){try{await acceptInvite();joined=true;}catch(e){AUTH=null;saveAuth();throw {msg:(e&&e.msg)||"Couldn't join the shop. Ask the owner for a new invite link."};}}
+  if(joined){const keep=APP.settings;APP=blankApp(null);APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.jobs=[];APP.view="jobs";SMETA={};AUTH.role="tech";saveAuth();applyRole();}
   const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:(shop&&shop.my_shop)||shop;saveAuth();
   // first time on this device: samples are never uploaded
-  if(APP.sample){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
+  if(APP.sample&&!joined){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
   SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
   try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
   SYNC.state="idle";await fetchPlan();await syncNow(true);
 }
-function cloudSignOut(){PLAN=null;TECHS.extra=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
+function cloudSignOut(){PLAN=null;if(isTech()){APP=blankApp(null);try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}}window.__TECH=false;rebuildChecklist(APP.settings);TECHS.extra=null;try{localStorage.removeItem("honestech-plan");}catch(e){}AUTH=null;saveAuth();SMETA={};saveMeta();SYNC.state="off";SYNC.err="";}
 /* ================= plans & subscriptions (Stripe) ================= */
 // Checkout and the billing page are opened by the "billing" server function (Supabase Edge Function).
 const BILLING={terms:"terms.html",privacy:"privacy.html"};
@@ -938,7 +959,9 @@ function techsCardHTML(){
 }
 const PRICES={soloM:"$24.99/mo",soloY:"$249/yr",team:"$49/mo",teamY:"$490/yr",seat:"$10/mo ($100/yr) per extra tech",trialDays:30};
 let PLAN=null;try{PLAN=JSON.parse(localStorage.getItem("honestech-plan")||"null");}catch(e){}
-async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));}}catch(e){}}
+async function fetchPlan(){if(!AUTH)return;try{const p=await supa("/rest/v1/rpc/my_plan",{method:"POST",body:{}});if(p&&typeof p==="object"){PLAN={...p,at:Date.now()};localStorage.setItem("honestech-plan",JSON.stringify(PLAN));if(AUTH&&p.role&&AUTH.role!==p.role){AUTH.role=p.role;saveAuth();applyRole(true);}}}catch(e){}}
+function applyRole(rerender){const t=!!(AUTH&&AUTH.role==="tech");if(t===window.__TECH&&!rerender)return;window.__TECH=t;rebuildChecklist(APP.settings);if(t&&["dash","customers","expenses","requests","dispatch","plan"].includes(APP.view))APP.view="jobs";if(rerender&&typeof render==="function")try{render();}catch(e){}}
+const isTech=()=>!!window.__TECH;
 const dayDiff=(a,b)=>Math.round((new Date(a+"T12:00:00")-new Date(b+"T12:00:00"))/864e5);
 function access(){
   if(!AUTH&&!IN_CLAUDE)return {ok:false,kind:"account"};
@@ -956,7 +979,7 @@ async function openBilling(body){const r=await supa("/functions/v1/billing",{met
 function planStatusLine(){const a=access();
   return a.kind==="account"?"No account yet":a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
     :a.kind==="sample"?"Sample data":a.left>=0?`Free trial · ${a.left} day${a.left===1?"":"s"} left`:"Free trial ended";}
-function trialBannerHTML(){const a=access();if(a.kind!=="trial"||a.left>10)return "";
+function trialBannerHTML(){if(isTech())return "";const a=access();if(a.kind!=="trial"||a.left>10)return "";
   return `<button type="button" class="dash-card dash-link trial-ban" data-nav="plan"><span><strong>${a.left>0?`${a.left} day${a.left===1?"":"s"} left in your free trial`:"Your free trial ends today"}</strong> · choose a plan to keep going</span><span>›</span></button>`;}
 function renderPlan(){
   const a=access(),signed=!!AUTH,busy=!!BUY_BUSY;
@@ -995,6 +1018,7 @@ function demoHTML(){
     <div class="lp-demo-f">Tap to change a result. The PDF report updates as you go.</div></div>`;
 }
 function renderJoin(){
+  if(INVITE)return `<div class="stage-head"><div class="eyebrow">Technician invite</div><h2>Join your shop</h2></div>${inviteBannerHTML()}${cloudSettingsHTML()}`;
   return `<div class="lp">
   <section class="lp-hero">
     <div class="lp-hero-t">
@@ -1048,10 +1072,14 @@ function renderJoin(){
     <p><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a> <button class="mini" type="button" data-nav="help">How the app works</button></p>
   </footer></div>`;
 }
+function techCfg(){const s=APP.settings;const o={};["biz","owner","phone","email","web","logo","hidden","custom","mpiList","mpiAuto","omwTpl","mapsApp","ppiDisc","pdfAccent","themeAccent"].forEach(k=>{if(s[k]!==undefined)o[k]=s[k];});
+  o.techs=(s.techs||[]).map(t=>({id:t.id,name:t.name,color:t.color}));return o;}
+function stampTechUsers(){const ts=APP.settings.techs||[];APP.jobs.forEach(j=>{const t=ts.find(x=>x.id===j.techId);const u=t&&t.userId||"";if((j.techUser||"")!==u)j.techUser=u;});}
 function localRecords(){
+  if(isTech()){const me=AUTH&&AUTH.user_id;return APP.jobs.filter(j=>j&&j.id&&j.techUser&&j.techUser===me).map(j=>({kind:"job",id:String(j.id),data:j}));}
   const out=[];const add=(kind,arr)=>(arr||[]).forEach(x=>{if(x&&x.id)out.push({kind,id:String(x.id),data:x});});
   add("job",APP.jobs);add("customer",APP.customers);add("expense",APP.expenses);add("trip",APP.trips);add("request",APP.requests);
-  const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});return out;
+  const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});if((APP.settings.techs||[]).length)out.push({kind:"techcfg",id:"main",data:techCfg()});return out;
 }
 function scheduleSync(){if(!AUTH||APP.sample)return;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(()=>syncNow(),3500);}
 async function syncNow(full){
@@ -1062,6 +1090,7 @@ async function syncNow(full){
     const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{}};}
     SMETA.h=SMETA.h||{};
     const first=!SMETA.cursor;
+    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();}
     // local fingerprints: what's changed here since the last sync ("dirty")
     const loc=localRecords(),lh={};loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
     const dirty=k=>k in lh&&SMETA.h[k]!==lh[k];
@@ -1078,7 +1107,11 @@ async function syncNow(full){
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
     now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
-    Object.keys(SMETA.h).forEach(k=>{if(!seen.has(k)&&!k.startsWith("settings:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
+    if(isTech()){ // jobs taken off my list disappear from this phone
+      const vis=await supa(`/rest/v1/records?select=id&kind=eq.job&deleted=eq.false&shop_id=eq.${shopId}`);const ids=new Set((vis||[]).map(x=>String(x.id)));
+      const before=APP.jobs.length;APP.jobs=APP.jobs.filter(j=>ids.has(String(j.id))||!(SMETA.h["job:"+j.id]));
+      Object.keys(SMETA.h).forEach(k=>{if(k.startsWith("job:")&&!ids.has(k.slice(4)))delete SMETA.h[k];});if(APP.jobs.length!==before){changed++;syncActive();}}
+    Object.keys(SMETA.h).forEach(k=>{if(!isTech()&&!seen.has(k)&&!k.startsWith("settings:")&&!k.startsWith("techcfg:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
     for(let i=0;i<push.length;i+=25){const chunk=push.slice(i,i+25);
       await supa("/rest/v1/records?on_conflict=shop_id,kind,id",{method:"POST",body:chunk.map(x=>x.row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
       chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
@@ -1089,6 +1122,8 @@ async function syncNow(full){
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
 }
 function applyRemote(r){
+  if(r.kind==="techcfg"){if(!isTech()||r.deleted)return 0;const k="techcfg:main",hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;
+    const keep={theme:APP.settings.theme,themeMode:APP.settings.themeMode,themeBg:APP.settings.themeBg};Object.assign(APP.settings,r.data,keep);SMETA.h[k]=hh;return 1;}
   const k=r.kind+":"+r.id,mapK={job:"jobs",customer:"customers",expense:"expenses",trip:"trips",request:"requests"}[r.kind];
   if(r.kind==="settings"){if(r.deleted)return 0;const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
   if(!mapK)return 0;const arr=APP[mapK]||(APP[mapK]=[]);const i=arr.findIndex(x=>String(x.id)===String(r.id));
@@ -1101,6 +1136,17 @@ function syncStatusText(){const t=SYNC.last?new Date(SYNC.last).toLocaleTimeStri
   return {off:"Not signed in",idle:"Waiting to sync",syncing:"Syncing…",ok:`Up to date${t?" · "+t:""}`,offline:`Offline. Will sync when you're back online${t?" · last "+t:""}`,error:`Sync problem: ${SYNC.err}`}[SYNC.state]||"";}
 function syncStatusHTML(){return `<span class="sync-st s-${SYNC.state}">${SYNC.state==="ok"?"☁︎ ✓":SYNC.state==="syncing"?"☁︎ ↻":SYNC.state==="offline"?"☁︎ ✕":SYNC.state==="error"?"☁︎ !":"☁︎"} ${esc(syncStatusText())}</span>`;}
 let CLOUD_FORM={email:"",pw:"",busy:false,msg:""};
+let INVITE=null;try{INVITE=JSON.parse(localStorage.getItem("honestech-invite")||"null");}catch(e){}
+(()=>{const m=/[?&]invite=([0-9a-f-]{36})/i.exec(location.search);if(!m)return;INVITE={token:m[1].toLowerCase()};try{localStorage.setItem("honestech-invite",JSON.stringify(INVITE));}catch(e){}
+  history.replaceState(null,"",location.pathname);})();
+async function loadInviteInfo(){if(!INVITE||INVITE.info||INVITE.loading)return;INVITE.loading=true;
+  try{const r=await supa("/rest/v1/rpc/invite_info",{method:"POST",auth:false,body:{p_token:INVITE.token}});INVITE.info=r||{bad:true};}catch(e){INVITE.info={err:true};}
+  INVITE.loading=false;if(typeof render==="function")try{render();}catch(e){}}
+function inviteBannerHTML(){if(!INVITE)return "";const i=INVITE.info;if(!i){setTimeout(loadInviteInfo,0);return `<div class="invite-ban">Checking your invite…</div>`;}
+  if(i.bad||i.used||i.expired)return `<div class="invite-ban bad"><strong>This invite link ${i.used?"was already used":i.expired?"has expired":"isn't valid"}.</strong> Ask the shop owner to send a new one. <button class="mini" type="button" data-act="inviteDrop">Dismiss</button></div>`;
+  return `<div class="invite-ban"><strong>${esc(i.shop||"A shop")} invited you${i.tech_name?", "+esc(i.tech_name):""}.</strong> Create your account (or sign in) to see the jobs assigned to you.</div>`;}
+async function acceptInvite(){const r=await supa("/rest/v1/rpc/accept_invite",{method:"POST",body:{p_token:INVITE.token}});
+  INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}return r;}
 let RECOVERY=null;
 (()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
   if(q.get("type")==="recovery"&&q.get("access_token"))RECOVERY={token:q.get("access_token"),msg:"",busy:false};
@@ -1119,7 +1165,7 @@ function cloudSettingsHTML(){
   if(AUTH)return `<div class="form cloud-set" id="setCloud"><p class="formh">☁️ Cloud sync</p>
     <p class="full" style="margin:0">Signed in as <strong>${esc(AUTH.email||"")}</strong></p>
     <div class="full" id="syncLbl">${syncStatusHTML()}</div>
-    <div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>
+    ${isTech()?"":`<div class="full plan-line"><span>Plan: <strong>${esc(planStatusLine())}</strong></span><button class="mini" type="button" data-nav="plan">View plans</button></div>`}
     <p class="help full" style="margin:0">Your jobs, customers, expenses, requests and settings sync to your account. Sign in with the same email on another phone, iPad or computer (open the app link in any browser) to see everything there. Photos, videos and receipt pictures stay on the device that took them for now.</p>
     <div class="formacts full"><button class="btn primary" type="button" data-act="syncnow">Sync now</button><button class="btn" type="button" data-act="signout">Sign out</button></div></div>`;
   const gate=!AUTH&&!IN_CLAUDE;
@@ -1385,7 +1431,7 @@ function reqToDraft(r){
 
 /* ================= team & dispatch (turns on when technicians are added) ================= */
 const TECH_COLORS=["#1d5fa8","#e2620f","#2b8a3e","#6a3fc8","#c0262d","#0b7f8f","#b07d0a","#3d4651"];
-const hasTeam=()=>(APP.settings.techs||[]).length>0;
+const hasTeam=()=>!isTech()&&(APP.settings.techs||[]).length>0;
 function teamList(){const st=APP.settings;return [{id:"me",name:(st.owner||"Me").trim()||"Me",phone:st.phone||"",color:"#15202b",me:true},...(st.techs||[])];}
 function techOf(j){if(j.techId){const t=teamList().find(x=>x.id===j.techId);if(t)return t;}
   const n=String(j.info.tech||"").trim().toLowerCase();if(!n)return null;return teamList().find(x=>x.name.trim().toLowerCase()===n)||null;}
@@ -1394,15 +1440,28 @@ const DSP_ST=[["assigned","Assigned"],["enroute","On the way"],["onsite","On sit
 function dspStatus(j){if(j.status==="done")return "done";if(!techOf(j))return "unassigned";return j.dispatch||"assigned";}
 const DSP_LBL={unassigned:"Unassigned",assigned:"Assigned",enroute:"On the way",onsite:"On site",done:"Done"};
 let TECH_NEW=null,TECH_DEL=null;
+let TEAM={at:0,list:[],busy:"",msg:""};
+async function loadTeam(quiet){if(!AUTH||isTech())return;try{const r=await supa("/rest/v1/rpc/team_status",{method:"POST",body:{}});TEAM.list=Array.isArray(r)?r:[];TEAM.at=Date.now();
+  let ch=false;(APP.settings.techs||[]).forEach(t=>{const inv=TEAM.list.find(x=>x.tech_id===t.id&&x.active);const u=inv?inv.user_id:"";if((t.userId||"")!==u){t.userId=u;ch=true;}});
+  if(ch){stampTechUsers();try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}scheduleSync();}
+  if(!quiet&&APP.view==="settings")rerenderKeep();}catch(e){}}
+function techAccessHTML(t){
+  if(!AUTH)return `<div class="tm-acc help">Sign in to Cloud sync to give ${esc(t.name)} their own login.</div>`;
+  const inv=TEAM.list.find(x=>x.tech_id===t.id);const busy=TEAM.busy===t.id;
+  if(inv&&inv.active)return `<div class="tm-acc"><span class="tm-ok">✓ Has their own login${inv.email?" ("+esc(inv.email)+")":""}</span><button class="mini del" type="button" data-techrm="${t.id}" ${busy?"disabled":""}>${TEAM.rm===t.id?"Tap again to remove access":"Remove access"}</button></div>`;
+  if(inv&&!inv.accepted_at)return `<div class="tm-acc"><span class="help">Invite sent ${esc(fmtDate(String(inv.created_at).slice(0,10),{month:"short",day:"numeric"}))}. Waiting for ${esc(t.name)} to join.</span><button class="mini" type="button" data-techinv="${t.id}" ${busy?"disabled":""}>Send a new invite</button><button class="mini" type="button" data-techrm="${t.id}">Cancel invite</button></div>`;
+  return `<div class="tm-acc"><button class="mini go" type="button" data-techinv="${t.id}" ${busy?"disabled":""}>${busy?"Creating link…":"Invite to the app"}</button><span class="help">They get their own login and see only their jobs.</span></div>`;
+}
 function teamSettingsHTML(){
-  const ts=APP.settings.techs||[];
+  const ts=APP.settings.techs||[];if(AUTH&&ts.length&&!TEAM.at&&!TEAM.loading){TEAM.loading=true;setTimeout(()=>loadTeam().finally(()=>{TEAM.loading=false;}),0);}
   return `<div class="form" id="teamSet">
     <p class="formh">Team &amp; dispatch</p>
     <p class="help full" style="margin:0">Working solo? Leave this empty. Add technicians to turn on the <strong>Dispatch board</strong>, where you assign jobs, text job sheets to techs and track where everyone is. You're on the team automatically as ${esc(teamList()[0].name)}.</p>
     ${ts.length?`<div class="full team-list">${ts.map(t=>`<div class="tm-row"><span class="tm-dot" style="background:${esc(t.color)}"></span>
       <input data-techf="${t.id}:name" value="${esc(t.name)}" placeholder="Name" aria-label="Technician name"><input data-techf="${t.id}:phone" value="${esc(t.phone||"")}" inputmode="tel" placeholder="Phone" aria-label="Technician phone">
       ${TECH_DEL===t.id?`<button class="mini del" type="button" data-techdelgo="${t.id}">Remove</button><button class="mini" type="button" data-techdelno="1">Keep</button>`:`<button class="xbtn" type="button" data-techdel="${t.id}" aria-label="Remove ${esc(t.name)}">×</button>`}
-      <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div></div>`).join("")}</div>`:""}
+      <div class="tm-colors">${TECH_COLORS.map(c=>`<button type="button" class="tm-c" data-techcolor="${t.id}:${c}" style="background:${c}" aria-pressed="${t.color===c}" aria-label="Color"></button>`).join("")}</div>${techAccessHTML(t)}</div>`).join("")}</div>`:""}
+    ${TEAM.msg?`<div class="full vin-warn">${esc(TEAM.msg)}${/limit|seat/i.test(TEAM.msg)?` <button class="mini" type="button" data-nav="plan">Add a technician seat</button>`:""}</div>`:""}
     ${TECH_NEW?`<div class="full tm-new"><input id="tmName" data-technew="name" value="${esc(TECH_NEW.name)}" placeholder="Technician name"><input data-technew="phone" value="${esc(TECH_NEW.phone)}" inputmode="tel" placeholder="Phone (for texting job sheets)">
       <div class="acts"><button class="mini go" type="button" data-act="techsave">Add technician</button><button class="mini" type="button" data-act="techcancel">Cancel</button></div></div>`
       :`<div class="full"><button class="mini" type="button" data-act="techadd">＋ Add a technician</button></div>`}
@@ -2065,11 +2124,11 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
-    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";
+    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
     return;
   }
   const svc=isSvc(S);
@@ -2095,7 +2154,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   const on=$("#steps .on"); if(on) on.scrollIntoView({block:"nearest",inline:"center"});
   $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";
   const id=STAGES[S.step].id;
-  $("#nextBtn").textContent=id==="invoice"?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
+  $("#nextBtn").textContent=id==="invoice"||(isTech()&&id==="report")?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
   $("#countLbl").textContent=`${st.done}/${st.total}`;
 }
 function sampleBanner(){
@@ -2208,25 +2267,25 @@ const COL_DEFAULT={done:true};
 const isCol=k=>{const c=APP.col||{};return k in c?!!c[k]:!!COL_DEFAULT[k];};
 function grpH(k,label,n,extra=""){const c=isCol(k);return `<button type="button" class="group-h grp-t" data-grp="${esc(k)}" aria-expanded="${!c}"><span class="grp-chev">${c?"▸":"▾"}</span>${esc(label)}<span class="grp-n">${n}</span>${extra}</button>`;}
 function jobRowCompact(j){const i=j.info,svc=isSvc(j);
-  const st=j.status==="done"?(j.invoice.paid?`<span class="st st-paid">Paid</span>`:`<span class="st st-unpaid">${money(jobTotal(j))}</span>`):j.status==="active"?`<span class="st st-active">In progress</span>`:"";
+  const st=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:j.invoice.paid?`<span class="st st-paid">Paid</span>`:`<span class="st st-unpaid">${money(jobTotal(j))}</span>`):j.status==="active"?`<span class="st st-active">In progress</span>`:"";
   return `<button type="button" class="job-c" data-open="${j.id}"><span class="jc-t">${i.time?esc(fmtTime(i.time)):"—"}</span><span class="jc-w"><strong>${esc(i.customer||"No name")}</strong> <small>${esc([vehOf(i),svc?i.work:""].filter(Boolean).join(" · "))}</small></span><span class="tag">${svc?"Svc":"PPI"}</span>${st}<span class="jc-go">›</span></button>`;}
 const cardsHTML=js=>APP.compact?`<div class="jobs-c">${js.map(jobRowCompact).join("")}</div>`:`<div class="jobs">${js.map(jobCard).join("")}</div>`;
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
-  const status=j.status==="done"?`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`
+  const status=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
     :j.status==="active"?`<span class="st st-active">In progress${svc?"":` ${st.done}/${st.total}`}</span>`:`<span class="st st-sched">Booked</span>`;
   const confirmDel=APP.confirmDel===j.id;
-  const estChip=svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
+  const estChip=!isTech()&&svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
     <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&j.status!=="done"&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
-    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
+    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
-      :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?"Open invoice":j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
+      :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?(isTech()?"Open job":"Open invoice"):j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"&&j.invoice.paid&&!j.reviewAt&&(APP.settings.reviewLink||"").trim()&&i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,reviewText(j)))}" data-reviewsent="${j.id}">⭐ Review</a>`:""}
-      ${j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${isTech()?"":j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
       ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
       ${j.status!=="done"&&i.location?dirLink(i.location):""}
       ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
@@ -2343,6 +2402,7 @@ function themeSectionHTML(){
 
 /* ================= settings ================= */
 function renderSettings(){
+  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${cloudSettingsHTML()}`;
   const s=APP.settings;
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
@@ -2395,6 +2455,7 @@ function renderSettings(){
     <label class="full">Warranty / fine print on service invoices<textarea data-set="warranty" rows="2" placeholder="e.g. 12 months / 12,000 miles on parts and labor I supply. Customer-supplied parts are not covered.">${esc(s.warranty||"")}</textarea><span class="help">Prints at the bottom of service estimates and invoices. Leave blank for none.</span></label>
     <label class="full">PPI report disclaimer<textarea data-set="ppiDisc" rows="4">${esc(s.ppiDisc||"")}</textarea><span class="help">Prints at the bottom of every pre-purchase inspection report. Have a lawyer or your insurance agent review your wording.</span></label>
   </div>
+  ${mpiSettingsHTML()}
   <div class="form" id="setReminders">
     <p class="formh">Reminders &amp; directions</p>
     <label class="full">"On my way" text<textarea id="s-omwTpl" data-set="omwTpl" rows="3" placeholder="${esc(OMW_DEFAULT)}">${esc(s.omwTpl||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first} customer's first name, {tech}, {business}, {eta} arrival time, {minutes}, {vehicle}.</span></label>
@@ -2902,6 +2963,7 @@ function renderService(){
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
   </div>
+  ${mpiSectionHTML(S)}
   ${timerHTML()}</div>
   <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
@@ -3059,6 +3121,8 @@ function estimateText(){
   if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row("ESTIMATED TOTAL",t.total);
+  if(i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
+  L.push(...mpiText(S));
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
   if((st.warranty||"").trim())L.push("Warranty: "+st.warranty.trim());
   if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
@@ -3144,6 +3208,7 @@ function invoiceText(){
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row(inv.paid?"PAID":"TOTAL DUE",t.total);
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
+  if(t.svc)L.push(...mpiText(S));
   if(t.svc&&nextServiceLine(S)){L.push("");L.push("NEXT SERVICE: "+nextServiceLine(S));}
   if(t.svc&&(S.media||[]).length){const nv=S.media.filter(m=>m.kind==="video").length,np=S.media.length-nv;L.push("");L.push(`Photos/videos: ${np} photo${np===1?"":"s"}${nv?`, ${nv} video${nv===1?"":"s"}`:""} (sent separately)`);}
   if(t.svc&&(st.warranty||"").trim()){L.push("");L.push("WARRANTY: "+st.warranty.trim());}
@@ -3373,6 +3438,7 @@ function buildInvoicePdf(job,est){
     {const tt=fleetTermsLine(job,inv.date)||s.terms;if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
   }
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
+  if(svc)mpiPdf(P,job);
   if(svc&&!est&&nextServiceLine(job)){P.y+=12;P.need(46);doc.setFillColor(...PC.paper);const nl=P.wrap(nextServiceLine(job),PW-2*PM-24);doc.roundedRect(PM,P.y-4,PW-2*PM,22+nl.length*13,5,5,"F");
     P.font(8,"bold",PC.accent);P.text("NEXT SERVICE",PM+12,P.y+9);P.font(10,"bold");P.text(nl,PM+12,P.y+23);P.y+=26+nl.length*13;}
   if(!est&&job.sig&&job.sig.inv){const sg=job.sig.inv;P.y+=14;P.need(80);try{doc.addImage(sg.data,"JPEG",PM,P.y,180,48);}catch(e){}P.y+=52;
@@ -3422,10 +3488,12 @@ async function savePdf(kind){
 
 /* ================= render & navigation ================= */
 function render(){applyTheme();
-  const acc=access();document.body.classList.toggle("gated",acc.kind==="account");
+  const acc=access();document.body.classList.toggle("gated",acc.kind==="account");document.body.classList.toggle("tech-mode",isTech());
+  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help"].includes(APP.view))APP.view="jobs";}
+  if(isTech()&&S&&!isSvc(S)&&S.step>=STAGES.length)S.step=STAGES.length-1;
   if(acc.kind==="account"){if(!["join","help"].includes(APP.view))APP.view="join";}
   else if(APP.view==="join")APP.view="dash";
-  else if(!acc.ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
+  else if(!isTech()&&!acc.ok&&!["settings","help","plan"].includes(APP.view)){APP.view="plan";}
   syncActive();
   let html;
   if(APP.view==="settings")html=renderSettings();
@@ -3436,6 +3504,7 @@ function render(){applyTheme();
   else if(APP.view==="help")html=renderHelp();
   else if(APP.view==="plan")html=renderPlan();
   else if(APP.view==="join")html=renderJoin();
+  else if(APP.view==="techlocked")html=`<div class="stage-head"><div class="eyebrow">Technician</div><h2>Your shop's plan isn't active</h2><p class="when">Ask ${esc(APP.settings.owner||APP.settings.biz||"the shop owner")} to renew the Honestech plan. Your jobs come back as soon as they do.</p></div>${cloudSettingsHTML()}`;
   else if(APP.view==="expenses"){html=renderExpenses();setTimeout(loadReceipts,0);}
   else if(APP.view==="jobs")html=renderJobs();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
@@ -3458,7 +3527,7 @@ function saveDraft(){
   const {type,custId,...info}=d;
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
-  else{const nj=newJob(info,type);if(custId)nj.custId=custId;applyAgreed(nj);APP.jobs.push(nj);
+  else{const nj=newJob(info,type);if(custId)nj.custId=custId;if(type==="service"&&APP.settings.mpiAuto)mpiStart(nj);applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
@@ -3466,6 +3535,116 @@ function saveDraft(){
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
 
+
+
+/* ================= quick multipoint inspection (service jobs) ================= */
+const MPI_DEFAULT=[
+  {id:"battery",label:"Battery voltage",kind:"rate",unit:"V",ph:"12.6"},
+  {id:"brakes",label:"Brake pads",kind:"corners",unit:"mm",ph:"8"},
+  {id:"tread",label:"Tire tread depth",kind:"corners",unit:"/32",ph:"7"},
+  {id:"pressure",label:"Tire pressure",kind:"corners",unit:"psi",ph:"35"},
+  {id:"susp",label:"Suspension & steering",kind:"rate"},
+  {id:"balljoints",label:"Ball joints",kind:"rate"},
+  {id:"exhaust",label:"Exhaust",kind:"rate"},
+  {id:"lights",label:"Lights",kind:"rate"},
+  {id:"leaks",label:"Fluid leaks",kind:"rate"},
+  {id:"reset",label:"Reset maintenance light",kind:"task"}];
+const MPI_KINDS=[["rate","Rating"],["corners","4 wheels"],["task","Done or not"]];
+const MPI_STATUS={good:"Good",mon:"Monitor",bad:"Repair",na:"N/A",done:"Done",skip:"Not needed"};
+function mpiList(){const s=APP.settings;if(!Array.isArray(s.mpiList))s.mpiList=MPI_DEFAULT.map(x=>({...x}));return s.mpiList;}
+function mpiStart(job){job.mpi={items:mpiList().map(x=>({...x})),res:{}};}
+function mpiRes(job,id){const m=job.mpi;return m.res[id]||(m.res[id]={r:"",val:"",c:{},note:""});}
+function mpiReading(it,r){
+  if(it.kind==="corners"){const c=r.c||{};const parts=CORNERS.map(([k])=>c[k]!==undefined&&c[k]!==""?`${k} ${c[k]}`:"").filter(Boolean);return parts.length?parts.join(", ")+(it.unit?" "+it.unit:""):"";}
+  return r.val!==undefined&&r.val!==""?r.val+(it.unit?" "+it.unit:""):"";}
+function mpiRows(job){const m=job&&job.mpi;if(!m)return [];
+  return m.items.map(it=>{const r=m.res[it.id]||{};return {it,r:r.r||"",status:MPI_STATUS[r.r]||"Not checked",reading:mpiReading(it,r),note:(r.note||"").trim()};}).filter(x=>x.r||x.reading||x.note);}
+function mpiCounts(job){const c={good:0,mon:0,bad:0};mpiRows(job).forEach(x=>{if(c[x.r]!==undefined)c[x.r]++;});return c;}
+function mpiItemHTML(it,r){
+  const opts=it.kind==="task"?[["done","Done","good"],["skip","Not needed","na"]]:RATES.map(([v,l])=>[v,l,v]);
+  return `<div class="item mpi-item" data-r="${r.r==="done"?"good":r.r==="skip"?"na":r.r}">
+    <div class="item-top"><div class="item-label">${esc(it.label)}</div><button type="button" class="mpi-x" data-mpidel="${it.id}" aria-label="Remove ${esc(it.label)} from this job">✕</button></div>
+    <div class="rate${it.kind==="task"?" rate2":""}" role="group" aria-label="${esc(it.label)}">${opts.map(([v,l,c])=>`<button type="button" data-mpir="${it.id}|${v}" data-v="${c}" aria-pressed="${r.r===v}">${l}</button>`).join("")}</div>
+    ${it.kind==="rate"&&it.unit?`<div class="extras"><label class="meas"><input data-mpival="${it.id}" inputmode="decimal" placeholder="${esc(it.ph||"")}" value="${esc(r.val||"")}" aria-label="${esc(it.label)} reading"><span>${esc(it.unit)}</span></label></div>`:""}
+    ${it.kind==="corners"?`<div class="corners">${CORNERS.map(([k,name])=>`<label class="corner"><span class="cname">${k}</span><input data-mpic="${it.id}|${k}" inputmode="decimal" placeholder="${esc(it.ph||"")}" value="${esc((r.c||{})[k]??"")}" aria-label="${name} ${esc(it.label)}"><span class="cunit">${esc(it.unit||"")}</span></label>`).join("")}</div>`:""}
+    ${r.note||MPI_NOTE===it.id?`<textarea class="note" data-mpinote="${it.id}" placeholder="What did you find?">${esc(r.note||"")}</textarea>`:(it.kind==="task"?"":`<div class="extras"><button class="mini" type="button" data-mpiaddnote="${it.id}">＋ Note</button></div>`)}
+  </div>`;
+}
+let MPI_NOTE=null,MPI_ADD=false;
+function mpiSectionHTML(job){
+  if(!job.mpi)return `<div class="form mpi-off"><p class="formh">Multipoint inspection</p><p class="help full" style="margin:0">A quick check of battery, brakes, tires, lights and more. It prints on the estimate and invoice.</p>
+    <div class="formacts full"><button class="btn" type="button" data-act="mpiStart">Add multipoint inspection</button></div></div>`;
+  const m=job.mpi,c=mpiCounts(job),done=m.items.filter(it=>(m.res[it.id]||{}).r).length;
+  return `<div class="form mpi" id="mpiBox"><p class="formh">Multipoint inspection <span class="mpi-count">${done} of ${m.items.length} checked${c.mon||c.bad?` · <span class="mpi-mon">${c.mon} monitor</span> · <span class="mpi-bad">${c.bad} repair</span>`:""}</span></p>
+    <div class="items full">${m.items.map(it=>mpiItemHTML(it,mpiRes(job,it.id))).join("")}</div>
+    ${MPI_ADD?`<div class="full mpi-add"><input id="mpiNew" placeholder="e.g. Wiper blades" autocomplete="off" aria-label="New inspection item"><select id="mpiNewKind" aria-label="Type">${MPI_KINDS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select><button class="mini go" type="button" data-act="mpiAddSave">Add</button><button class="mini" type="button" data-act="mpiAddCancel">Cancel</button></div>`
+      :`<div class="full acts"><button class="mini" type="button" data-act="mpiAdd">＋ Add item to this job</button>${c.mon||c.bad?`<button class="mini" type="button" data-act="mpiRecs">Copy Monitor and Repair items to Recommendations</button>`:""}<button class="mini del" type="button" data-act="mpiRemove">Remove inspection</button></div>`}
+    <p class="help full" style="margin:0">Change the standard list in Settings → Multipoint inspection.</p></div>`;
+}
+function mpiRefresh(){const b=document.getElementById("mpiBox")||document.querySelector(".mpi-off");if(!b||!S)return;const tmp=document.createElement("div");tmp.innerHTML=mpiSectionHTML(S);b.replaceWith(tmp.firstElementChild);}
+function mpiText(job){const rows=mpiRows(job);if(!rows.length)return [];
+  return ["","MULTIPOINT INSPECTION",...rows.map(x=>`${x.it.label}: ${x.status}${x.reading?" ("+x.reading+")":""}${x.note?" - "+x.note:""}`)];}
+function mpiPdf(P,job){const rows=mpiRows(job);if(!rows.length)return;
+  P.y+=12;P.need(40);P.font(8,"bold",PC.muted);P.text("MULTIPOINT INSPECTION",PM,P.y);P.y+=14;
+  const col={good:PC.good,mon:PC.mon,bad:PC.bad,na:PC.na,done:PC.good,skip:PC.na};
+  rows.forEach(x=>{const left=x.it.label+(x.reading?"  ·  "+x.reading:"");const nl=x.note?P.wrap(x.note,PW-2*PM-110):[];P.need(16+nl.length*12);
+    P.font(10);P.text(P.wrap(left,PW-2*PM-110)[0],PM,P.y);P.font(10,"bold",col[x.r]||PC.muted);P.text(x.status,PW-PM-100,P.y);P.y+=14;
+    if(nl.length){P.font(9,"normal",PC.muted);P.text(nl,PM+10,P.y-2);P.y+=nl.length*12;}});
+}
+function mpiSettingsHTML(){const L=mpiList(),s=APP.settings;
+  return `<div class="form" id="setMpi"><p class="formh">Multipoint inspection</p>
+    <p class="help full" style="margin:0">The quick check for service jobs. Add, rename, reorder or remove items. Changes apply to new inspections.</p>
+    <label class="check full"><input type="checkbox" data-setc="mpiAuto" ${s.mpiAuto?"checked":""}> Add it to every new service job automatically</label>
+    <div class="full mpi-set">${L.map((it,k)=>`<div class="mpi-set-row">
+      <input class="mpi-name" data-mpiset="${k}|label" value="${esc(it.label)}" aria-label="Item name">
+      <select data-mpiset="${k}|kind" aria-label="Type">${MPI_KINDS.map(([v,l])=>`<option value="${v}" ${it.kind===v?"selected":""}>${l}</option>`).join("")}</select>
+      ${it.kind!=="task"?`<input data-mpiset="${k}|unit" value="${esc(it.unit||"")}" placeholder="Unit" aria-label="Reading unit" class="mpi-unit">`:"<span></span>"}
+      <span class="mpi-ord"><button class="mini" type="button" data-mpimove="${k}|-1" aria-label="Move up" ${k?"":"disabled"}>↑</button><button class="mini" type="button" data-mpimove="${k}|1" aria-label="Move down" ${k<L.length-1?"":"disabled"}>↓</button><button class="mini del" type="button" data-mpisetdel="${k}" aria-label="Remove ${esc(it.label)}">✕</button></span></div>`).join("")}</div>
+    <div class="full acts"><button class="mini go" type="button" data-act="mpiSetAdd">＋ Add item</button><button class="mini" type="button" data-act="mpiSetReset">Restore the standard list</button></div>
+    <p class="help full" style="margin:0">Rating gives Good / Monitor / Repair / N/A. 4 wheels adds a reading for each wheel. Done or not is for tasks like resetting the oil light. Add a unit (V, psi, mm) to get a box for the reading.</p></div>`;
+}
+
+
+const MPI_AUTO={battery:v=>v<12.2?"bad":v<12.45?"mon":"good",brakes:v=>v<=3?"bad":v<=5?"mon":"good",tread:v=>v<=2?"bad":v<=4?"mon":"good"};
+function mpiAutoRate(it,r){const f=MPI_AUTO[it.id];if(!f||r.manual)return;
+  const vals=it.kind==="corners"?Object.values(r.c||{}).filter(x=>x!==""&&!isNaN(+x)).map(Number):(r.val!==""&&!isNaN(+r.val)?[+r.val]:[]);
+  r.r=vals.length?f(Math.min(...vals)):"";}
+function mpiPaint(id){const box=document.querySelector(`[data-mpidel="${CSS.escape(id)}"]`)?.closest(".mpi-item");if(!box||!S||!S.mpi)return;const r=mpiRes(S,id);
+  box.dataset.r=r.r==="done"?"good":r.r==="skip"?"na":r.r;box.querySelectorAll("[data-mpir]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mpir.endsWith("|"+r.r)));
+  const cnt=document.querySelector("#mpiBox .mpi-count");if(cnt){const m=S.mpi,c=mpiCounts(S),done=m.items.filter(it=>(m.res[it.id]||{}).r).length;
+    cnt.innerHTML=`${done} of ${m.items.length} checked${c.mon||c.bad?` · <span class="mpi-mon">${c.mon} monitor</span> · <span class="mpi-bad">${c.bad} repair</span>`:""}`;}}
+let MPI_RM=false;
+document.addEventListener("click",e=>{
+  const b=e.target.closest&&e.target.closest("button");if(!b)return;const d=b.dataset;
+  const mine=d.mpir||d.mpidel||d.mpiaddnote||d.mpimove||d.mpisetdel!==undefined||/^mpi/.test(d.act||"");if(!mine)return;
+  e.stopPropagation();
+  if(d.act==="mpiSetAdd"){mpiList().push({id:"m"+uid(),label:"New item",kind:"rate"});save();const y=scrollY;render();scrollTo(0,y);
+    setTimeout(()=>{const ins=document.querySelectorAll('[data-mpiset$="|label"]');const last=ins[ins.length-1];if(last){last.focus();last.select();}},50);return;}
+  if(d.act==="mpiSetReset"){APP.settings.mpiList=MPI_DEFAULT.map(x=>({...x}));save();const y=scrollY;render();scrollTo(0,y);toast("Standard list restored");return;}
+  if(d.mpimove){const [k,dir]=d.mpimove.split("|").map(Number);const L=mpiList();const j=k+dir;if(j<0||j>=L.length)return;[L[k],L[j]]=[L[j],L[k]];save();const y=scrollY;render();scrollTo(0,y);return;}
+  if(d.mpisetdel!==undefined){const L=mpiList();L.splice(+d.mpisetdel,1);save();const y=scrollY;render();scrollTo(0,y);return;}
+  if(!S)return;
+  if(d.act==="mpiStart"){mpiStart(S);MPI_RM=false;save();mpiRefresh();return;}
+  if(d.act==="mpiRemove"){if(!MPI_RM){MPI_RM=true;b.textContent="Tap again to remove";setTimeout(()=>{MPI_RM=false;},4000);return;}MPI_RM=false;S.mpi=null;save();mpiRefresh();toast("Inspection removed");return;}
+  if(d.act==="mpiAdd"){MPI_ADD=true;mpiRefresh();setTimeout(()=>document.getElementById("mpiNew")?.focus(),50);return;}
+  if(d.act==="mpiAddCancel"){MPI_ADD=false;mpiRefresh();return;}
+  if(d.act==="mpiAddSave"){const label=(document.getElementById("mpiNew")?.value||"").trim();if(!label){toast("Type a name for the item");return;}
+    S.mpi.items.push({id:"x"+uid(),label,kind:document.getElementById("mpiNewKind")?.value||"rate"});MPI_ADD=false;save();mpiRefresh();return;}
+  if(d.act==="mpiRecs"){const add=mpiRows(S).filter(x=>x.r==="mon"||x.r==="bad").map(x=>`${x.r==="bad"?"Repair":"Monitor"}: ${x.it.label}${x.reading?" ("+x.reading+")":""}${x.note?" - "+x.note:""}`);
+    const cur=(S.info.recs||"").split("\n").map(x=>x.trim());const nw=add.filter(x=>!cur.includes(x));
+    S.info.recs=[S.info.recs||"",...nw].filter(Boolean).join("\n");save();const el=document.getElementById("f-recs");if(el)el.value=S.info.recs;toast(nw.length?`Added ${nw.length} to Recommendations`:"Already in Recommendations");return;}
+  if(d.mpir){const [id,v]=split2(d.mpir);const r=mpiRes(S,id);r.r=r.r===v?"":v;r.manual=!!r.r;save();mpiPaint(id);return;}
+  if(d.mpidel){S.mpi.items=S.mpi.items.filter(x=>x.id!==d.mpidel);delete S.mpi.res[d.mpidel];save();mpiRefresh();return;}
+  if(d.mpiaddnote){MPI_NOTE=d.mpiaddnote;mpiRefresh();setTimeout(()=>document.querySelector(`[data-mpinote="${CSS.escape(MPI_NOTE)}"]`)?.focus(),50);return;}
+},true);
+function mpiInput(e){const t=e.target,d=t.dataset||{};
+  if(d.mpiset){const [k,f]=split2(d.mpiset);const it=mpiList()[+k];if(!it)return;it[f]=t.value;save();if(f==="kind"&&e.type==="change"){const y=scrollY;render();scrollTo(0,y);}return;}
+  if(!S||!S.mpi)return;
+  if(d.mpival){const it=S.mpi.items.find(x=>x.id===d.mpival);const r=mpiRes(S,d.mpival);r.val=t.value;if(it)mpiAutoRate(it,r);save();mpiPaint(d.mpival);return;}
+  if(d.mpic){const [id,k]=split2(d.mpic);const it=S.mpi.items.find(x=>x.id===id);const r=mpiRes(S,id);r.c=r.c||{};r.c[k]=t.value;if(it)mpiAutoRate(it,r);save();mpiPaint(id);return;}
+  if(d.mpinote){mpiRes(S,d.mpinote).note=t.value;clearTimeout(window.__mpn);window.__mpn=setTimeout(save,400);return;}
+}
+document.addEventListener("input",mpiInput,true);document.addEventListener("change",e=>{if(e.target&&e.target.dataset&&e.target.dataset.mpiset)mpiInput(e);},true);
 
 /* ================= VIN scanner (camera) ================= */
 const ZX_URL="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js";
@@ -3684,6 +3863,22 @@ document.addEventListener("click",e=>{
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
+  if(d.act==="inviteDrop"){INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}render();return;}
+  if(d.techinv){const t=(APP.settings.techs||[]).find(x=>x.id===d.techinv);if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
+    supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
+      const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
+      const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link}`;
+      TEAM.busy="";TEAM.at=0;loadTeam();
+      if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
+      else{copyText(msg);toast("Invite link copied. Paste it in a text to "+t.name+".");}
+      rerenderKeep();})
+    .catch(e=>{TEAM.busy="";const m=(e&&e.msg)||"";const lim=/TECH_LIMIT:(\d+)/.exec(m);
+      TEAM.msg=lim?(+lim[1]?`Your plan includes ${lim[1]} technician login${+lim[1]===1?"":"s"}, and they're all in use. Add a technician seat to invite more.`:"Technician logins come with the Team plan. Switch to Team to invite technicians."):(m||"Couldn't create the invite. Check your connection.");rerenderKeep();});return;}
+  if(d.techrm){const t=(APP.settings.techs||[]).find(x=>x.id===d.techrm);if(!t)return;const inv=TEAM.list.find(x=>x.tech_id===t.id);
+    if(inv&&inv.active&&TEAM.rm!==t.id){TEAM.rm=t.id;rerenderKeep();setTimeout(()=>{if(TEAM.rm===t.id){TEAM.rm=null;rerenderKeep();}},4000);return;}
+    TEAM.rm=null;TEAM.busy=t.id;rerenderKeep();
+    supa("/rest/v1/rpc/remove_tech",{method:"POST",body:{p_tech_id:t.id}}).then(()=>{TEAM.busy="";t.userId="";stampTechUsers();save();toast(inv&&inv.active?`${t.name} no longer has access`:"Invite canceled");TEAM.at=0;loadTeam();})
+      .catch(e=>{TEAM.busy="";toast((e&&e.msg)||"Couldn't remove access");rerenderKeep();});return;}
   if(d.act==="techadd"){TECH_NEW={name:"",phone:""};rerenderKeep();setTimeout(()=>document.getElementById("tmName")?.focus(),30);return;}
   if(d.act==="techcancel"){TECH_NEW=null;rerenderKeep();return;}
   if(d.act==="techsave"){const n=(TECH_NEW.name||"").trim();if(!n){toast("Enter the technician's name");return;}const ts=APP.settings.techs;
@@ -3860,6 +4055,7 @@ $("#nextBtn").addEventListener("click",()=>{
   if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
+  if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
   if(isSvc(S)&&S.status!=="done"&&docMode(S)==="est"){S.docMode="inv";if(S.est&&S.est.status!=="declined"&&S.est.status!=="approved"){S.est.status="approved";S.est.approvedDate=TODAY;S.est.total=jobTotal(S);}ensureInvoice();}
   if(isSvc(S)||STAGES[S.step].id==="invoice"){if(isSvc(S)&&S.status==="done"){APP.view="jobs";save();render();window.scrollTo(0,0);return;}S.status="done";APP.view="jobs";save();render();window.scrollTo(0,0);toast(S.invoice.paid?"Job complete":"Job complete. Invoice is unpaid.");return;}
   go(S.step+1);

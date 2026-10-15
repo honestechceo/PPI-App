@@ -23,7 +23,9 @@ async function saveSub(sub: Stripe.Subscription, shopId?: string | null) {
   const isTeam = items.some(teamItem);
   const seats = items.reduce((n, i) => n + (teamItem(i) ? 0 : (i.quantity || 0)), 0);
   const row: Record<string, unknown> = {
-    status: sub.status, plan: isTeam ? "team" : "solo", seats: Math.max(1, seats),
+    status: sub.status, plan: isTeam ? "team" : "solo",
+    // seats = technicians allowed: Team includes 2, plus any extra technician seats
+    seats: isTeam ? 2 + items.filter((i) => !teamItem(i)).reduce((n, i) => n + (i.quantity || 0), 0) : 0,
     stripe_customer: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
     stripe_subscription: sub.id,
     current_period_end: (() => { const t = (sub as any).current_period_end || (items[0] as any)?.current_period_end; return t ? new Date(t * 1000).toISOString() : null; })(),

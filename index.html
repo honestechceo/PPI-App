@@ -629,6 +629,17 @@ body.gated main{max-width:1060px}
 .fleet-tag{vertical-align:2px;margin-left:4px}.veh-notes{margin:0 0 6px;white-space:pre-wrap;color:var(--muted)}
 .fleet-box{display:grid;gap:10px;border-left:3px solid var(--accent);padding-left:12px}
 .cust-filter{margin:8px 0}
+.scan-row{margin-bottom:-4px}.scan-btn{font-weight:600}
+body.scanning{overflow:hidden}
+.scan-ov{position:fixed;inset:0;z-index:1000;background:#000;color:#fff;display:flex;flex-direction:column}
+.scan-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scan-frame{position:absolute;left:8%;right:8%;top:32%;height:22%;border:3px solid #fff;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,.45)}
+.scan-top{position:relative;display:flex;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 12px) 14px 0}
+.scan-x,.scan-torch{background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:999px;min-width:44px;height:44px;font-size:18px;padding:0 14px}
+.scan-torch.on{background:#fff;color:#000}
+.scan-bottom{position:relative;margin-top:auto;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(transparent,rgba(0,0,0,.8) 30%)}
+.scan-msg{margin:0 0 12px;font-size:16px;line-height:1.4}.scan-tip{margin:12px 0 0;font-size:13px;opacity:.8}
+.scan-acts{display:flex;gap:10px;flex-wrap:wrap}.scan-acts .btn{flex:1;text-align:center;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -1778,7 +1789,7 @@ function vehFormHTML(c,v){
     <p class="formh">${v?"Edit vehicle":"Add a vehicle"}</p>
     ${f("unit","Fleet unit #",'autocomplete="off" placeholder="Optional"')}${f("plate","License plate",'autocapitalize="characters" autocomplete="off"')}
     <label class="full">VIN<input id="ve-vin" class="mono" maxlength="17" autocapitalize="characters" autocomplete="off" value="${val("vin")}"><span class="help">17 characters. Tap Look up to fill in the vehicle.</span></label>
-    <div class="full acts" style="margin-top:-4px"><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
+    <div class="full acts" style="margin-top:-4px"><button class="mini scan-btn" type="button" data-scanvin="ve-vin">Scan VIN</button><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("trim","Trim")}
     ${f("miles","Mileage",'inputmode="numeric"')}${f("color","Color")}
     <label class="full">Notes<textarea id="ve-notes" rows="2" placeholder="Oil type, tire size, known issues">${val("notes")}</textarea></label>
@@ -2241,6 +2252,7 @@ function renderJobForm(){
     <label>Agreed price ($)<input id="d-agreed" data-draft="agreed" inputmode="decimal" value="${esc(d.agreed||"")}" placeholder="Optional"><span class="help">Price you agreed on. Goes in the confirmation and starts the invoice.</span></label>
     <label class="check full"><input type="checkbox" data-draftc="agreedTravel" ${d.agreedTravel!==false?"checked":""}> Travel is included in the agreed price</label>
     ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
+    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="d-vin">Scan VIN with camera</button></div>
     <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><span class="vin-dec" id="dVinDec"></span></label>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
@@ -2562,6 +2574,7 @@ function renderIntake(){
     ${f("model","Model")}
     ${f("trim","Trim")}
     ${f("engine","Engine","","full")}
+    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="f-vin">Scan VIN with camera</button></div>
     <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
     ${f("miles","Odometer (miles)",'inputmode="numeric"')}
     ${f("color","Color")}
@@ -2876,6 +2889,7 @@ function renderService(){
     ${f("model","Model")}
     ${f("trim","Trim")}
     ${f("engine","Engine","","full")}
+    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="f-vin">Scan VIN with camera</button></div>
     <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
     ${f("miles","Mileage",'inputmode="numeric"')}
     ${f("color","Color")}
@@ -3451,6 +3465,92 @@ function saveDraft(){
   APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
+
+
+/* ================= VIN scanner (camera) ================= */
+const ZX_URL="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js";
+let ZX_P=null;
+function loadZX(){if(window.ZXing)return Promise.resolve(window.ZXing);
+  if(!ZX_P)ZX_P=new Promise((ok,no)=>{const sc=document.createElement("script");sc.src=ZX_URL;sc.async=true;sc.onload=()=>window.ZXing?ok(window.ZXing):no(new Error("zx"));sc.onerror=()=>{ZX_P=null;no(new Error("zx"));};document.head.appendChild(sc);});
+  return ZX_P;}
+function extractVin(raw){
+  let t=String(raw||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(!t)return null;
+  const fix=x=>x.replace(/O/g,"0").replace(/[IQ]/g,m=>m==="I"?"1":"0");
+  const cands=[];
+  for(let i=0;i+17<=t.length;i++){const w=fix(t.slice(i,i+17));if(vinReady(w))cands.push(w);}
+  if(!cands.length)return null;
+  const good=cands.find(w=>vinCheck(w).cls==="ok");
+  return good?{vin:good,ok:true}:{vin:cands[cands.length===1?0:(t.length===18&&t[0]==="I"?1:0)],ok:false};
+}
+let SCAN=null;
+function scanClose(){if(!SCAN)return;SCAN.stop=true;clearTimeout(SCAN.timer);try{SCAN.stream&&SCAN.stream.getTracks().forEach(t=>t.stop());}catch(e){}
+  SCAN.el&&SCAN.el.remove();document.body.classList.remove("scanning");const f=SCAN.target;SCAN=null;setTimeout(()=>document.getElementById(f)?.focus({preventScroll:true}),50);}
+function scanFill(res){if(!SCAN)return;const id=SCAN.target;scanClose();
+  const el=document.getElementById(id);if(!el)return;el.value=res.vin;el.dispatchEvent(new Event("input",{bubbles:true}));
+  if(id==="ve-vin")document.querySelector('[data-vdecode]')?.click();
+  if(navigator.vibrate)try{navigator.vibrate(60);}catch(e){}
+  toast(res.ok?"VIN scanned: "+res.vin:"VIN scanned. Double-check it, the check digit doesn't match: "+res.vin);}
+function scanMsg(t){const m=SCAN&&SCAN.el.querySelector(".scan-msg");if(m)m.textContent=t;}
+async function decodeSource(src,w,h){
+  // 1) phone's built-in barcode reader (Android Chrome, some desktops)
+  if(window.BarcodeDetector){try{if(!SCAN.bd){const sup=await BarcodeDetector.getSupportedFormats();const want=["code_39","code_128","data_matrix","qr_code","pdf417"].filter(f=>sup.includes(f));if(want.length)SCAN.bd=new BarcodeDetector({formats:want});else SCAN.bd=false;}
+    if(SCAN.bd){const r=await SCAN.bd.detect(src);for(const x of r){const v=extractVin(x.rawValue);if(v)return v;}if(SCAN.bdOnly)return null;}}catch(e){SCAN.bd=false;}}
+  // 2) open-source reader (iPhone and everything else)
+  if(SCAN.zx===undefined){try{const ZX=await loadZX();const H=new Map();const F=ZX.BarcodeFormat;
+      H.set(ZX.DecodeHintType.POSSIBLE_FORMATS,[F.CODE_39,F.CODE_128,F.DATA_MATRIX,F.QR_CODE,F.PDF_417]);H.set(ZX.DecodeHintType.TRY_HARDER,true);
+      const r=new ZX.MultiFormatReader();r.setHints(H);SCAN.zx={ZX,r};}catch(e){SCAN.zx=null;}}
+  if(!SCAN.zx)return null;
+  const cv=SCAN.cv||(SCAN.cv=document.createElement("canvas"));const sc=Math.min(1,1280/Math.max(w,h));cv.width=Math.round(w*sc);cv.height=Math.round(h*sc);
+  const cx=cv.getContext("2d",{willReadFrequently:true});cx.drawImage(src,0,0,cv.width,cv.height);
+  const {ZX,r}=SCAN.zx;
+  for(const rot of [0,90]){
+    let c2=cv;if(rot){c2=SCAN.cv2||(SCAN.cv2=document.createElement("canvas"));c2.width=cv.height;c2.height=cv.width;const x2=c2.getContext("2d",{willReadFrequently:true});x2.setTransform(0,1,-1,0,cv.height,0);x2.drawImage(cv,0,0);}
+    try{const res=r.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(new ZX.HTMLCanvasElementLuminanceSource(c2))));const v=extractVin(res.getText());if(v)return v;}catch(e){}
+  }
+  return null;
+}
+async function scanLoop(){
+  if(!SCAN||SCAN.stop)return;const v=SCAN.video;
+  if(v.readyState>=2&&v.videoWidth&&!SCAN.busy){SCAN.busy=true;
+    try{const res=await decodeSource(v,v.videoWidth,v.videoHeight);if(res&&SCAN){scanFill(res);return;}}catch(e){}
+    if(SCAN)SCAN.busy=false;}
+  if(SCAN&&!SCAN.stop)SCAN.timer=setTimeout(scanLoop,SCAN.zx?350:200);
+}
+async function scanPhoto(file){
+  if(!file||!SCAN)return;scanMsg("Reading the photo…");
+  try{const img=await createImageBitmap(file);const res=await decodeSource(img,img.width,img.height);
+    if(res){scanFill(res);return;}
+    scanMsg("No VIN barcode found in that photo. Get closer to the barcode on the door jamb, or type the VIN.");}
+  catch(e){scanMsg("Couldn't read that photo. Try again, or type the VIN.");}
+}
+async function openScanner(targetId){
+  if(SCAN)scanClose();
+  const el=document.createElement("div");el.className="scan-ov";el.setAttribute("role","dialog");el.setAttribute("aria-label","Scan VIN");
+  el.innerHTML=`<video class="scan-video" playsinline muted autoplay></video>
+    <div class="scan-frame" aria-hidden="true"></div>
+    <div class="scan-top"><button type="button" class="scan-x" data-scanclose="1" aria-label="Close scanner">✕</button><button type="button" class="scan-torch" data-scantorch="1" hidden>Light</button></div>
+    <div class="scan-bottom"><p class="scan-msg">Point the camera at the VIN barcode on the driver's door jamb or under the windshield.</p>
+      <div class="scan-acts"><label class="btn scan-photo">Take a photo instead<input type="file" accept="image/*" capture="environment" data-scanphoto="1" hidden></label><button type="button" class="btn" data-scanclose="1">Type it instead</button></div>
+      <p class="scan-tip">Tip on iPhone: to read the printed VIN, tap the VIN box, then tap it again and choose Scan Text.</p></div>`;
+  document.body.appendChild(el);document.body.classList.add("scanning");
+  SCAN={target:targetId,el,video:el.querySelector("video"),stop:false,busy:false};
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){scanMsg("This browser can't open the camera here. Use Take a photo instead.");return;}
+  try{const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false});
+    if(!SCAN||SCAN.el!==el){st.getTracks().forEach(t=>t.stop());return;}
+    SCAN.stream=st;SCAN.video.srcObject=st;try{await SCAN.video.play();}catch(e){}
+    const tr=st.getVideoTracks()[0];try{const cap=tr.getCapabilities&&tr.getCapabilities();if(cap&&cap.torch){SCAN.track=tr;el.querySelector(".scan-torch").hidden=false;}}catch(e){}
+    scanLoop();}
+  catch(e){scanMsg(e&&e.name==="NotAllowedError"?"Camera access is off. Allow the camera for this site in your settings, or use Take a photo instead.":"Couldn't open the camera. Use Take a photo instead.");}
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest&&e.target.closest("[data-scanvin],[data-scanclose],[data-scantorch]");if(!b)return;
+  if(b.dataset.scanvin){e.preventDefault();e.stopPropagation();openScanner(b.dataset.scanvin);return;}
+  if(b.dataset.scanclose){e.preventDefault();e.stopPropagation();scanClose();return;}
+  if(b.dataset.scantorch&&SCAN&&SCAN.track){SCAN.torch=!SCAN.torch;SCAN.track.applyConstraints({advanced:[{torch:SCAN.torch}]}).catch(()=>{});b.classList.toggle("on",SCAN.torch);}
+},true);
+document.addEventListener("change",e=>{if(e.target&&e.target.dataset&&e.target.dataset.scanphoto){scanPhoto(e.target.files&&e.target.files[0]);e.target.value="";}},true);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&SCAN)scanClose();});
 
 /* ================= events ================= */
 document.addEventListener("click",e=>{

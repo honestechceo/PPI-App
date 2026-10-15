@@ -1983,6 +1983,23 @@ function techNames(){const seen=new Map();const add=n=>{n=String(n||"").trim();i
   add(APP.settings.owner);(APP.settings.techs||[]).forEach(t=>add(t.name));[...APP.jobs].sort((a,b)=>(b.info.date||"").localeCompare(a.info.date||"")).forEach(j=>add(j.info&&j.info.tech));return [...seen.values()];}
 function techDL(){return `<datalist id="techList">${techNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist>`;}
 const TECH_ATTR='list="techList" autocomplete="off" placeholder="Optional"';
+let TECH_OTHER={};
+function techFieldHTML(target,val){
+  const id=target==="draft"?"d-tech":"f-tech",bind=target==="draft"?"data-draft":"data-info";
+  const team=teamList(),v=String(val||"").trim(),hit=team.find(t=>t.name.trim().toLowerCase()===v.toLowerCase());
+  if(!(APP.settings.techs||[]).length)return `<label class="full">Technician<input id="${id}" ${bind}="tech" value="${esc(v)}" ${TECH_ATTR}></label>${techDL()}`;
+  const other=!!TECH_OTHER[target]||(v&&!hit);
+  return `<label class="full">Technician<select id="${id}-pick" data-techpick="${target}">
+      <option value="" ${!v&&!other?"selected":""}>Not assigned</option>
+      ${team.map(t=>`<option value="${esc(t.id)}" ${hit&&hit.id===t.id&&!other?"selected":""}>${esc(t.name)}${t.me?" (you)":""}</option>`).join("")}
+      <option value="__other" ${other?"selected":""}>Someone else…</option></select></label>
+    ${other?`<label class="full">Technician name<input id="${id}" ${bind}="tech" value="${esc(v)}" autocomplete="off" placeholder="Type a name"></label>`:""}`;
+}
+document.addEventListener("change",e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.techpick)return;const target=t.dataset.techpick;
+  const tm=teamList().find(x=>x.id===t.value);
+  if(t.value==="__other"){TECH_OTHER[target]=true;if(target==="draft")APP.draft.tech="";else if(S){S.info.tech="";S.techId="";}}
+  else{TECH_OTHER[target]=false;const name=tm?tm.name:"";if(target==="draft"){APP.draft.tech=name;APP.draft.techId=tm?tm.id:"";}else if(S){S.info.tech=name;S.techId=tm?tm.id:"";if(typeof stampTechUsers==="function")stampTechUsers();}}
+  save();const y=window.scrollY;render();window.scrollTo(0,y);if(t.value==="__other")setTimeout(()=>document.getElementById(target==="draft"?"d-tech":"f-tech")?.focus(),50);},true);
 function bizContact(){const s=APP.settings;return [s.phone,s.email,s.web].filter(Boolean).join(" · ");}
 function copyText(txt,boxId){
   const box=boxId&&document.getElementById(boxId);
@@ -2310,7 +2327,7 @@ function renderJobForm(){
       :`<label>Estimated price<input id="d-est" value="${esc(money(num(APP.settings.fee)+Math.round(tr)))}" readonly tabindex="-1"><span class="help">${money(APP.settings.fee)} PPI${tr?` + ${money(Math.round(tr))} travel`:""}</span></label>`}
     <label>Agreed price ($)<input id="d-agreed" data-draft="agreed" inputmode="decimal" value="${esc(d.agreed||"")}" placeholder="Optional"><span class="help">Price you agreed on. Goes in the confirmation and starts the invoice.</span></label>
     <label class="check full"><input type="checkbox" data-draftc="agreedTravel" ${d.agreedTravel!==false?"checked":""}> Travel is included in the agreed price</label>
-    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
+    ${techFieldHTML("draft",d.tech)}
     <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="d-vin">Scan VIN with camera</button></div>
     <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><span class="vin-dec" id="dVinDec"></span></label>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
@@ -2629,7 +2646,7 @@ function renderIntake(){
     ${f("date","Date",'type="date"')}
     ${f("time","Time",'type="time"')}
     <div class="full addr-row">${f("location","Inspection address")}${dirLink(i.location,"dirLink")}</div>
-    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
+    ${techFieldHTML("info",i.tech)}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -2944,7 +2961,7 @@ function renderService(){
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
-    ${f("tech","Technician",TECH_ATTR,"full")}${techDL()}
+    ${techFieldHTML("info",i.tech)}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -3514,9 +3531,9 @@ function render(){applyTheme();
   renderChrome();
 }
 function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sched"&&S.step>0)S.status="active";save();render();window.scrollTo(0,0);}
-function openJob(id,step){APP.active=id;APP.view="job";syncActive();if(step!=null&&!isSvc(S))S.step=step;if(isSvc(S)&&S.status==="sched")S.status="active";save();render();window.scrollTo(0,0);}
+function openJob(id,step){TECH_OTHER={};APP.active=id;APP.view="job";syncActive();if(step!=null&&!isSvc(S))S.step=step;if(isSvc(S)&&S.status==="sched")S.status="active";save();render();window.scrollTo(0,0);}
 function startAdd(job){
-  APP.adding=true;APP.editing=job?job.id:null;
+  APP.adding=true;APP.editing=job?job.id:null;TECH_OTHER={};
   const b=job?job.info:{};
   APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",unit:b.unit||"",plate:b.plate||"",po:b.po||"",tech:b.tech||"",engine:b.engine||"",agreed:b.agreed||"",agreedTravel:b.agreedTravel!==false};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
@@ -3524,12 +3541,13 @@ function startAdd(job){
 function saveDraft(){
   const d=APP.draft;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
-  const {type,custId,...info}=d;
+  const {type,custId,techId:pickedTech,...info}=d;TECH_OTHER={};
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
   else{const nj=newJob(info,type);if(custId)nj.custId=custId;if(type==="service"&&APP.settings.mpiAuto)mpiStart(nj);applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
+  {const sj=APP.editing?APP.jobs.find(x=>x.id===APP.editing):APP.jobs[APP.jobs.length-1];if(sj){if(pickedTech&&techOf({techId:pickedTech,info:sj.info})&&teamList().some(t=>t.id===pickedTech&&t.name===sj.info.tech))sj.techId=pickedTech;else{sj.techId="";linkTech(sj);}}}
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
   APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");

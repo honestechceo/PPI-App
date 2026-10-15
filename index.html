@@ -640,6 +640,18 @@ body.scanning{overflow:hidden}
 .scan-bottom{position:relative;margin-top:auto;padding:16px 16px calc(env(safe-area-inset-bottom) + 18px);background:linear-gradient(transparent,rgba(0,0,0,.8) 30%)}
 .scan-msg{margin:0 0 12px;font-size:16px;line-height:1.4}.scan-tip{margin:12px 0 0;font-size:13px;opacity:.8}
 .scan-acts{display:flex;gap:10px;flex-wrap:wrap}.scan-acts .btn{flex:1;text-align:center;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.5);color:#fff}
+.mpi .items{gap:8px}.mpi-item{padding:10px}.mpi-item .rate{margin-top:8px}.rate.rate2{grid-template-columns:1fr 1fr}
+.mpi-x{border:0;background:none;color:var(--muted);font-size:16px;min-width:36px;min-height:36px;margin:-6px -6px 0 0}
+.mpi-count{font-weight:400;font-size:13px;color:var(--muted);margin-left:6px}.mpi-mon{color:var(--mon);font-weight:600}.mpi-bad{color:var(--bad);font-weight:600}
+.mpi-add{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.mpi-add input{flex:1 1 160px}.mpi-add select{flex:1 1 160px}
+.mpi-set{display:flex;flex-direction:column;gap:8px}.mpi-set-row{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
+.mpi-set-row input,.mpi-set-row select{min-width:0}.mpi-set-row .mpi-unit{max-width:90px}.mpi-ord{display:flex;gap:4px;justify-content:flex-end}
+.mpi .items label.meas,.mpi .items label.corner{flex-direction:row;align-items:center;gap:8px;font-size:inherit;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink)}
+.mpi .items .meas input,.mpi .items .corner input{border:0;background:transparent;padding:8px 0;border-radius:0;width:72px;font-family:var(--f-mono)}
+.mpi .items .corner input{width:100%;min-width:0}.mpi .items .meas span,.mpi .items .cunit{font-size:12px;color:var(--muted);text-transform:none}
+.mpi .items .note{width:100%;margin-top:8px}
+.mpi-set-row{grid-template-columns:1fr 1fr auto}.mpi-set-row .mpi-name{grid-column:1/-1}.mpi-set-row .mpi-unit{max-width:none}
+@media(min-width:620px){.mpi-set-row{grid-template-columns:1.6fr 1.3fr 90px auto}.mpi-set-row .mpi-name{grid-column:auto}}
 </style>
 <header class="top">
   <div class="top-inner">
@@ -2395,6 +2407,7 @@ function renderSettings(){
     <label class="full">Warranty / fine print on service invoices<textarea data-set="warranty" rows="2" placeholder="e.g. 12 months / 12,000 miles on parts and labor I supply. Customer-supplied parts are not covered.">${esc(s.warranty||"")}</textarea><span class="help">Prints at the bottom of service estimates and invoices. Leave blank for none.</span></label>
     <label class="full">PPI report disclaimer<textarea data-set="ppiDisc" rows="4">${esc(s.ppiDisc||"")}</textarea><span class="help">Prints at the bottom of every pre-purchase inspection report. Have a lawyer or your insurance agent review your wording.</span></label>
   </div>
+  ${mpiSettingsHTML()}
   <div class="form" id="setReminders">
     <p class="formh">Reminders &amp; directions</p>
     <label class="full">"On my way" text<textarea id="s-omwTpl" data-set="omwTpl" rows="3" placeholder="${esc(OMW_DEFAULT)}">${esc(s.omwTpl||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first} customer's first name, {tech}, {business}, {eta} arrival time, {minutes}, {vehicle}.</span></label>
@@ -2902,6 +2915,7 @@ function renderService(){
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
   </div>
+  ${mpiSectionHTML(S)}
   ${timerHTML()}</div>
   <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
@@ -3059,6 +3073,8 @@ function estimateText(){
   if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row("ESTIMATED TOTAL",t.total);
+  if(i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
+  L.push(...mpiText(S));
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
   if((st.warranty||"").trim())L.push("Warranty: "+st.warranty.trim());
   if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
@@ -3144,6 +3160,7 @@ function invoiceText(){
   if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
   row(inv.paid?"PAID":"TOTAL DUE",t.total);
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
+  if(t.svc)L.push(...mpiText(S));
   if(t.svc&&nextServiceLine(S)){L.push("");L.push("NEXT SERVICE: "+nextServiceLine(S));}
   if(t.svc&&(S.media||[]).length){const nv=S.media.filter(m=>m.kind==="video").length,np=S.media.length-nv;L.push("");L.push(`Photos/videos: ${np} photo${np===1?"":"s"}${nv?`, ${nv} video${nv===1?"":"s"}`:""} (sent separately)`);}
   if(t.svc&&(st.warranty||"").trim()){L.push("");L.push("WARRANTY: "+st.warranty.trim());}
@@ -3373,6 +3390,7 @@ function buildInvoicePdf(job,est){
     {const tt=fleetTermsLine(job,inv.date)||s.terms;if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
   }
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
+  if(svc)mpiPdf(P,job);
   if(svc&&!est&&nextServiceLine(job)){P.y+=12;P.need(46);doc.setFillColor(...PC.paper);const nl=P.wrap(nextServiceLine(job),PW-2*PM-24);doc.roundedRect(PM,P.y-4,PW-2*PM,22+nl.length*13,5,5,"F");
     P.font(8,"bold",PC.accent);P.text("NEXT SERVICE",PM+12,P.y+9);P.font(10,"bold");P.text(nl,PM+12,P.y+23);P.y+=26+nl.length*13;}
   if(!est&&job.sig&&job.sig.inv){const sg=job.sig.inv;P.y+=14;P.need(80);try{doc.addImage(sg.data,"JPEG",PM,P.y,180,48);}catch(e){}P.y+=52;
@@ -3458,7 +3476,7 @@ function saveDraft(){
   const {type,custId,...info}=d;
   if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
-  else{const nj=newJob(info,type);if(custId)nj.custId=custId;applyAgreed(nj);APP.jobs.push(nj);
+  else{const nj=newJob(info,type);if(custId)nj.custId=custId;if(type==="service"&&APP.settings.mpiAuto)mpiStart(nj);applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}
     if(APP.fuFrom){const fj=APP.jobs.find(x=>x.id===APP.fuFrom);if(fj&&fj.followup)fj.followup.status="done";}}
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
@@ -3466,6 +3484,116 @@ function saveDraft(){
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
 }
 
+
+
+/* ================= quick multipoint inspection (service jobs) ================= */
+const MPI_DEFAULT=[
+  {id:"battery",label:"Battery voltage",kind:"rate",unit:"V",ph:"12.6"},
+  {id:"brakes",label:"Brake pads",kind:"corners",unit:"mm",ph:"8"},
+  {id:"tread",label:"Tire tread depth",kind:"corners",unit:"/32",ph:"7"},
+  {id:"pressure",label:"Tire pressure",kind:"corners",unit:"psi",ph:"35"},
+  {id:"susp",label:"Suspension & steering",kind:"rate"},
+  {id:"balljoints",label:"Ball joints",kind:"rate"},
+  {id:"exhaust",label:"Exhaust",kind:"rate"},
+  {id:"lights",label:"Lights",kind:"rate"},
+  {id:"leaks",label:"Fluid leaks",kind:"rate"},
+  {id:"reset",label:"Reset maintenance light",kind:"task"}];
+const MPI_KINDS=[["rate","Rating"],["corners","4 wheels"],["task","Done or not"]];
+const MPI_STATUS={good:"Good",mon:"Monitor",bad:"Repair",na:"N/A",done:"Done",skip:"Not needed"};
+function mpiList(){const s=APP.settings;if(!Array.isArray(s.mpiList))s.mpiList=MPI_DEFAULT.map(x=>({...x}));return s.mpiList;}
+function mpiStart(job){job.mpi={items:mpiList().map(x=>({...x})),res:{}};}
+function mpiRes(job,id){const m=job.mpi;return m.res[id]||(m.res[id]={r:"",val:"",c:{},note:""});}
+function mpiReading(it,r){
+  if(it.kind==="corners"){const c=r.c||{};const parts=CORNERS.map(([k])=>c[k]!==undefined&&c[k]!==""?`${k} ${c[k]}`:"").filter(Boolean);return parts.length?parts.join(", ")+(it.unit?" "+it.unit:""):"";}
+  return r.val!==undefined&&r.val!==""?r.val+(it.unit?" "+it.unit:""):"";}
+function mpiRows(job){const m=job&&job.mpi;if(!m)return [];
+  return m.items.map(it=>{const r=m.res[it.id]||{};return {it,r:r.r||"",status:MPI_STATUS[r.r]||"Not checked",reading:mpiReading(it,r),note:(r.note||"").trim()};}).filter(x=>x.r||x.reading||x.note);}
+function mpiCounts(job){const c={good:0,mon:0,bad:0};mpiRows(job).forEach(x=>{if(c[x.r]!==undefined)c[x.r]++;});return c;}
+function mpiItemHTML(it,r){
+  const opts=it.kind==="task"?[["done","Done","good"],["skip","Not needed","na"]]:RATES.map(([v,l])=>[v,l,v]);
+  return `<div class="item mpi-item" data-r="${r.r==="done"?"good":r.r==="skip"?"na":r.r}">
+    <div class="item-top"><div class="item-label">${esc(it.label)}</div><button type="button" class="mpi-x" data-mpidel="${it.id}" aria-label="Remove ${esc(it.label)} from this job">✕</button></div>
+    <div class="rate${it.kind==="task"?" rate2":""}" role="group" aria-label="${esc(it.label)}">${opts.map(([v,l,c])=>`<button type="button" data-mpir="${it.id}|${v}" data-v="${c}" aria-pressed="${r.r===v}">${l}</button>`).join("")}</div>
+    ${it.kind==="rate"&&it.unit?`<div class="extras"><label class="meas"><input data-mpival="${it.id}" inputmode="decimal" placeholder="${esc(it.ph||"")}" value="${esc(r.val||"")}" aria-label="${esc(it.label)} reading"><span>${esc(it.unit)}</span></label></div>`:""}
+    ${it.kind==="corners"?`<div class="corners">${CORNERS.map(([k,name])=>`<label class="corner"><span class="cname">${k}</span><input data-mpic="${it.id}|${k}" inputmode="decimal" placeholder="${esc(it.ph||"")}" value="${esc((r.c||{})[k]??"")}" aria-label="${name} ${esc(it.label)}"><span class="cunit">${esc(it.unit||"")}</span></label>`).join("")}</div>`:""}
+    ${r.note||MPI_NOTE===it.id?`<textarea class="note" data-mpinote="${it.id}" placeholder="What did you find?">${esc(r.note||"")}</textarea>`:(it.kind==="task"?"":`<div class="extras"><button class="mini" type="button" data-mpiaddnote="${it.id}">＋ Note</button></div>`)}
+  </div>`;
+}
+let MPI_NOTE=null,MPI_ADD=false;
+function mpiSectionHTML(job){
+  if(!job.mpi)return `<div class="form mpi-off"><p class="formh">Multipoint inspection</p><p class="help full" style="margin:0">A quick check of battery, brakes, tires, lights and more. It prints on the estimate and invoice.</p>
+    <div class="formacts full"><button class="btn" type="button" data-act="mpiStart">Add multipoint inspection</button></div></div>`;
+  const m=job.mpi,c=mpiCounts(job),done=m.items.filter(it=>(m.res[it.id]||{}).r).length;
+  return `<div class="form mpi" id="mpiBox"><p class="formh">Multipoint inspection <span class="mpi-count">${done} of ${m.items.length} checked${c.mon||c.bad?` · <span class="mpi-mon">${c.mon} monitor</span> · <span class="mpi-bad">${c.bad} repair</span>`:""}</span></p>
+    <div class="items full">${m.items.map(it=>mpiItemHTML(it,mpiRes(job,it.id))).join("")}</div>
+    ${MPI_ADD?`<div class="full mpi-add"><input id="mpiNew" placeholder="e.g. Wiper blades" autocomplete="off" aria-label="New inspection item"><select id="mpiNewKind" aria-label="Type">${MPI_KINDS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select><button class="mini go" type="button" data-act="mpiAddSave">Add</button><button class="mini" type="button" data-act="mpiAddCancel">Cancel</button></div>`
+      :`<div class="full acts"><button class="mini" type="button" data-act="mpiAdd">＋ Add item to this job</button>${c.mon||c.bad?`<button class="mini" type="button" data-act="mpiRecs">Copy Monitor and Repair items to Recommendations</button>`:""}<button class="mini del" type="button" data-act="mpiRemove">Remove inspection</button></div>`}
+    <p class="help full" style="margin:0">Change the standard list in Settings → Multipoint inspection.</p></div>`;
+}
+function mpiRefresh(){const b=document.getElementById("mpiBox")||document.querySelector(".mpi-off");if(!b||!S)return;const tmp=document.createElement("div");tmp.innerHTML=mpiSectionHTML(S);b.replaceWith(tmp.firstElementChild);}
+function mpiText(job){const rows=mpiRows(job);if(!rows.length)return [];
+  return ["","MULTIPOINT INSPECTION",...rows.map(x=>`${x.it.label}: ${x.status}${x.reading?" ("+x.reading+")":""}${x.note?" - "+x.note:""}`)];}
+function mpiPdf(P,job){const rows=mpiRows(job);if(!rows.length)return;
+  P.y+=12;P.need(40);P.font(8,"bold",PC.muted);P.text("MULTIPOINT INSPECTION",PM,P.y);P.y+=14;
+  const col={good:PC.good,mon:PC.mon,bad:PC.bad,na:PC.na,done:PC.good,skip:PC.na};
+  rows.forEach(x=>{const left=x.it.label+(x.reading?"  ·  "+x.reading:"");const nl=x.note?P.wrap(x.note,PW-2*PM-110):[];P.need(16+nl.length*12);
+    P.font(10);P.text(P.wrap(left,PW-2*PM-110)[0],PM,P.y);P.font(10,"bold",col[x.r]||PC.muted);P.text(x.status,PW-PM-100,P.y);P.y+=14;
+    if(nl.length){P.font(9,"normal",PC.muted);P.text(nl,PM+10,P.y-2);P.y+=nl.length*12;}});
+}
+function mpiSettingsHTML(){const L=mpiList(),s=APP.settings;
+  return `<div class="form" id="setMpi"><p class="formh">Multipoint inspection</p>
+    <p class="help full" style="margin:0">The quick check for service jobs. Add, rename, reorder or remove items. Changes apply to new inspections.</p>
+    <label class="check full"><input type="checkbox" data-setc="mpiAuto" ${s.mpiAuto?"checked":""}> Add it to every new service job automatically</label>
+    <div class="full mpi-set">${L.map((it,k)=>`<div class="mpi-set-row">
+      <input class="mpi-name" data-mpiset="${k}|label" value="${esc(it.label)}" aria-label="Item name">
+      <select data-mpiset="${k}|kind" aria-label="Type">${MPI_KINDS.map(([v,l])=>`<option value="${v}" ${it.kind===v?"selected":""}>${l}</option>`).join("")}</select>
+      ${it.kind!=="task"?`<input data-mpiset="${k}|unit" value="${esc(it.unit||"")}" placeholder="Unit" aria-label="Reading unit" class="mpi-unit">`:"<span></span>"}
+      <span class="mpi-ord"><button class="mini" type="button" data-mpimove="${k}|-1" aria-label="Move up" ${k?"":"disabled"}>↑</button><button class="mini" type="button" data-mpimove="${k}|1" aria-label="Move down" ${k<L.length-1?"":"disabled"}>↓</button><button class="mini del" type="button" data-mpisetdel="${k}" aria-label="Remove ${esc(it.label)}">✕</button></span></div>`).join("")}</div>
+    <div class="full acts"><button class="mini go" type="button" data-act="mpiSetAdd">＋ Add item</button><button class="mini" type="button" data-act="mpiSetReset">Restore the standard list</button></div>
+    <p class="help full" style="margin:0">Rating gives Good / Monitor / Repair / N/A. 4 wheels adds a reading for each wheel. Done or not is for tasks like resetting the oil light. Add a unit (V, psi, mm) to get a box for the reading.</p></div>`;
+}
+
+
+const MPI_AUTO={battery:v=>v<12.2?"bad":v<12.45?"mon":"good",brakes:v=>v<=3?"bad":v<=5?"mon":"good",tread:v=>v<=2?"bad":v<=4?"mon":"good"};
+function mpiAutoRate(it,r){const f=MPI_AUTO[it.id];if(!f||r.manual)return;
+  const vals=it.kind==="corners"?Object.values(r.c||{}).filter(x=>x!==""&&!isNaN(+x)).map(Number):(r.val!==""&&!isNaN(+r.val)?[+r.val]:[]);
+  r.r=vals.length?f(Math.min(...vals)):"";}
+function mpiPaint(id){const box=document.querySelector(`[data-mpidel="${CSS.escape(id)}"]`)?.closest(".mpi-item");if(!box||!S||!S.mpi)return;const r=mpiRes(S,id);
+  box.dataset.r=r.r==="done"?"good":r.r==="skip"?"na":r.r;box.querySelectorAll("[data-mpir]").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mpir.endsWith("|"+r.r)));
+  const cnt=document.querySelector("#mpiBox .mpi-count");if(cnt){const m=S.mpi,c=mpiCounts(S),done=m.items.filter(it=>(m.res[it.id]||{}).r).length;
+    cnt.innerHTML=`${done} of ${m.items.length} checked${c.mon||c.bad?` · <span class="mpi-mon">${c.mon} monitor</span> · <span class="mpi-bad">${c.bad} repair</span>`:""}`;}}
+let MPI_RM=false;
+document.addEventListener("click",e=>{
+  const b=e.target.closest&&e.target.closest("button");if(!b)return;const d=b.dataset;
+  const mine=d.mpir||d.mpidel||d.mpiaddnote||d.mpimove||d.mpisetdel!==undefined||/^mpi/.test(d.act||"");if(!mine)return;
+  e.stopPropagation();
+  if(d.act==="mpiSetAdd"){mpiList().push({id:"m"+uid(),label:"New item",kind:"rate"});save();const y=scrollY;render();scrollTo(0,y);
+    setTimeout(()=>{const ins=document.querySelectorAll('[data-mpiset$="|label"]');const last=ins[ins.length-1];if(last){last.focus();last.select();}},50);return;}
+  if(d.act==="mpiSetReset"){APP.settings.mpiList=MPI_DEFAULT.map(x=>({...x}));save();const y=scrollY;render();scrollTo(0,y);toast("Standard list restored");return;}
+  if(d.mpimove){const [k,dir]=d.mpimove.split("|").map(Number);const L=mpiList();const j=k+dir;if(j<0||j>=L.length)return;[L[k],L[j]]=[L[j],L[k]];save();const y=scrollY;render();scrollTo(0,y);return;}
+  if(d.mpisetdel!==undefined){const L=mpiList();L.splice(+d.mpisetdel,1);save();const y=scrollY;render();scrollTo(0,y);return;}
+  if(!S)return;
+  if(d.act==="mpiStart"){mpiStart(S);MPI_RM=false;save();mpiRefresh();return;}
+  if(d.act==="mpiRemove"){if(!MPI_RM){MPI_RM=true;b.textContent="Tap again to remove";setTimeout(()=>{MPI_RM=false;},4000);return;}MPI_RM=false;S.mpi=null;save();mpiRefresh();toast("Inspection removed");return;}
+  if(d.act==="mpiAdd"){MPI_ADD=true;mpiRefresh();setTimeout(()=>document.getElementById("mpiNew")?.focus(),50);return;}
+  if(d.act==="mpiAddCancel"){MPI_ADD=false;mpiRefresh();return;}
+  if(d.act==="mpiAddSave"){const label=(document.getElementById("mpiNew")?.value||"").trim();if(!label){toast("Type a name for the item");return;}
+    S.mpi.items.push({id:"x"+uid(),label,kind:document.getElementById("mpiNewKind")?.value||"rate"});MPI_ADD=false;save();mpiRefresh();return;}
+  if(d.act==="mpiRecs"){const add=mpiRows(S).filter(x=>x.r==="mon"||x.r==="bad").map(x=>`${x.r==="bad"?"Repair":"Monitor"}: ${x.it.label}${x.reading?" ("+x.reading+")":""}${x.note?" - "+x.note:""}`);
+    const cur=(S.info.recs||"").split("\n").map(x=>x.trim());const nw=add.filter(x=>!cur.includes(x));
+    S.info.recs=[S.info.recs||"",...nw].filter(Boolean).join("\n");save();const el=document.getElementById("f-recs");if(el)el.value=S.info.recs;toast(nw.length?`Added ${nw.length} to Recommendations`:"Already in Recommendations");return;}
+  if(d.mpir){const [id,v]=split2(d.mpir);const r=mpiRes(S,id);r.r=r.r===v?"":v;r.manual=!!r.r;save();mpiPaint(id);return;}
+  if(d.mpidel){S.mpi.items=S.mpi.items.filter(x=>x.id!==d.mpidel);delete S.mpi.res[d.mpidel];save();mpiRefresh();return;}
+  if(d.mpiaddnote){MPI_NOTE=d.mpiaddnote;mpiRefresh();setTimeout(()=>document.querySelector(`[data-mpinote="${CSS.escape(MPI_NOTE)}"]`)?.focus(),50);return;}
+},true);
+function mpiInput(e){const t=e.target,d=t.dataset||{};
+  if(d.mpiset){const [k,f]=split2(d.mpiset);const it=mpiList()[+k];if(!it)return;it[f]=t.value;save();if(f==="kind"&&e.type==="change"){const y=scrollY;render();scrollTo(0,y);}return;}
+  if(!S||!S.mpi)return;
+  if(d.mpival){const it=S.mpi.items.find(x=>x.id===d.mpival);const r=mpiRes(S,d.mpival);r.val=t.value;if(it)mpiAutoRate(it,r);save();mpiPaint(d.mpival);return;}
+  if(d.mpic){const [id,k]=split2(d.mpic);const it=S.mpi.items.find(x=>x.id===id);const r=mpiRes(S,id);r.c=r.c||{};r.c[k]=t.value;if(it)mpiAutoRate(it,r);save();mpiPaint(id);return;}
+  if(d.mpinote){mpiRes(S,d.mpinote).note=t.value;clearTimeout(window.__mpn);window.__mpn=setTimeout(save,400);return;}
+}
+document.addEventListener("input",mpiInput,true);document.addEventListener("change",e=>{if(e.target&&e.target.dataset&&e.target.dataset.mpiset)mpiInput(e);},true);
 
 /* ================= VIN scanner (camera) ================= */
 const ZX_URL="https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js";

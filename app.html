@@ -651,6 +651,24 @@ body.gated main{max-width:1060px}
 .fleet-box{display:grid;gap:10px;border-left:3px solid var(--accent);padding-left:12px}
 .cust-filter{margin:8px 0}
 .scan-row{margin-bottom:-4px}.scan-btn{font-weight:600}
+.vin-in{display:flex;gap:6px;align-items:stretch;margin-top:6px}.vin-in input{flex:1;min-width:0;margin-top:0!important}
+.vin-cam{display:inline-flex;align-items:center;gap:5px;flex:0 0 auto;padding:0 12px;min-height:44px;border-radius:10px;border:1px solid var(--accent,#e2620f);background:var(--accent,#e2620f);color:#fff;font-weight:700;font-size:14px;cursor:pointer}
+label.search{display:flex;gap:6px;align-items:center}label.search input{flex:1;min-width:0}
+.jctl{border:1px solid var(--line,#ddd);border-radius:12px;padding:10px 12px;margin:0 0 14px;background:var(--card,#fff)}
+.jctl-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.jctl-top .jc-st{font-weight:800;font-size:15px;margin-right:auto;display:flex;align-items:center;gap:7px}
+.jc-dot{width:10px;height:10px;border-radius:50%;background:#888;flex:0 0 auto}
+.jc-sched .jc-dot{background:#6b7280}.jc-active .jc-dot{background:#16a34a;box-shadow:0 0 0 3px rgba(22,163,74,.2)}.jc-hold .jc-dot{background:#d97706}.jc-canceled .jc-dot{background:#dc2626}.jc-done .jc-dot{background:#2563eb}
+.jctl .jc-sub{font-size:13px;color:var(--muted,#666);margin-top:4px}
+.jctl .jc-btns{display:flex;flex-wrap:wrap;gap:6px}
+.jctl .jc-btns .btn{min-height:40px;padding:6px 14px}
+.jc-panel{margin-top:10px;border-top:1px solid var(--line,#ddd);padding-top:10px;display:flex;flex-direction:column;gap:8px}
+.jc-reasons{display:flex;flex-wrap:wrap;gap:6px}
+.jc-reasons button{padding:7px 11px;border-radius:999px;border:1px solid var(--line,#ccc);background:transparent;color:inherit;font-size:13px;font-weight:600}
+.jc-reasons button.on{background:var(--accent,#e2620f);border-color:var(--accent,#e2620f);color:#fff}
+.jc-panel textarea{width:100%;min-height:54px}
+.st-hold{background:#fef3c7;color:#92400e}.st-cancel{background:#fee2e2;color:#991b1b}.st-stopped{background:#e0e7ff;color:#3730a3}
+:root[data-theme="dark"] .st-hold{background:#3b2a07;color:#fcd34d}:root[data-theme="dark"] .st-cancel{background:#3b0d0d;color:#fca5a5}:root[data-theme="dark"] .st-stopped{background:#1e1b4b;color:#c7d2fe}
 body.scanning{overflow:hidden}
 .scan-ov{position:fixed;inset:0;z-index:1000;background:#000;color:#fff;display:flex;flex-direction:column}
 .scan-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
@@ -1325,7 +1343,7 @@ async function saveExpDraft(){
 let TRIP_DRAFT=null;
 function tripsIn(p){const start=p==="all"?"":p==="year"?TODAY.slice(0,4)+"-01-01":p==="week"?periodStart("week"):TODAY.slice(0,7)+"-01";
   const rt=APP.settings.roundTrip!==false?2:1,inR=d=>d&&(!start||d>=start)&&d<=TODAY;
-  const jobs=APP.jobs.filter(j=>!APP.sample||true).filter(j=>(j.status==="done"||j.status==="active"||(j.info.date||"")<TODAY)&&inR(j.info.date))
+  const jobs=APP.jobs.filter(j=>j.status!=="canceled").filter(j=>(j.status==="done"||j.status==="active"||(j.info.date||"")<TODAY)&&inR(j.info.date))
     .map(j=>({id:"j_"+j.id,jobId:j.id,date:j.info.date,miles:Math.round(num(j.info.dist)*rt*10)/10,purpose:`${isSvc(j)?"Service":"PPI"} – ${j.info.customer||"customer"}`,auto:true,missing:!num(j.info.dist)}));
   const man=(APP.trips||[]).filter(t=>inR(t.date)).map(t=>({...t,miles:num(t.miles)}));
   return [...jobs,...man].sort((a,b)=>b.date.localeCompare(a.date));
@@ -1553,7 +1571,7 @@ function jobSheet(j,t){
 }
 function renderDispatch(){
   const day=APP.dspDay||TODAY,team=teamList();
-  const js=APP.jobs.filter(j=>j.info.date===day).sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));
+  const js=APP.jobs.filter(j=>j.info.date===day&&j.status!=="canceled").sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));
   const cols=[{id:"",name:"Unassigned",color:"var(--na)"},...team].map(t=>({t,js:js.filter(j=>t.id?(techOf(j)||{}).id===t.id:!techOf(j))}));
   const rt=APP.settings.roundTrip!==false?2:1;
   const card=j=>{const i=j.info,tc=techOf(j),stt=dspStatus(j);
@@ -1761,7 +1779,7 @@ function renderDash(){
   const billed=inP.reduce((a,j)=>a+jobTotal(j),0),collected=inP.filter(j=>j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   const unpaid=done.filter(j=>!j.invoice.paid).sort((a,b)=>jDate(a)<jDate(b)?-1:1),unpaidAmt=unpaid.reduce((a,j)=>a+jobTotal(j),0);
   const nP=inP.filter(j=>!isSvc(j)).length,nS=inP.length-nP,avg=inP.length?billed/inP.length:0;
-  const upcoming=APP.jobs.filter(j=>j.status!=="done"&&(j.info.date||"")>=TODAY).sort((a,b)=>((a.info.date||"")+(a.info.time||"99"))<((b.info.date||"")+(b.info.time||"99"))?-1:1);
+  const upcoming=APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||"")>=TODAY).sort((a,b)=>((a.info.date||"")+(a.info.time||"99"))<((b.info.date||"")+(b.info.time||"99"))?-1:1);
   const today=upcoming.filter(j=>j.info.date===TODAY);
   const fuDue=APP.jobs.filter(j=>fuOpen(j)&&j.followup.date<=addDays(TODAY,14)).length;
   // months chart: last 6 months billed
@@ -1920,8 +1938,8 @@ function vehFormHTML(c,v){
   return `<div class="form veh-form" style="margin:8px 0">
     <p class="formh">${v?"Edit vehicle":"Add a vehicle"}</p>
     ${f("unit","Fleet unit #",'autocomplete="off" placeholder="Optional"')}${f("plate","License plate",'autocapitalize="characters" autocomplete="off"')}
-    <label class="full">VIN<input id="ve-vin" class="mono" maxlength="17" autocapitalize="characters" autocomplete="off" value="${val("vin")}"><span class="help">17 characters. Tap Look up to fill in the vehicle.</span></label>
-    <div class="full acts" style="margin-top:-4px"><button class="mini scan-btn" type="button" data-scanvin="ve-vin">Scan VIN</button><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
+    <label class="full">VIN<span class="vin-in"><input id="ve-vin" class="mono" maxlength="17" autocapitalize="characters" autocomplete="off" value="${val("vin")}"><button class="vin-cam" type="button" data-scanvin="ve-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="help">17 characters. Tap Look up to fill in the vehicle.</span></label>
+    <div class="full acts" style="margin-top:-4px"><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("trim","Trim")}
     ${f("miles","Mileage",'inputmode="numeric"')}${f("color","Color")}
     <label class="full">Notes<textarea id="ve-notes" rows="2" placeholder="Oil type, tire size, known issues">${val("notes")}</textarea></label>
@@ -1950,7 +1968,7 @@ function garageHTML(c){
     </div>`;};
   return `<div class="garage-h"><div class="group-h">Garage${n?` · ${n} vehicle${n===1?"":"s"}`:""}</div><button class="mini" type="button" data-vadd="${c.id}">+ Add vehicle</button></div>
     ${VEH_EDIT===c.id+"|new"?vehFormHTML(c,null):""}
-    ${n>4?`<label class="search" style="margin:6px 0"><input id="garage-q" data-garageq="${c.id}" value="${esc(GARAGE_Q)}" placeholder="Search unit, plate, make or VIN" autocomplete="off"></label>`:""}
+    ${n>4?`<label class="search" style="margin:6px 0"><input id="garage-q" data-garageq="${c.id}" value="${esc(GARAGE_Q)}" placeholder="Search unit, plate, make or VIN" autocomplete="off"><button class="vin-cam" type="button" data-scanvin="garage-q" aria-label="Scan a VIN to find the vehicle"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></label>`:""}
     <div id="garageList">${list.length?list.map(card).join(""):`<p class="empty">${n?"No vehicles match.":"No vehicles yet. They're added when you book a job, or tap Add vehicle."}</p>`}</div>
     <div class="acts" style="margin-top:6px"><button class="mini" type="button" data-cbook="${c.id}||service">Book service, other vehicle</button></div>`;
 }
@@ -2256,7 +2274,7 @@ function renderMonthCal(){
   const ym=APP.calMonth||TODAY.slice(0,7),[y,m]=ym.split("-").map(Number);
   const first=new Date(y,m-1,1,12),offset=first.getDay(),nDays=new Date(y,m,0).getDate();
   const sel=APP.calDay||TODAY;
-  const byDay={};APP.jobs.forEach(j=>{const d=j.info.date;if(!d)return;(byDay[d]=byDay[d]||{b:0,d:0,f:0});j.status==="done"?byDay[d].d++:byDay[d].b++;});
+  const byDay={};APP.jobs.forEach(j=>{const d=j.info.date;if(!d)return;if(j.status==="canceled")return;(byDay[d]=byDay[d]||{b:0,d:0,f:0});j.status==="done"?byDay[d].d++:byDay[d].b++;});
   APP.jobs.filter(fuOpen).forEach(j=>{const d=j.followup.date;(byDay[d]=byDay[d]||{b:0,d:0,f:0});byDay[d].f++;});
   let cells="";for(let k=0;k<offset;k++)cells+=`<span class="cal-blank"></span>`;
   for(let d=1;d<=nDays;d++){const iso=`${ym}-${String(d).padStart(2,"0")}`,c=byDay[iso],past=iso<TODAY;
@@ -2281,19 +2299,20 @@ function renderMonthCal(){
 }
 function renderJobs(){
   const days=[...Array(14)].map((_,k)=>addDays(TODAY,k));
-  const counts={};APP.jobs.forEach(j=>{counts[j.info.date]=(counts[j.info.date]||0)+1});
+  const counts={};APP.jobs.forEach(j=>{if(j.status!=="canceled")counts[j.info.date]=(counts[j.info.date]||0)+1});
   const strip=`<div class="days" role="group" aria-label="Filter by day"><button type="button" class="day all" data-day="" aria-pressed="${!APP.day}"><strong style="font-size:16px">All</strong><small>upcoming</small></button>${days.map(d=>{
     const dt=new Date(d+"T12:00:00");
     return `<button type="button" class="day${counts[d]?" has":""}" data-day="${d}" aria-pressed="${APP.day===d}"><small>${d===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><i></i></button>`}).join("")}</div>`;
   const sortKey=j=>(j.info.date||"")+(j.info.time||"99");
-  let upcoming=APP.jobs.filter(j=>j.status!=="done"&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
+  let upcoming=APP.jobs.filter(j=>isOpenJob(j)&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
   const done=APP.jobs.filter(j=>j.status==="done"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
+  const canceled=APP.jobs.filter(j=>j.status==="canceled"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true):""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&j.status!=="done").length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&j.status!=="done"&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   ${routeHTML()}
@@ -2303,7 +2322,8 @@ function renderJobs(){
   ${upcoming.length||done.length?`<div class="grp-tools"><button class="mini" type="button" data-grpall="0">Collapse all</button><button class="mini" type="button" data-grpall="1">Expand all</button><label class="mini grp-compact"><input type="checkbox" data-compact="1" ${APP.compact?"checked":""}> Compact</label></div>`:""}
   ${upcoming.length?Object.entries(groups).map(([k,js])=>`${grpH("g:"+k,k,js.length)}${isCol("g:"+k)?"":cardsHTML(js)}`).join("")
     :`<div class="emptybox">${APP.day?"Nothing booked this day.":"No upcoming jobs."} Tap <strong>+ Book a job</strong> to add one.</div>`}
-  ${done.length?`${grpH("done","Completed",done.length)}${isCol("done")?"":cardsHTML(done)}`:""}`}
+  ${done.length?`${grpH("done","Completed",done.length)}${isCol("done")?"":cardsHTML(done)}`:""}
+  ${canceled.length?`${grpH("canceled","Canceled",canceled.length)}${isCol("canceled")?"":cardsHTML(canceled)}`:""}`}
   <textarea class="copybox" id="jobCopy" hidden readonly></textarea>`;
 }
 /* ---- "On my way" text with ETA ---- */
@@ -2353,35 +2373,96 @@ function omwPanel(j){
   </div>`;
 }
 /* collapsible schedule sections + compact rows */
-const COL_DEFAULT={done:true};
+const COL_DEFAULT={done:true,canceled:true};
 const isCol=k=>{const c=APP.col||{};return k in c?!!c[k]:!!COL_DEFAULT[k];};
 function grpH(k,label,n,extra=""){const c=isCol(k);return `<button type="button" class="group-h grp-t" data-grp="${esc(k)}" aria-expanded="${!c}"><span class="grp-chev">${c?"▸":"▾"}</span>${esc(label)}<span class="grp-n">${n}</span>${extra}</button>`;}
 function jobRowCompact(j){const i=j.info,svc=isSvc(j);
   const st=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:j.invoice.paid?`<span class="st st-paid">Paid</span>`:`<span class="st st-unpaid">${money(jobTotal(j))}</span>`):j.status==="active"?`<span class="st st-active">In progress</span>`:"";
   return `<button type="button" class="job-c" data-open="${j.id}"><span class="jc-t">${i.time?esc(fmtTime(i.time)):"—"}</span><span class="jc-w"><strong>${esc(i.customer||"No name")}</strong> <small>${esc([vehOf(i),svc?i.work:""].filter(Boolean).join(" · "))}</small></span><span class="tag">${svc?"Svc":"PPI"}</span>${st}<span class="jc-go">›</span></button>`;}
 const cardsHTML=js=>APP.compact?`<div class="jobs-c">${js.map(jobRowCompact).join("")}</div>`:`<div class="jobs">${js.map(jobCard).join("")}</div>`;
+
+/* ================= job status: start, hold, stop, cancel ================= */
+const isOpenJob=j=>j.status!=="done"&&j.status!=="canceled";
+const HOLD_R=["Waiting on parts","Waiting on customer OK","Customer not available","Weather","Other"];
+const STOP_R=["Customer declined the work","Needs a shop or lift","Parts not available","Other"];
+const CANCEL_R=["Customer canceled","No-show","Rescheduled","Other"];
+let JCTL=null;  // {id, mode:"hold"|"stop"|"cancel", reason, note}
+const jcWho=()=>isTech()?((S&&S.info.tech)||"Technician").split(/\s+/)[0]:(APP.settings.owner||"Owner").split(/\s+/)[0];
+function jcLog(j,ev,extra){(j.log=j.log||[]).push({ev,at:Date.now(),by:jcWho(),...(extra||{})});if(j.log.length>40)j.log=j.log.slice(-40);}
+function jcTimer(j,on){if(!isSvc(j))return;const t=j.timer||(j.timer={segs:[],run:0});
+  if(on){if(!t.run)t.run=Date.now();}else if(t.run){t.segs.push({s:t.run,e:Date.now()});t.run=0;}}
+const jcTime=ms=>{const d=new Date(ms);return (d.toDateString()===new Date().toDateString()?"":d.toLocaleDateString([], {month:"short",day:"numeric"})+" ")+d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});};
+function jcNotifyManagers(j,title){if(isTech())notifySend({to:"managers",title,body:jobLine(j)+(j.hold&&j.status==="hold"&&j.hold.note?" · "+j.hold.note:""),url:"./?job="+encodeURIComponent(j.id),tag:"st-"+j.id});}
+function jcNotifyTech(j,title){const t=techOf(j);if(!isTech()&&t&&t.userId)notifySend({user_ids:[t.userId],title,body:jobLine(j),url:"./?job="+encodeURIComponent(j.id),tag:"st-"+j.id});}
+function jobCtlHTML(){
+  const j=S;if(!j)return "";const st=j.status||"sched",own=!isTech(),P=JCTL&&JCTL.id===j.id?JCTL:null;
+  const lbl={sched:"Booked",active:"In progress",hold:"On hold",done:j.stopped?"Stopped before finishing":"Done",canceled:"Canceled"}[st]||"Booked";
+  let sub="",btns="";
+  if(st==="sched"){sub=j.info.date?`Scheduled ${esc(fmtDate(j.info.date,{weekday:"short",month:"short",day:"numeric"}))}${j.info.time?" at "+esc(fmtTime(j.info.time)):""}`:"";
+    btns=`<button class="btn primary" type="button" data-jc="start">▶ ${isSvc(j)?"Start job":"Start inspection"}</button>${own?`<button class="btn" type="button" data-jc="cancel">Cancel job</button>`:""}`;}
+  else if(st==="active"){const t=j.timer;sub=j.startedAt?`Started ${esc(jcTime(j.startedAt))}${isSvc(j)&&t&&(t.run||(t.segs||[]).length)?` · ${esc(fmtHM(tmrHours(j)))} on the clock`:""}`:"";
+    btns=`<button class="btn" type="button" data-jc="hold">⏸ Put on hold</button><button class="btn" type="button" data-jc="stop">■ Stop</button>${own?`<button class="btn" type="button" data-jc="cancel">Cancel</button>`:""}`;}
+  else if(st==="hold"){const h=j.hold||{};sub=`${esc(h.reason||"On hold")}${h.at?` · since ${esc(jcTime(h.at))}`:""}${h.by&&hasTeam()?` · ${esc(h.by)}`:""}${h.note?`<br>${esc(h.note)}`:""}`;
+    btns=`<button class="btn primary" type="button" data-jc="resume">▶ Resume</button><button class="btn" type="button" data-jc="stop">■ Stop</button>${own?`<button class="btn" type="button" data-jc="cancel">Cancel</button>`:""}`;}
+  else if(st==="canceled"){const c=j.canceled||{};sub=`${esc(c.reason||"Canceled")}${c.at?` · ${esc(jcTime(c.at))}`:""}${c.note?`<br>${esc(c.note)}`:""}`;
+    btns=own?`<button class="btn" type="button" data-jc="restore">Restore job</button>`:"";}
+  else if(st==="done"){if(!j.stopped)return "";const c=j.stopped;sub=`${esc(c.reason||"")}${c.at?` · ${esc(jcTime(c.at))}`:""}${c.note?`<br>${esc(c.note)}`:""}${own&&isSvc(j)?"<br>You can still bill for the time and parts used.":""}`;
+    btns=`<button class="btn" type="button" data-jc="reopen">Reopen job</button>`;}
+  let panel="";
+  if(P){const R=P.mode==="hold"?HOLD_R:P.mode==="stop"?STOP_R:CANCEL_R;
+    const title=P.mode==="hold"?"Why is it on hold?":P.mode==="stop"?"Why are you stopping before it's finished?":"Why is it canceled?";
+    const go=P.mode==="hold"?"Put on hold":P.mode==="stop"?"Stop job":"Cancel job";
+    panel=`<div class="jc-panel"><strong>${title}</strong>
+      <div class="jc-reasons">${R.map(r=>`<button type="button" data-jcr="${esc(r)}" class="${P.reason===r?"on":""}">${esc(r)}</button>`).join("")}</div>
+      <textarea id="jc-note" data-jcnote="1" placeholder="${P.mode==="hold"?"Note, e.g. which part and when it arrives":"Note (optional)"}">${esc(P.note||"")}</textarea>
+      ${P.mode==="stop"?`<span class="help">Finished the work? Use <strong>${isTech()?"Finish job":"Finish"}</strong> at the bottom instead.</span>`:""}
+      ${P.mode==="cancel"&&techOf(j)&&techOf(j).userId?`<span class="help">${esc(techOf(j).name)} gets a notification that it's canceled.</span>`:""}
+      <div class="jc-btns"><button class="btn ${P.mode==="cancel"?"danger":"primary"}" type="button" data-jc="${P.mode}go">${go}</button><button class="btn" type="button" data-jc="back">Never mind</button></div></div>`;}
+  return `<div class="jctl jc-${st}" id="jobCtl"><div class="jctl-top"><span class="jc-st"><span class="jc-dot"></span>${lbl}</span><span class="jc-btns">${P?"":btns}</span></div>${sub?`<div class="jc-sub">${sub}</div>`:""}${panel}</div>`;
+}
+function jcAct(k){const j=S;if(!j)return;const P=JCTL&&JCTL.id===j.id?JCTL:null;
+  if(k==="hold"||k==="stop"||k==="cancel"){JCTL={id:j.id,mode:k,reason:"",note:""};rerenderKeep();return;}
+  if(k==="back"){JCTL=null;rerenderKeep();return;}
+  if(k==="start"||k==="resume"){j.status="active";if(!j.startedAt)j.startedAt=Date.now();j.hold=null;jcTimer(j,true);jcLog(j,k);
+    if(hasTeam()&&techOf(j)&&j.dispatch!=="onsite")j.dispatch="onsite";
+    save();rerenderKeep();tickTimer();toast(k==="start"?"Job started. The clock is running.":"Back to work. The clock is running.");if(k==="resume")jcNotifyManagers(j,`${jcWho()} resumed a job`);return;}
+  if(k==="holdgo"){if(!P||!P.reason){toast("Pick a reason");return;}
+    j.status="hold";j.hold={reason:P.reason,note:(P.note||"").trim(),at:Date.now(),by:jcWho()};jcTimer(j,false);jcLog(j,"hold",{reason:P.reason});JCTL=null;
+    save();rerenderKeep();toast("On hold. The clock is paused.");jcNotifyManagers(j,`${jcWho()} put a job on hold: ${P.reason}`);return;}
+  if(k==="stopgo"){if(!P||!P.reason){toast("Pick a reason");return;}
+    jcTimer(j,false);if(isSvc(j)&&j.timer&&tmrHours(j)>0&&!num(j.actualHrs))j.actualHrs=String(Math.max(0.1,Math.round(tmrHours(j)*10)/10));
+    j.stopped={reason:P.reason,note:(P.note||"").trim(),at:Date.now(),by:jcWho()};j.status="done";j.hold=null;if(isTech()){j.doneBy=(AUTH&&AUTH.email)||"";}j.dsp="";jcLog(j,"stop",{reason:P.reason});JCTL=null;
+    save();rerenderKeep();toast(isTech()?"Job stopped. The office has it now.":"Job stopped. You can still bill for what was done.");jcNotifyManagers(j,`${jcWho()} stopped a job: ${P.reason}`);return;}
+  if(k==="cancelgo"){if(!P||!P.reason){toast("Pick a reason");return;}
+    jcTimer(j,false);j.canceled={reason:P.reason,note:(P.note||"").trim(),at:Date.now(),by:jcWho(),prev:j.status};j.status="canceled";j.hold=null;jcLog(j,"cancel",{reason:P.reason});JCTL=null;
+    jcNotifyTech(j,"Job canceled");save();APP.view="jobs";render();window.scrollTo(0,0);toast("Job canceled. It's under Canceled on the Schedule if you need it back.");return;}
+  if(k==="restore"){const prev=j.canceled&&j.canceled.prev;j.status=prev==="active"||prev==="hold"?"hold":"sched";if(j.status==="hold"&&!j.hold)j.hold={reason:"Restored after cancel",at:Date.now(),by:jcWho()};j.canceled=null;jcLog(j,"restore");
+    jcNotifyTech(j,"Job is back on");save();rerenderKeep();toast("Job restored");return;}
+  if(k==="reopen"){j.status="hold";j.hold={reason:"Reopened",note:j.stopped&&j.stopped.reason||"",at:Date.now(),by:jcWho()};j.stopped=null;jcLog(j,"reopen");save();rerenderKeep();toast("Reopened. Tap Resume to start the clock again.");return;}
+}
+
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
-  const status=j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
-    :j.status==="active"?`<span class="st st-active">In progress${svc?"":` ${st.done}/${st.total}`}</span>`:`<span class="st st-sched">Booked</span>`;
+  const status=j.status==="canceled"?`<span class="st st-cancel">Canceled</span>`:j.status==="hold"?`<span class="st st-hold">On hold${j.hold&&j.hold.reason?" · "+esc(j.hold.reason):""}</span>`:(j.status==="done"&&j.stopped?`<span class="st st-stopped">Stopped</span> `:"")+(j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
+    :j.status==="active"?`<span class="st st-active">In progress${svc?"":` ${st.done}/${st.total}`}</span>`:`<span class="st st-sched">Booked</span>`);
   const confirmDel=APP.confirmDel===j.id;
   const estChip=!isTech()&&svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
-    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&j.status!=="done"&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
+    <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&isOpenJob(j)&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
     <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
-      :`<button class="mini go" type="button" data-open="${j.id}">${svc?(j.status==="done"?(isTech()?"Open job":"Open invoice"):j.status==="active"?"Continue job":"Start job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
+      :`<button class="mini go" type="button" data-open="${j.id}">${j.status==="canceled"?"Open":j.status==="hold"?"Open job":svc?(j.status==="done"?(isTech()?"Open job":"Open invoice"):j.status==="active"?"Continue job":"Open job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
       ${j.status==="done"&&j.invoice.paid&&!j.reviewAt&&(APP.settings.reviewLink||"").trim()&&i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,reviewText(j)))}" data-reviewsent="${j.id}">⭐ Review</a>`:""}
-      ${isTech()?"":j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
-      ${j.status!=="done"?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
-      ${j.status!=="done"&&i.location?dirLink(i.location):""}
-      ${j.status!=="done"?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
+      ${isTech()||j.status==="canceled"?"":j.status==="done"?(svc?"":`<button class="mini" type="button" data-openinv="${j.id}">Invoice</button>`):`${i.phone&&CAN_CAL?`<a class="mini" href="${esc(smsHref(i.phone,confirmText(j)))}">💬 Text confirmation</a>`:""}<button class="mini" type="button" data-confirm="${j.id}">Copy confirmation</button>`}
+      ${isOpenJob(j)?`<button class="mini omw-btn" type="button" data-omw="${j.id}">🚗 On my way</button>`:""}
+      ${isOpenJob(j)&&i.location?dirLink(i.location):""}
+      ${isOpenJob(j)?`<button class="mini cal-only" type="button" data-jobcal="${j.id}">Add to Calendar</button>`:""}
       <button class="mini" type="button" data-edit="${j.id}">Edit</button>
       <button class="mini del" type="button" data-askdel="${j.id}">Delete</button>`}
-    </div>${omwPanel(j)}${j.omwAt&&j.status!=="done"&&(Date.now()-j.omwAt)<6*3600000?`<div class="meta omw-sent">✓ "On my way" sent ${esc(new Date(j.omwAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</div>`:""}</div>`;
+    </div>${omwPanel(j)}${j.omwAt&&isOpenJob(j)&&(Date.now()-j.omwAt)<6*3600000?`<div class="meta omw-sent">✓ "On my way" sent ${esc(new Date(j.omwAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</div>`:""}</div>`;
 }
 function renderJobForm(){
   const d=APP.draft, svc=d.type==="service", tr=Math.max(0,num(d.dist)-num(APP.settings.freeMiles))*num(APP.settings.perMile);
@@ -2401,8 +2482,7 @@ function renderJobForm(){
     <label>Agreed price ($)<input id="d-agreed" data-draft="agreed" inputmode="decimal" value="${esc(d.agreed||"")}" placeholder="Optional"><span class="help">Price you agreed on. Goes in the confirmation and starts the invoice.</span></label>
     <label class="check full"><input type="checkbox" data-draftc="agreedTravel" ${d.agreedTravel!==false?"checked":""}> Travel is included in the agreed price</label>
     ${techFieldHTML("draft",d.tech)}
-    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="d-vin">Scan VIN with camera</button></div>
-    <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><span class="vin-dec" id="dVinDec"></span></label>
+        <label class="full">VIN <span class="opt">(optional, fills in the vehicle)</span><span class="vin-in"><input id="d-vin" class="mono" data-draft="vin" maxlength="17" autocapitalize="characters" autocomplete="off" value="${esc(d.vin)}"><button class="vin-cam" type="button" data-scanvin="d-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="vin-dec" id="dVinDec"></span></label>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
     ${f("model","Model")}
@@ -2726,8 +2806,7 @@ function renderIntake(){
     ${f("model","Model")}
     ${f("trim","Trim")}
     ${f("engine","Engine","","full")}
-    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="f-vin">Scan VIN with camera</button></div>
-    <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
+        <label class="full">VIN<span class="vin-in"><input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><button class="vin-cam" type="button" data-scanvin="f-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
     ${f("miles","Odometer (miles)",'inputmode="numeric"')}
     ${f("color","Color")}
     ${i.notes?`<p class="help full" style="margin:0"><strong>Booking notes:</strong> ${esc(i.notes)}</p>`:""}
@@ -3093,8 +3172,7 @@ function renderService(){
     ${f("model","Model")}
     ${f("trim","Trim")}
     ${f("engine","Engine","","full")}
-    <div class="full scan-row"><button class="mini scan-btn" type="button" data-scanvin="f-vin">Scan VIN with camera</button></div>
-    <label class="full">VIN<input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
+        <label class="full">VIN<span class="vin-in"><input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><button class="vin-cam" type="button" data-scanvin="f-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>
     ${f("miles","Mileage",'inputmode="numeric"')}
     ${f("color","Color")}
     ${f("plate","License plate",'autocapitalize="characters"')}${f("unit","Fleet unit #")}
@@ -3653,11 +3731,12 @@ function render(){applyTheme();
   else if(isSvc(S)){html=renderService();setTimeout(()=>{preloadMedia(S);tickTimer();},0);}
   else{const s=STAGES[S.step];
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
+  if(APP.view==="job"&&S)html=jobCtlHTML()+html;
   $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
   renderChrome();
 }
 function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sched"&&S.step>0)S.status="active";save();render();window.scrollTo(0,0);}
-function openJob(id,step){TECH_OTHER={};APP.active=id;APP.view="job";syncActive();if(step!=null&&!isSvc(S))S.step=step;if(isSvc(S)&&S.status==="sched")S.status="active";save();render();window.scrollTo(0,0);}
+function openJob(id,step){TECH_OTHER={};APP.active=id;APP.view="job";syncActive();if(step!=null&&!isSvc(S))S.step=step;save();render();window.scrollTo(0,0);}
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;TECH_OTHER={};
   const b=job?job.info:{};APP.draftBase=job?JSON.parse(JSON.stringify(job.info)):null;
@@ -4143,8 +4222,10 @@ document.addEventListener("click",e=>{
     if(el)setTimeout(()=>{const x=document.getElementById(el);if(x){x.scrollIntoView({behavior:"smooth",block:"start"});x.classList.add("flash-hl");setTimeout(()=>x.classList.remove("flash-hl"),1800);}},60);return;}
   if(d.grp){APP.col=APP.col||{};APP.col[d.grp]=!isCol(d.grp);save();rerenderKeep();return;}
   if(d.grpall!==undefined){APP.col=APP.col||{};const keys=["fu","done",...[...document.querySelectorAll("[data-grp]")].map(b=>b.dataset.grp)];keys.forEach(k=>APP.col[k]=d.grpall==="0");save();rerenderKeep();return;}
+  if(d.jc){jcAct(d.jc);return;}
+  if(d.jcr!==undefined&&JCTL){JCTL.reason=d.jcr;rerenderKeep();setTimeout(()=>document.getElementById("jc-note")?.focus({preventScroll:true}),30);return;}
   if(d.tmr){const t=S.timer||(S.timer={segs:[],run:0});const k=d.tmr;
-    if(k==="start"){t.run=Date.now();if(S.status==="sched")S.status="active";}
+    if(k==="start"){t.run=Date.now();if(S.status==="sched"||S.status==="hold"){S.status="active";S.hold=null;if(!S.startedAt)S.startedAt=Date.now();}}
     else if(k==="pause"||k==="stop"){if(t.run){t.segs.push({s:t.run,e:Date.now()});t.run=0;}if(k==="stop"){S.actualHrs=String(Math.max(0.1,Math.round(tmrHours(S)*10)/10));toast(`Logged ${S.actualHrs} hr`);}}
     else if(k==="reset"){S.timer={segs:[],run:0};S.actualHrs="";}
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
@@ -4277,7 +4358,7 @@ document.addEventListener("click",e=>{
     if(!nv.make&&!nv.model&&!nv.vin&&!nv.unit){toast("Add a make and model, a VIN or a unit number");return;}
     let v=key?c.vehicles.find(x=>x.key===key):null;
     if(v){const oldInfo={...v};Object.assign(v,nv);v.manual=true;const nk=vehKey(v);if(nk!==v.key){v.alias=[...new Set([...(v.alias||[]),v.key])];v.key=nk;}
-      for(const j of APP.jobs)if(j.custId===c.id&&j.status!=="done"&&vehMatch(oldInfo,j.info))Object.assign(j.info,{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,unit:v.unit,plate:v.plate,color:v.color});
+      for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j)&&vehMatch(oldInfo,j.info))Object.assign(j.info,{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,unit:v.unit,plate:v.plate,color:v.color});
       if(VEH_OPEN===key)VEH_OPEN=v.key;}
     else{v={...nv,manual:true};v.key=vehKey(v);if(c.vehicles.some(x=>x.key===v.key))v.key+="#"+uid();c.vehicles.push(v);c.vehHidden=(c.vehHidden||[]).filter(k=>k!==v.key);}
     VEH_EDIT=null;save();relist();toast(key?"Vehicle saved":"Vehicle added");return;}
@@ -4295,7 +4376,7 @@ document.addEventListener("click",e=>{
     c.lock=c.lock||{};
     for(const k of ["name","phone","email","dist","location"])if(nv[k]!==(c[k]||""))c.lock[k]=true;
     const jobField={name:"customer",phone:"phone",location:"location",dist:"dist"};
-    for(const j of APP.jobs)if(j.custId===c.id&&j.status!=="done")for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
+    for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j))for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
     Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Customer saved");return;}
   if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;VEH_EDIT=null;VEH_OPEN=null;GARAGE_Q="";const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
   if(d.cbook){const [cid,vk,type]=split3(d.cbook);const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
@@ -4369,6 +4450,7 @@ document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
+  if(d.jcnote){if(JCTL)JCTL.note=t.value;return;}
   if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}
   if(d.techf){const [id,f]=d.techf.split(":");const tm=APP.settings.techs.find(x=>x.id===id);if(tm){tm[f]=e.target.value;

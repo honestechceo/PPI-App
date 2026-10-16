@@ -527,6 +527,10 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .jc-t{font-family:var(--f-mono);font-size:12px;color:var(--muted)}.jc-w{min-width:0}.jc-w strong,.jc-w small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.jc-w small{color:var(--muted);font-size:12px}.jc-go{color:var(--muted)}
 @media (min-width:860px){.jobs-c{display:grid;grid-template-columns:1fr 1fr}.job-c:nth-last-child(2):nth-child(odd){border-bottom:0}}
 @media (max-width:420px){.brand h1 small{display:none}.saved{font-size:10px;max-width:58px;line-height:1.15;text-align:right}.cloud-dot,.help-btn{width:30px;height:30px;margin-left:4px}}
+.back-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:2px;height:36px;padding:0 12px 0 6px;margin-right:2px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:700;font-size:15px;cursor:pointer}
+.back-btn[hidden]{display:none}
+@media(max-width:460px){.back-btn span{display:none}.back-btn{width:36px;padding:0;justify-content:center;margin-right:8px}.back-btn svg{margin-left:-2px}
+  .brand.has-back{flex-wrap:nowrap;gap:6px}.brand.has-back h1{font-size:18px}.brand.has-back .saved{display:none}.brand.has-back .help-btn{margin-left:4px}}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -701,7 +705,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
+    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -2224,6 +2228,7 @@ function jobTotal(job){return totals(job).total;}
 
 /* ================= chrome ================= */
 function renderChrome(){try{syncLabel();}catch(e){}
+  {const bb=document.getElementById("backBtn");if(bb){bb.hidden=!NAV.stack.length||NAV_SKIP.has(APP.view);bb.parentElement.classList.toggle("has-back",!bb.hidden);}}
   const inJob=APP.view==="job"&&S;
   $("#jobChrome").hidden=!inJob; $("#plainPad").hidden=!!inJob;
   $("#navJobs").setAttribute("aria-current",APP.view==="jobs"?"page":"false");
@@ -3708,6 +3713,40 @@ async function savePdf(kind){
 }
 
 /* ================= render & navigation ================= */
+/* ================= back button: remembers where you were ================= */
+const NAV={stack:[],key:null,snap:null,y:0,restoring:false};
+const NAV_SKIP=new Set(["join","techlocked"]);
+function navKey(){return APP.view+"|"+(APP.view==="job"?APP.active+"|"+(S&&!isSvc(S)?S.step:""):"")+"|"+(APP.view==="customers"?(CUST_OPEN||""):"");}
+function navSnap(){return {view:APP.view,active:APP.active,step:S&&APP.view==="job"&&!isSvc(S)?S.step:null,cust:CUST_OPEN};}
+function navTrack(){
+  const k=navKey();
+  if(NAV.key===null||NAV_SKIP.has(APP.view)){NAV.key=k;NAV.snap=navSnap();if(NAV_SKIP.has(APP.view))NAV.stack=[];return;}
+  if(k===NAV.key)return;
+  if(!NAV.restoring&&!NAV_SKIP.has(NAV.snap.view)){NAV.stack.push({...NAV.snap,y:NAV.y});if(NAV.stack.length>40)NAV.stack.shift();
+    try{history.pushState({nav:NAV.stack.length},"");}catch(e){}}
+  NAV.key=k;NAV.snap=navSnap();NAV.y=0;
+}
+function navBack(){
+  const b=NAV.stack.pop();if(!b)return false;
+  NAV.restoring=true;JCTL=null;
+  if(b.view==="job"&&APP.jobs.some(j=>j.id===b.active)){APP.view="job";APP.active=b.active;syncActive();if(S&&!isSvc(S)&&b.step!=null)S.step=b.step;}
+  else APP.view=b.view==="job"?"jobs":b.view;
+  if(APP.view==="customers"){CUST_OPEN=b.cust||null;CUST_EDIT=null;}
+  try{render();}finally{NAV.restoring=false;}
+  window.scrollTo(0,b.y||0);NAV.y=b.y||0;return true;
+}
+window.addEventListener("scroll",()=>{if(!NAV.restoring)NAV.y=window.scrollY;},{passive:true});
+let NAV_WAIT=null;
+window.addEventListener("popstate",()=>{clearTimeout(NAV_WAIT);NAV_WAIT=null;
+  // phone back gesture closes an open photo, scanner or guide first
+  const ov=document.querySelector(".viewer,.inst-ov");
+  if(SCAN||ov){if(SCAN)scanClose();else ov.remove();if(NAV.stack.length)try{history.pushState({nav:NAV.stack.length},"");}catch(e){}return;}
+  navBack();});
+function navBackTap(){if(!NAV.stack.length)return;
+  try{history.back();}catch(e){}
+  clearTimeout(NAV_WAIT);NAV_WAIT=setTimeout(()=>{NAV_WAIT=null;navBack();},350);}
+try{history.replaceState({nav:0},"");}catch(e){}
+
 function render(){applyTheme();
   const acc=access();document.body.classList.toggle("gated",acc.kind==="account");document.body.classList.toggle("tech-mode",isTech());
   if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help"].includes(APP.view))APP.view="jobs";}
@@ -3733,6 +3772,7 @@ function render(){applyTheme();
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   if(APP.view==="job"&&S)html=jobCtlHTML()+html;
   $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
+  navTrack();
   renderChrome();
 }
 function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sched"&&S.step>0)S.status="active";save();render();window.scrollTo(0,0);}
@@ -4113,6 +4153,7 @@ document.addEventListener("click",e=>{
   if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
+  if(d.navback){navBackTap();return;}
   if(d.nav){TECH_NEW=null;TECH_DEL=null;if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
@@ -4378,7 +4419,7 @@ document.addEventListener("click",e=>{
     const jobField={name:"customer",phone:"phone",location:"location",dist:"dist"};
     for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j))for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
     Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Customer saved");return;}
-  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;VEH_EDIT=null;VEH_OPEN=null;GARAGE_Q="";const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;VEH_EDIT=null;VEH_OPEN=null;GARAGE_Q="";const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");navTrack();renderChrome();return;}
   if(d.cbook){const [cid,vk,type]=split3(d.cbook);const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
     APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
   if(d.cdel){if(CUST_DEL!==d.cdel){CUST_DEL=d.cdel;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}

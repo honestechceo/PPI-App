@@ -1106,28 +1106,61 @@ function localRecords(){
   const st={...APP.settings};out.push({kind:"settings",id:"main",data:st});if((APP.settings.techs||[]).length)out.push({kind:"techcfg",id:"main",data:techCfg()});return out;
 }
 function scheduleSync(){if(!AUTH||APP.sample)return;clearTimeout(SYNC.timer);SYNC.timer=setTimeout(()=>syncNow(),3500);}
+/* Field-by-field merge. When this phone has unsent changes to a record that another phone also changed,
+   keep both sides' edits: compare each against the last version both agreed on (the "base"). */
+const BASE={get:k=>MDB.get("b:"+k).then(v=>v?JSON.parse(v):undefined).catch(()=>undefined),
+  put:(k,d)=>{let t;try{t=JSON.stringify(d);}catch(e){return;}MDB.put("b:"+k,t).catch(()=>{});},del:k=>MDB.del("b:"+k).catch(()=>{})};
+function stab(v){return JSON.stringify(v,(k,x)=>x&&typeof x==="object"&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}):x);}
+const isObj=v=>!!v&&typeof v==="object"&&!Array.isArray(v);
+const idArr=a=>Array.isArray(a)&&a.every(x=>isObj(x)&&x.id!=null&&x.id!=="")&&new Set(a.map(x=>String(x.id))).size===a.length;
+function merge3(b,l,r,localWins){
+  const sl=stab(l),sr=stab(r);if(sl===sr)return l;const sb=stab(b);
+  if(sl===sb)return r;if(sr===sb)return l;
+  if(isObj(l)&&isObj(r)){const bb=isObj(b)?b:{},o={};
+    for(const k of new Set([...Object.keys(r),...Object.keys(l)])){const v=merge3(bb[k],l[k],r[k],localWins);if(v!==undefined)o[k]=v;}return o;}
+  if(idArr(l)&&idArr(r)&&(b===undefined||idArr(b))&&(l.length||r.length)){   // lists of things with ids (photos, vehicles, lines…)
+    const m=a=>new Map((a||[]).map(x=>[String(x.id),x])),ml=m(l),mr=m(r),mb=m(b);const out=[];
+    for(const id of [...r.map(x=>String(x.id)),...l.map(x=>String(x.id)).filter(id=>!mr.has(id))]){const v=merge3(mb.get(id),ml.get(id),mr.get(id),localWins);if(v!==undefined)out.push(v);}
+    return out;}
+  return localWins?l:r;
+}
 async function syncNow(full){
   if(!AUTH||APP.sample)return;if(SYNC.busy){SYNC.again=true;return;}
   SYNC.busy=true;SYNC.state="syncing";syncLabel();
   try{
     if(!AUTH.shop_id){const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:shop;saveAuth();}
-    const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{}};}
+    const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{},t:{},lh:{},based:1};}
     SMETA.h=SMETA.h||{};
     const first=!SMETA.cursor;
-    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();}
-    // local fingerprints: what's changed here since the last sync ("dirty")
-    const loc=localRecords(),lh={};loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
+    // local fingerprints: what's changed here since the last sync ("dirty"), and when it last changed
+    const loc=localRecords(),lh={},t0=Date.now();loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
     const dirty=k=>k in lh&&SMETA.h[k]!==lh[k];
+    SMETA.t=SMETA.t||{};SMETA.lh=SMETA.lh||{};
+    for(const k in lh){if(dirty(k)){if(SMETA.lh[k]!==lh[k]){SMETA.lh[k]=lh[k];SMETA.t[k]=t0;}}else{delete SMETA.t[k];delete SMETA.lh[k];}}
+    if(!SMETA.based){for(const r of loc){const k=r.kind+":"+r.id;if(!dirty(k)&&SMETA.h[k])BASE.put(k,r.data);}SMETA.based=1;}
+    const locBy={};loc.forEach(r=>{locBy[r.kind+":"+r.id]=r;});
     // 1) pull what changed elsewhere. Unsent local edits win; on a device's first sync, the account's settings win.
     let changed=0;
     for(let guard=0;guard<40;guard++){
       const q=`/rest/v1/records?select=kind,id,data,deleted,updated_at&shop_id=eq.${shopId}${SMETA.cursor?`&updated_at=gt.${encodeURIComponent(SMETA.cursor)}`:""}&order=updated_at.asc&limit=500`;
       const rows=await supa(q);if(!rows||!rows.length)break;
-      rows.forEach(r=>{const k=r.kind+":"+r.id;SMETA.cursor=r.updated_at;
-        if(dirty(k)&&!(first&&r.kind==="settings"))return;          // keep my newer edit; it gets pushed below
-        if(!(k in lh)&&k in SMETA.h&&!r.deleted)return;               // I deleted it here; the delete gets pushed below
-        const c=applyRemote(r);changed+=c;if(k in lh||r.deleted)delete lh[k];});
+      for(const r of rows){const k=r.kind+":"+r.id;SMETA.cursor=r.updated_at;
+        if(!(k in lh)&&k in SMETA.h&&!r.deleted)continue;             // I deleted it here; the delete gets pushed below
+        if(dirty(k)&&!(first&&r.kind==="settings")&&r.kind!=="techcfg"){
+          if(r.deleted)continue;                                       // deleted elsewhere but changed here: keep mine
+          // both phones changed it: merge field by field; where both changed the same field, the newer change wins
+          const base=await BASE.get(k),lt=SMETA.t[k]||0,rt=Date.parse(r.updated_at)||0;
+          const localWins=base!==undefined?lt>rt:lt>0&&lt<t0;      // no base yet: only edits made before this sync count
+          const mine=locBy[k]?JSON.parse(JSON.stringify(locBy[k].data)):{};
+          const merged=merge3(base,mine,r.data,localWins);
+          changed+=applyRemote({...r,data:merged});
+          const rh=h32(JSON.stringify(r.data));SMETA.h[k]=rh;BASE.put(k,r.data);
+          const cur=localRecords().find(x=>x.kind+":"+x.id===k);lh[k]=cur?h32(JSON.stringify(cur.data)):rh;
+          if(lh[k]===rh){delete SMETA.t[k];delete SMETA.lh[k];}else{SMETA.lh[k]=lh[k];}
+          continue;}
+        const c=applyRemote(r);changed+=c;if(r.deleted)BASE.del(k);else BASE.put(k,r.data);if(k in lh||r.deleted)delete lh[k];}
       saveMeta();if(rows.length<500)break;}
+    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();}
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
     now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
@@ -1138,7 +1171,7 @@ async function syncNow(full){
     Object.keys(SMETA.h).forEach(k=>{if(!isTech()&&!seen.has(k)&&!k.startsWith("settings:")&&!k.startsWith("techcfg:")){const [kind,...rest]=k.split(":");push.push({row:{shop_id:shopId,kind,id:rest.join(":"),data:{},deleted:true},k,hh:null});}});
     for(let i=0;i<push.length;i+=25){const chunk=push.slice(i,i+25);
       await supa("/rest/v1/records?on_conflict=shop_id,kind,id",{method:"POST",body:chunk.map(x=>x.row),headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
-      chunk.forEach(x=>{if(x.hh)SMETA.h[x.k]=x.hh;else delete SMETA.h[x.k];});saveMeta();}
+      chunk.forEach(x=>{if(x.hh){SMETA.h[x.k]=x.hh;BASE.put(x.k,x.row.data);}else{delete SMETA.h[x.k];BASE.del(x.k);}delete SMETA.t[x.k];delete SMETA.lh[x.k];});saveMeta();}
     if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
     if(!PLAN||Date.now()-(PLAN.at||0)>10*60000||PLAN.shop_id!==AUTH.shop_id)await fetchPlan();
     SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);setTimeout(mediaSyncUp,0);SMETA.lastAt=SYNC.last;saveMeta();
@@ -3627,7 +3660,7 @@ function go(i){S.step=Math.max(0,Math.min(STAGES.length-1,i));if(S.status==="sch
 function openJob(id,step){TECH_OTHER={};APP.active=id;APP.view="job";syncActive();if(step!=null&&!isSvc(S))S.step=step;if(isSvc(S)&&S.status==="sched")S.status="active";save();render();window.scrollTo(0,0);}
 function startAdd(job){
   APP.adding=true;APP.editing=job?job.id:null;TECH_OTHER={};
-  const b=job?job.info:{};
+  const b=job?job.info:{};APP.draftBase=job?JSON.parse(JSON.stringify(job.info)):null;
   APP.draft={type:job?(job.type||"ppi"):"ppi",work:b.work||"",vin:b.vin||"",miles:b.miles||"",color:b.color||"",date:b.date||APP.day||(APP.schedMode==="month"&&APP.calDay&&APP.calDay>=TODAY?APP.calDay:"")||TODAY,time:b.time||"",customer:b.customer||"",phone:b.phone||"",location:b.location||"",dist:b.dist||"",year:b.year||"",make:b.make||"",model:b.model||"",trim:b.trim||"",notes:b.notes||"",unit:b.unit||"",plate:b.plate||"",po:b.po||"",tech:b.tech||"",engine:b.engine||"",agreed:b.agreed||"",agreedTravel:b.agreedTravel!==false};
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
@@ -3636,7 +3669,10 @@ function saveDraft(){
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
   const {type,custId,techId:pickedTech,...info}=d;TECH_OTHER={};
   const _ej=APP.editing?APP.jobs.find(x=>x.id===APP.editing):null;const _prevTech=_ej?_ej.techId||"":"";const _prevKey=_ej?[_ej.info.date,_ej.info.time,_ej.info.location].join("|"):"";
-  if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);Object.assign(j.info,info);applyAgreed(j);
+  if(APP.editing){const j=APP.jobs.find(x=>x.id===APP.editing);const db=APP.draftBase;
+    // only fields changed in this form, so edits made on another phone meanwhile aren't undone
+    if(db)Object.keys(info).forEach(f=>{if(String(info[f]??"")===String(db[f]??"")&&j.info[f]!==undefined)delete info[f];});
+    Object.assign(j.info,info);applyAgreed(j);
     if((j.type||"ppi")!==type){j.type=type;if(!j.invoice.lines)j.invoice.lines=[];if(type==="service"&&!j.invoice.num)j.invoice.fee=0;if(type==="ppi"&&!j.invoice.num)j.invoice.fee=null;}}
   else{const nj=newJob(info,type);if(custId)nj.custId=custId;if(type==="service"&&APP.settings.mpiAuto)mpiStart(nj);applyAgreed(nj);APP.jobs.push(nj);
     if(APP.reqFrom){const rq=APP.requests.find(x=>x.id===APP.reqFrom);if(rq){rq.status="booked";rq.jobId=nj.id;}}

@@ -599,6 +599,8 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.inv-del{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
+.dup-row{border-top:1px solid var(--line);padding:9px 0}.dup-row .acts{margin-top:6px}
 .imp-steps{margin:4px 0 0;padding-left:20px;line-height:1.5}.imp-steps li{margin-bottom:4px}
 .imp-prev{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}.imp-prev p{margin:8px 0}.imp-file{padding:4px 0;font-size:13px}
 .imp-done{color:var(--good,#2b8a3e);font-weight:700}
@@ -2180,6 +2182,7 @@ function renderDash(){
     ${barChart(mVals)}
   </div>
   ${today.length||upcoming.length?`<div class="dash-card"><div class="dc-h"><h3>${today.length?"Today":"Coming up"}</h3><button class="mini" type="button" data-nav="jobs">Schedule</button></div>${(today.length?today:upcoming.slice(0,3)).map(jobRow).join("")}${today.length&&upcoming.length>today.length?`<p class="ts" style="margin:8px 0 0">${upcoming.length-today.length} more coming up</p>`:""}</div>`:`<div class="dash-card"><div class="dc-h"><h3>Coming up</h3></div><p class="empty">Nothing booked. Tap <strong>+ Book a job</strong>.</p></div>`}
+  ${dupCardHTML()}
   ${unpaid.length?`<div class="dash-card" id="dashUnpaid"><div class="dc-h"><h3>Unpaid invoices</h3><span class="ts">${money(unpaidAmt)}</span></div>
     ${BULK?`<div class="bulk-bar"><button class="mini" type="button" data-act="bulkall">${unpaid.every(j=>BULK.sel[j.id])?"Clear all":"Select all"}</button><span class="bulk-n">${Object.values(BULK.sel).filter(Boolean).length} selected · ${money(unpaid.filter(j=>BULK.sel[j.id]).reduce((a,j)=>a+jobTotal(j),0))}</span></div>
       <div class="bulk-how"><span class="help">Paid by</span><select data-bulkvia="1"><option value="" ${BULK.via?"":"selected"}>Not sure / mixed</option>${PAYMETHODS.map(m=>`<option ${BULK.via===m?"selected":""}>${esc(m)}</option>`).join("")}</select><span class="help">on</span><input type="date" data-bulkdate="1" value="${esc(BULK.date)}"></div>`
@@ -3097,6 +3100,24 @@ function jcAct(k){const j=S;if(!j)return;const P=JCTL&&JCTL.id===j.id?JCTL:null;
   if(k==="reopen"){j.status="hold";j.hold={reason:"Reopened",note:j.stopped&&j.stopped.reason||"",at:Date.now(),by:jcWho()};j.stopped=null;jcLog(j,"reopen");save();rerenderKeep();toast("Reopened. Tap Resume to start the clock again.");return;}
 }
 
+// ---- deleting an invoice (the whole job) + finding Zoho copies of jobs already in the app ----
+let INVDEL=null,DUPDEL=null;
+function invDelHTML(j){if(isTech()||!j)return "";
+  return INVDEL===j.id?`<div class="inv-del"><span class="help">Delete invoice ${esc(j.invoice.num||"")}${j.invoice.paid?" and its payment":""}? This removes the whole job from every phone.</span><button class="mini del" type="button" data-invdel="${j.id}">Yes, delete</button><button class="mini" type="button" data-act="invdelno">Keep</button></div>`
+    :`<div class="inv-del"><button class="mini del" type="button" data-invdelask="${j.id}">🗑 Delete this invoice</button></div>`;}
+function dupPairs(){const done=APP.jobs.filter(j=>j.status==="done"),out=[];
+  done.filter(z=>z.imported==="zoho"&&!z.notDup).forEach(z=>{const zt=jobTotal(z),zd=new Date(jDate(z)+"T12:00:00");
+    const a=done.find(a=>a!==z&&a.imported!=="zoho"&&normName(a.info.customer)===normName(z.info.customer)&&Math.abs(jobTotal(a)-zt)<1&&Math.abs(new Date(jDate(a)+"T12:00:00")-zd)<=10*864e5);
+    if(a)out.push({z,a});});return out;}
+function dupCardHTML(){if(isTech())return "";const P=dupPairs();if(!P.length)return "";
+  const d=j=>esc(fmtDate(jDate(j),{month:"short",day:"numeric",year:"numeric"}));
+  return `<div class="dash-card" id="dashDup"><div class="dc-h"><h3>Possible duplicates</h3><span class="ts">${P.length}</span></div>
+    <p class="help" style="margin:0 0 6px">These Zoho imports match a job already in the app: same customer, same total, within 10 days.</p>
+    ${P.map(({z,a})=>`<div class="dup-row"><div><strong>${esc(z.info.customer||"Customer")}</strong> · ${money(jobTotal(z))}</div>
+      <div class="help">Zoho ${esc(z.invoice.num||"")} · ${d(z)}${z.invoice.paid?" · paid":""}<br>App ${esc(a.invoice.num||"")} · ${d(a)}${a.invoice.paid?" · paid":""}</div>
+      <div class="acts">${DUPDEL===z.id?`<button class="mini del" type="button" data-invdel="${z.id}">Yes, delete Zoho copy</button><button class="mini" type="button" data-act="dupno">Keep</button>`
+        :`<button class="mini del" type="button" data-dupdel="${z.id}">Delete Zoho copy</button><button class="mini" type="button" data-open="${z.id}">Open</button><button class="mini" type="button" data-notdup="${z.id}">Not a duplicate</button>`}</div></div>`).join("")}</div>`;}
+
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
   const status=j.status==="canceled"?`<span class="st st-cancel">Canceled</span>`:j.status==="hold"?`<span class="st st-hold">On hold${j.hold&&j.hold.reason?" · "+esc(j.hold.reason):""}</span>`:(j.status==="done"&&j.stopped?`<span class="st st-stopped">Stopped</span> `:"")+(j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
@@ -3880,7 +3901,7 @@ function renderService(){
     <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     ${jobCostHTML()}
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
-      <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid&&!PAYMETHODS.includes(inv.paidVia)?`<button type="button" aria-pressed="true" disabled>Paid · ${esc(inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"method not recorded")}</button>`:""}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
+      <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid&&!PAYMETHODS.includes(inv.paidVia)?`<button type="button" aria-pressed="true" disabled>Paid · ${esc(inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"method not recorded")}</button>`:""}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>${invDelHTML(S)}
       ${payBoxHTML(t.total)}
       ${reviewBtnHTML(S)}
     </div>
@@ -4069,7 +4090,7 @@ function renderInvoice(){
       <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(rates(S).taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     <div class="rep-sec"><h4>Payment</h4>
-      <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid&&!PAYMETHODS.includes(inv.paidVia)?`<button type="button" aria-pressed="true" disabled>Paid · ${esc(inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"method not recorded")}</button>`:""}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
+      <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid&&!PAYMETHODS.includes(inv.paidVia)?`<button type="button" aria-pressed="true" disabled>Paid · ${esc(inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"method not recorded")}</button>`:""}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>${invDelHTML(S)}
       ${payBoxHTML(t.total)}
     </div>
     <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
@@ -4850,6 +4871,14 @@ document.addEventListener("click",e=>{
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
   if(d.confirm){copyText(confirmText(APP.jobs.find(x=>x.id===d.confirm)),"jobCopy");return;}
   if(d.edit){startAdd(APP.jobs.find(x=>x.id===d.edit));return;}
+  if(d.invdelask){INVDEL=d.invdelask;rerenderKeep();return;}
+  if(d.act==="invdelno"){INVDEL=null;rerenderKeep();return;}
+  if(d.dupdel){DUPDEL=d.dupdel;rerenderKeep();return;}
+  if(d.act==="dupno"){DUPDEL=null;rerenderKeep();return;}
+  if(d.notdup){const j=APP.jobs.find(x=>x.id===d.notdup);if(j)j.notDup=true;save();rerenderKeep();toast("Got it, not a duplicate");return;}
+  if(d.invdel){const j=APP.jobs.find(x=>x.id===d.invdel);if(!j)return;const was=APP.view,num=j.invoice.num;deleteJobMedia(j);APP.jobs=APP.jobs.filter(x=>x!==j);
+    if(BULK)delete BULK.sel[j.id];INVDEL=DUPDEL=null;
+    if(APP.active===j.id){APP.active=null;if(was==="job")APP.view="dash";}save();if(APP.view==="dash")rerenderKeep();else render();toast(`Deleted invoice ${num||""}`.trim());return;}
   if(d.askdel){APP.confirmDel=d.askdel;render();return;}
   if(d.del){deleteJobMedia(APP.jobs.find(x=>x.id===d.del));APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}

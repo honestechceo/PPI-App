@@ -1401,13 +1401,16 @@ function lkQuery(extra){const d=dtcInfo(LOOK.q);return [LOOK.veh,d?d.code:LOOK.q
 function lkURL(kind,q){const e=encodeURIComponent(q);return kind==="yt"?`https://www.youtube.com/results?search_query=${e}`:kind==="img"?`https://www.google.com/search?tbm=isch&q=${e}`:kind==="ai"?`https://www.google.com/search?udm=50&q=${e}`:`https://www.google.com/search?q=${e}`;}
 const lkMain=()=>LOOK.mode==="web"?"web":"ai";
 try{const o=JSON.parse(localStorage.getItem("honestech-look")||"null");if(o&&o.mode)LOOK.mode=o.mode;}catch(e){}
-function lkOpenRaw(kind,text){lkRemember();const w=window.open(lkURL(kind,text),"_blank","noopener");if(!w)location.href=lkURL(kind,text);}
+// Open outside the app (a browser sheet on top of it). Never navigate the app itself: on an iPhone home-screen
+// app there is no back button, so you'd have to close the app to get back.
+function openOutside(url){const a=document.createElement("a");a.href=url;a.target="_blank";a.rel="noopener noreferrer";a.style.display="none";document.body.appendChild(a);a.click();setTimeout(()=>a.remove(),0);}
+function lkOpenRaw(kind,text){lkRemember();openOutside(lkURL(kind,text));}
 function lkRemember(){const r=LOOK.recent.filter(x=>!(x.q===LOOK.q&&x.veh===LOOK.veh));if(LOOK.q.trim())r.unshift({q:LOOK.q.trim(),veh:LOOK.veh.trim()});LOOK.recent=r.slice(0,12);
   try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent,mode:LOOK.mode||"ai"}));}catch(e){}}
 function lkOpen(kind,extra){const q=lkQuery(extra);if(!q){toast("Type a code or what you're looking for");document.getElementById("lk-q")?.focus();return;}
   const r=LOOK.recent.filter(x=>!(x.q===LOOK.q&&x.veh===LOOK.veh));if(LOOK.q.trim())r.unshift({q:LOOK.q.trim(),veh:LOOK.veh.trim()});LOOK.recent=r.slice(0,12);
   try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent,mode:LOOK.mode||"ai"}));}catch(e){}
-  const w=window.open(lkURL(kind,q),"_blank","noopener");if(!w)location.href=lkURL(kind,q);}
+  openOutside(lkURL(kind,q));}
 function renderLookup(){
   const d=dtcInfo(LOOK.q),j=LOOK.jobId&&APP.jobs.find(x=>x.id===LOOK.jobId);
   return `<div class="stage-head"><div class="eyebrow">Look it up</div><h2>Search codes, fixes &amp; videos</h2>

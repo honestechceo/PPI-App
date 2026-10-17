@@ -24,6 +24,9 @@
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+/* iPhone zooms into any text box under 16px and stays zoomed. Keep them at 16px on touch screens. */
+@media (hover:none) and (pointer:coarse){input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]):not([type=color]),select,textarea{font-size:16px!important}}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html.has-bgimg{background:var(--bg)}
 html.has-bgimg body{background:transparent}
 html.has-bgimg body::before{content:"";position:fixed;inset:-12px;z-index:-2;background-position:center;background-size:cover;background-repeat:no-repeat;pointer-events:none}
@@ -53,7 +56,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;backgroun
 .brand .veh{font-size:13px;color:var(--muted);text-align:right;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar{height:6px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
-.steps{display:flex;gap:6px;overflow-x:auto;padding:10px 0;scrollbar-width:none}
+.steps{display:flex;gap:6px;overflow-x:auto;padding:10px 0;scrollbar-width:none}.steps[hidden],#jobChrome .bar[hidden]{display:none}
 .steps::-webkit-scrollbar{display:none}
 .step{flex:0 0 auto;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px 5px 6px;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);white-space:nowrap}
 .step b{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--na-soft);font-family:var(--f-mono);font-size:11px;color:var(--ink)}
@@ -4253,10 +4256,16 @@ const NAV={stack:[],key:null,snap:null,y:0,restoring:false};
 const NAV_SKIP=new Set(["join","techlocked"]);
 function navKey(){return APP.view+"|"+(APP.view==="job"?APP.active+"|"+(S&&!isSvc(S)?S.step:""):"")+"|"+(APP.view==="customers"?(CUST_OPEN||""):"");}
 function navSnap(){return {view:APP.view,active:APP.active,step:S&&APP.view==="job"&&!isSvc(S)?S.step:null,cust:CUST_OPEN};}
+/* Backup: if iPhone did zoom in, snap back to normal size after leaving a text box or changing screens. */
+const IS_IOS_Z=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function unzoom(){if(!IS_IOS_Z)return;const m=document.querySelector('meta[name="viewport"]');if(!m)return;const base=m.getAttribute("content").replace(/,\s*maximum-scale=[\d.]+/,"");
+  m.setAttribute("content",base+",maximum-scale=1");setTimeout(()=>m.setAttribute("content",base),300);}
+document.addEventListener("focusout",e=>{if(e.target&&/INPUT|TEXTAREA|SELECT/.test(e.target.tagName))setTimeout(()=>{const a=document.activeElement;if(!a||!/INPUT|TEXTAREA|SELECT/.test(a.tagName))unzoom();},60);});
 function navTrack(){
   const k=navKey();
   if(NAV.key===null||NAV_SKIP.has(APP.view)){NAV.key=k;NAV.snap=navSnap();if(NAV_SKIP.has(APP.view))NAV.stack=[];return;}
   if(k===NAV.key)return;
+  unzoom();
   if(!NAV.restoring&&!NAV_SKIP.has(NAV.snap.view)){NAV.stack.push({...NAV.snap,y:NAV.y});if(NAV.stack.length>40)NAV.stack.shift();
     try{history.pushState({nav:NAV.stack.length},"");}catch(e){}}
   NAV.key=k;NAV.snap=navSnap();NAV.y=0;

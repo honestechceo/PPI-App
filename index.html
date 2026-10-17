@@ -531,7 +531,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .back-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:2px;height:36px;padding:0 12px 0 6px;margin-right:2px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--accent);font-weight:700;font-size:15px;cursor:pointer}
 .back-btn[hidden]{display:none}
 @media(max-width:460px){.back-btn span{display:none}.back-btn{width:36px;padding:0;justify-content:center;margin-right:8px}.back-btn svg{margin-left:-2px}
-  .brand.has-back{flex-wrap:nowrap;gap:6px}.brand.has-back h1{font-size:18px}.brand.has-back .saved{display:none}.brand.has-back .help-btn{margin-left:4px}}
+  .brand.has-back{flex-wrap:nowrap;gap:6px}.brand.has-back h1{font-size:16px}.brand.has-back .cloud-dot,.brand.has-back .help-btn{margin-left:3px}.brand.has-back .saved{display:none}.brand.has-back .help-btn{margin-left:4px}}
 .gift-ban{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:var(--mon-soft,#fff7ed);border:1px solid var(--accent,#e2620f);border-radius:14px;padding:14px;margin:0 0 16px;font-size:15px;line-height:1.4}
 .gift-ban>div{flex:1 1 220px}.gift-ban .gift-ic{font-size:30px}.gift-ban.bad{border-color:var(--line)}
 .lp-gift{max-width:1080px;margin:12px auto 0;padding:0 16px}
@@ -545,6 +545,16 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .az-h{font-family:var(--f-display);font-weight:700;font-size:15px;color:var(--accent);padding:10px 4px 2px;border-bottom:1px solid var(--line);margin-bottom:4px}
 .lock-note{margin:6px 0 0;font-size:12px}.lock-note .mini{margin-left:4px}
 .inv-hits{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}.inv-hit{display:grid!important;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;width:100%}
+.look-btn svg{display:block}
+@media (max-width:420px){.brand h1{font-size:17px}}
+a.btn{color:inherit;text-decoration:none;text-align:center}
+.lk-go{display:flex;flex-wrap:wrap;gap:8px}.lk-go .btn{flex:1 1 140px}
+.lk-yt{background:#c4302b;border-color:#c4302b;color:#fff}
+.lk-chips{display:flex;flex-wrap:wrap;gap:6px}
+.lk-chip{padding:8px 12px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-weight:600;font-size:13px}
+.lk-dtc:empty{display:none}.lk-dtc{background:var(--mon-soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.lk-recent{display:flex;flex-direction:column}
+.jctl .lk-job{margin-left:auto}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -719,7 +729,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
+    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -1301,6 +1311,48 @@ async function giftSend(via){const F=GIFTS.form,c=F.contact.trim();
     else{copyText(msg);toast("Gift message copied. Paste it anywhere.");}
     rerenderKeep();}
   catch(e){GIFTS.busy=false;GIFTS.msg=(e&&e.msg)||"Couldn't create the gift. Check your connection.";rerenderKeep();}}
+
+
+/* ================= Look it up: codes, how-tos and videos without leaving the app ================= */
+let LOOK={q:"",veh:"",vin:"",jobId:""};
+try{const o=JSON.parse(localStorage.getItem("honestech-look")||"null");if(o&&o.recent)LOOK.recent=o.recent;}catch(e){}
+LOOK.recent=LOOK.recent||[];
+const DTC_RE=/^\s*([PBCU])([0-3])([0-9A-F])([0-9A-F]{2})\s*$/i;
+function dtcInfo(q){const m=DTC_RE.exec(q||"");if(!m)return null;const sys={P:"Powertrain (engine / transmission)",B:"Body",C:"Chassis (brakes, steering, suspension)",U:"Network / communication"}[m[1].toUpperCase()];
+  const P=m[1].toUpperCase()==="P";const gen=m[2]==="0"||(P&&m[2]==="2")||(P&&m[2]==="3"&&/[4-9]/.test(m[3]))?"generic, same meaning on all makes":"manufacturer-specific, meaning depends on the make";
+  const sub=P&&m[2]==="0"?({"1":"fuel and air metering","2":"fuel and air metering (injectors)","3":"ignition / misfire","4":"emissions controls","5":"speed, idle and cruise controls","6":"computer and output circuits","7":"transmission","8":"transmission","9":"transmission"}[m[3].toUpperCase()]||""):"";
+  return {code:(m[1]+m[2]+m[3]+m[4]).toUpperCase(),sys,gen,sub};}
+function openLookup(job){const j=job||(APP.view==="job"?S:null);
+  if(j){LOOK.veh=[j.info.year,j.info.make,j.info.model,j.info.engine].filter(Boolean).join(" ");LOOK.vin=j.info.vin||"";LOOK.jobId=j.id;}
+  APP.view="lookup";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("lk-q")?.focus(),60);}
+const LK_TOPICS=[["Code meaning","code meaning causes"],["How to fix","how to replace repair"],["Torque specs","torque specs"],["Fluid capacity","oil type capacity"],["Fuse / relay","fuse relay location"],["Wiring diagram","wiring diagram"],["TSB / known issues","TSB common problems"],["Parts location","location"]];
+function lkQuery(extra){const d=dtcInfo(LOOK.q);return [LOOK.veh,d?d.code:LOOK.q,extra].map(x=>String(x||"").trim()).filter(Boolean).join(" ");}
+function lkURL(kind,q){const e=encodeURIComponent(q);return kind==="yt"?`https://www.youtube.com/results?search_query=${e}`:kind==="img"?`https://www.google.com/search?tbm=isch&q=${e}`:`https://www.google.com/search?q=${e}`;}
+function lkOpen(kind,extra){const q=lkQuery(extra);if(!q){toast("Type a code or what you're looking for");document.getElementById("lk-q")?.focus();return;}
+  const r=LOOK.recent.filter(x=>!(x.q===LOOK.q&&x.veh===LOOK.veh));if(LOOK.q.trim())r.unshift({q:LOOK.q.trim(),veh:LOOK.veh.trim()});LOOK.recent=r.slice(0,12);
+  try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent}));}catch(e){}
+  const w=window.open(lkURL(kind,q),"_blank","noopener");if(!w)location.href=lkURL(kind,q);}
+function renderLookup(){
+  const d=dtcInfo(LOOK.q),j=LOOK.jobId&&APP.jobs.find(x=>x.id===LOOK.jobId);
+  return `<div class="stage-head"><div class="eyebrow">Look it up</div><h2>Search codes, fixes &amp; videos</h2>
+    <p class="when">Results open on top of the app. Tap <strong>Done</strong> (iPhone) or the back arrow to come right back.</p></div>
+  <div class="form lk-form">
+    <label class="full">Vehicle<input id="lk-veh" data-lk="veh" value="${esc(LOOK.veh)}" placeholder="e.g. 2015 Honda Civic 1.8L" autocomplete="off"></label>
+    ${j?`<p class="help full" style="margin:-6px 0 0">From ${esc(j.info.customer||"this job")}'s job.${LOOK.vin?` VIN ${esc(LOOK.vin)}`:""}</p>`:""}
+    <label class="full">Code or problem<input id="lk-q" data-lk="q" value="${esc(LOOK.q)}" placeholder="e.g. P0420, rough idle, front brake pads" autocomplete="off" autocapitalize="characters" enterkeyhint="search"></label>
+    <div class="full lk-dtc" id="lkDtc">${dtcHTML(d)}</div>
+    <div class="full lk-go">
+      <button class="btn primary" type="button" data-lkgo="web">${SEARCH_ICON} Google</button>
+      <button class="btn lk-yt" type="button" data-lkgo="yt">▶ YouTube videos</button>
+      <button class="btn" type="button" data-lkgo="img">Images</button></div>
+    <div class="full"><span class="help" style="display:block;margin:4px 0 6px">Quick searches</span>
+      <div class="lk-chips">${LK_TOPICS.map(([l,x],i)=>`<button type="button" class="lk-chip" data-lktopic="${i}">${esc(l)}</button>`).join("")}</div></div>
+    ${LOOK.vin&&/^[A-HJ-NPR-Z0-9]{17}$/i.test(LOOK.vin)?`<div class="full"><a class="btn" href="https://www.nhtsa.gov/recalls?vin=${esc(LOOK.vin)}" target="_blank" rel="noopener">Check open recalls for this VIN</a></div>`:""}
+  </div>
+  ${LOOK.recent.length?`<div class="group-h">Recent</div><div class="lk-recent">${LOOK.recent.map((r,i)=>`<button type="button" class="hist-row" data-lkrecent="${i}"><span class="hist-what"><strong>${esc(r.q)}</strong>${r.veh?` · ${esc(r.veh)}`:""}</span><span class="jc-go">›</span></button>`).join("")}</div>
+    <button class="mini" type="button" data-act="lkclear" style="margin-top:8px">Clear recent</button>`:""}`;}
+const SEARCH_ICON=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>`;
+function dtcHTML(d){return d?`<strong>${esc(d.code)}</strong> · ${esc(d.sys)}${d.sub?" · "+esc(d.sub):""}<br><span class="help">${esc(d.gen)}. Tap Code meaning for the full description and causes.</span>`:"";}
 
 let RECOVERY=null;
 (()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
@@ -2343,7 +2395,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot");
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="lookup"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
@@ -2529,7 +2581,7 @@ function jobCtlHTML(){
       ${P.mode==="stop"?`<span class="help">Finished the work? Use <strong>${isTech()?"Finish job":"Finish"}</strong> at the bottom instead.</span>`:""}
       ${P.mode==="cancel"&&techOf(j)&&techOf(j).userId?`<span class="help">${esc(techOf(j).name)} gets a notification that it's canceled.</span>`:""}
       <div class="jc-btns"><button class="btn ${P.mode==="cancel"?"danger":"primary"}" type="button" data-jc="${P.mode}go">${go}</button><button class="btn" type="button" data-jc="back">Never mind</button></div></div>`;}
-  return `<div class="jctl jc-${st}" id="jobCtl"><div class="jctl-top"><span class="jc-st"><span class="jc-dot"></span>${lbl}</span><span class="jc-btns">${P?"":btns}</span></div>${sub?`<div class="jc-sub">${sub}</div>`:""}${panel}</div>`;
+  return `<div class="jctl jc-${st}" id="jobCtl"><div class="jctl-top"><span class="jc-st"><span class="jc-dot"></span>${lbl}</span><span class="jc-btns">${P?"":btns}<button class="btn lk-job" type="button" data-look="job" aria-label="Look it up for this vehicle">${SEARCH_ICON} Look up</button></span></div>${sub?`<div class="jc-sub">${sub}</div>`:""}${panel}</div>`;
 }
 function jcAct(k){const j=S;if(!j)return;const P=JCTL&&JCTL.id===j.id?JCTL:null;
   if(k==="hold"||k==="stop"||k==="cancel"){JCTL={id:j.id,mode:k,reason:"",note:""};rerenderKeep();return;}
@@ -3843,6 +3895,7 @@ function navBack(){
   window.scrollTo(0,b.y||0);NAV.y=b.y||0;return true;
 }
 window.addEventListener("scroll",()=>{if(!NAV.restoring)NAV.y=window.scrollY;},{passive:true});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target&&(e.target.id==="lk-q"||e.target.id==="lk-veh")){e.preventDefault();e.target.blur();lkOpen("web");}});
 let NAV_WAIT=null;
 window.addEventListener("popstate",()=>{clearTimeout(NAV_WAIT);NAV_WAIT=null;
   // phone back gesture closes an open photo, scanner or guide first
@@ -3856,7 +3909,7 @@ try{history.replaceState({nav:0},"");}catch(e){}
 
 function render(){applyTheme();
   const acc=access();document.body.classList.toggle("gated",acc.kind==="account");document.body.classList.toggle("tech-mode",isTech());
-  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help"].includes(APP.view))APP.view="jobs";}
+  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help","lookup"].includes(APP.view))APP.view="jobs";}
   if(isTech()&&S&&!isSvc(S)&&S.step>=STAGES.length)S.step=STAGES.length-1;
   if(acc.kind==="account"){if(!["join","help"].includes(APP.view))APP.view="join";}
   else if(APP.view==="join")APP.view="dash";
@@ -3869,6 +3922,7 @@ function render(){applyTheme();
   else if(APP.view==="requests")html=renderRequests();
   else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="help")html=renderHelp();
+  else if(APP.view==="lookup")html=renderLookup();
   else if(APP.view==="plan")html=renderPlan();
   else if(APP.view==="join")html=renderJoin();
   else if(APP.view==="techlocked")html=`<div class="stage-head"><div class="eyebrow">Technician</div><h2>Your shop's plan isn't active</h2><p class="when">Ask ${esc(APP.settings.owner||APP.settings.biz||"the shop owner")} to renew the Honestech plan. Your jobs come back as soon as they do.</p></div>${cloudSettingsHTML()}`;
@@ -4261,6 +4315,11 @@ document.addEventListener("click",e=>{
   const t=e.target.closest("button");if(!t)return;
   const d=t.dataset;
   if(d.navback){navBackTap();return;}
+  if(d.look){if(d.look==="job"&&S)openLookup(S);else{if(APP.view!=="job"){LOOK.jobId="";}openLookup(APP.view==="job"?S:null);}return;}
+  if(d.lkgo){lkOpen(d.lkgo);return;}
+  if(d.lktopic!==undefined){const t=LK_TOPICS[+d.lktopic];if(t)lkOpen(t[0]==="Code meaning"||t[0]==="How to fix"?"web":"web",t[1]);return;}
+  if(d.lkrecent!==undefined){const r=LOOK.recent[+d.lkrecent];if(r){LOOK.q=r.q;LOOK.veh=r.veh;rerenderKeep();}return;}
+  if(d.act==="lkclear"){LOOK.recent=[];try{localStorage.removeItem("honestech-look");}catch(e){}rerenderKeep();return;}
   if(d.nav){TECH_NEW=null;TECH_DEL=null;if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
   if(d.day!==undefined){APP.day=d.day;render();return;}
   if(d.open){const j=APP.jobs.find(x=>x.id===d.open);openJob(d.open,j.status==="done"?STAGES.findIndex(s=>s.id==="report"):null);return;}
@@ -4609,6 +4668,7 @@ document.addEventListener("input",e=>{
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
+  if(d.lk){LOOK[d.lk]=t.value;if(d.lk==="q"){const b=document.getElementById("lkDtc");if(b)b.innerHTML=dtcHTML(dtcInfo(t.value));}return;}
   if(d.jcnote){if(JCTL)JCTL.note=t.value;return;}
   if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}

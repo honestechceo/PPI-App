@@ -531,6 +531,10 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .back-btn[hidden]{display:none}
 @media(max-width:460px){.back-btn span{display:none}.back-btn{width:36px;padding:0;justify-content:center;margin-right:8px}.back-btn svg{margin-left:-2px}
   .brand.has-back{flex-wrap:nowrap;gap:6px}.brand.has-back h1{font-size:18px}.brand.has-back .saved{display:none}.brand.has-back .help-btn{margin-left:4px}}
+.gift-ban{display:flex;flex-wrap:wrap;align-items:center;gap:12px;background:var(--mon-soft,#fff7ed);border:1px solid var(--accent,#e2620f);border-radius:14px;padding:14px;margin:0 0 16px;font-size:15px;line-height:1.4}
+.gift-ban>div{flex:1 1 220px}.gift-ban .gift-ic{font-size:30px}.gift-ban.bad{border-color:var(--line)}
+.lp-gift{max-width:1080px;margin:12px auto 0;padding:0 16px}
+.gift-row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid var(--line);font-size:14px}.gift-st{text-align:right;flex:0 0 auto}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -977,6 +981,7 @@ async function cloudSignIn(email,pw,create){
   if(INVITE){try{await acceptInvite();joined=true;}catch(e){AUTH=null;saveAuth();throw {msg:(e&&e.msg)||"Couldn't join the shop. Ask the owner for a new invite link."};}}
   if(joined){const keep=APP.settings;APP=blankApp(null);APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.jobs=[];APP.view="jobs";SMETA={};AUTH.role="tech";saveAuth();applyRole();}
   const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:(shop&&shop.my_shop)||shop;saveAuth();
+  if(GIFT&&!joined)await redeemGift();
   // first time on this device: samples are never uploaded
   if(APP.sample&&!joined){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
   SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
@@ -1065,7 +1070,7 @@ function demoHTML(){
 }
 function renderJoin(){
   if(INVITE)return `<div class="stage-head"><div class="eyebrow">Technician invite</div><h2>Join your shop</h2></div>${inviteBannerHTML()}${cloudSettingsHTML()}`;
-  return `<div class="lp">
+  return `<div class="lp">${GIFT?`<div class="lp-gift">${giftBannerHTML()}</div>`:""}
   <section class="lp-hero">
     <div class="lp-hero-t">
       <h2 class="lp-h1">Run your mobile repair business from your phone</h2>
@@ -1226,6 +1231,66 @@ function inviteBannerHTML(){if(!INVITE)return "";const i=INVITE.info;if(!i){setT
   return `<div class="invite-ban"><strong>${esc(i.shop||"A shop")} invited you${i.tech_name?", "+esc(i.tech_name):""}.</strong> Create your account (or sign in) to see the jobs assigned to you.</div>`;}
 async function acceptInvite(){const r=await supa("/rest/v1/rpc/accept_invite",{method:"POST",body:{p_token:INVITE.token}});
   INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}return r;}
+
+/* ================= gift free months (app owner only) ================= */
+let GIFT=null;try{GIFT=JSON.parse(localStorage.getItem("honestech-gift")||"null");}catch(e){}
+(()=>{const m=/[?&]gift=([0-9a-f-]{36})/i.exec(location.search);if(!m)return;GIFT={token:m[1].toLowerCase()};try{localStorage.setItem("honestech-gift",JSON.stringify(GIFT));}catch(e){}
+  history.replaceState(null,"",location.pathname);})();
+const giftDrop=()=>{GIFT=null;try{localStorage.removeItem("honestech-gift");}catch(e){}};
+async function loadGiftInfo(){if(!GIFT||GIFT.info||GIFT.loading)return;GIFT.loading=true;
+  try{const r=await supa("/rest/v1/rpc/gift_info",{method:"POST",auth:false,body:{p_token:GIFT.token}});GIFT.info=r||{bad:true};}catch(e){GIFT.info={err:true};}
+  GIFT.loading=false;if(typeof render==="function")try{render();}catch(e){}}
+const mo=n=>`${n} month${n===1?"":"s"}`;
+function giftBannerHTML(){if(!GIFT)return "";const i=GIFT.info;if(!i){setTimeout(loadGiftInfo,0);return `<div class="gift-ban">🎁 Checking your gift…</div>`;}
+  if(i.err)return "";
+  if(i.bad||i.used||i.expired)return `<div class="gift-ban bad"><strong>This gift link ${i.used?"was already used":i.expired?"has expired":"isn't valid"}.</strong> You can still start the regular ${PRICES.trialDays}-day free trial. <button class="mini" type="button" data-act="giftDrop">Dismiss</button></div>`;
+  return `<div class="gift-ban"><span class="gift-ic">🎁</span><div><strong>${i.to_name?esc(i.to_name.split(/\s+/)[0])+", ":""}${esc(i.from||"Honestech")} gave you ${mo(i.months)} free.</strong><br>That's on top of the ${PRICES.trialDays}-day free trial, so you get ${mo(i.months+1)} free. No card needed. Create your account below to claim it.</div><a class="btn primary" href="#lpJoin" data-lpjump="1">Claim it</a></div>`;}
+async function redeemGift(){if(!GIFT||!AUTH)return;const tok=GIFT.token;
+  try{const r=await supa("/rest/v1/rpc/redeem_gift",{method:"POST",body:{p_token:tok}});giftDrop();
+    const until=r&&r.trial_ends?fmtDate(String(r.trial_ends).slice(0,10),{month:"long",day:"numeric",year:"numeric"}):"";
+    if(PLAN)PLAN.at=0;try{await fetchPlan();}catch(e){}
+    GIFT_NOTE=r&&r.again?`Your gift is already on your account${until?". Free until "+until:""}.`:`🎁 ${mo((r&&r.months)||1)} free added to your account${until?". You're free until "+until:""}.`;toast(GIFT_NOTE,7000);setTimeout(()=>{GIFT_NOTE="";},15000);
+    try{render();}catch(e){}}
+  catch(e){const m=(e&&e.msg)||"";if(e&&e.code==="offline")return;giftDrop();GIFT_NOTE=m||"Couldn't add the gift.";toast(GIFT_NOTE,7000);}}
+
+let GIFT_NOTE="";
+const GIFTS={list:null,at:0,busy:false,msg:"",form:{name:"",contact:"",months:1}};
+async function loadGifts(){if(!AUTH||!PLAN||!PLAN.comp)return;try{const r=await supa("/rest/v1/rpc/list_gifts",{method:"POST",body:{}});GIFTS.list=Array.isArray(r)?r:[];GIFTS.at=Date.now();}catch(e){GIFTS.list=GIFTS.list||[];}
+  if(APP.view==="settings")rerenderKeep();}
+const giftLink=t=>location.origin+location.pathname+"?gift="+String(t).replace(/"/g,"");
+function giftMsg(name,months,link){const first=(name||"").trim().split(/\s+/)[0];
+  return `${first?first+", here":"Here"}'s ${mo(months)} free of the Honestech Mobile Mechanic App: book jobs, run inspections, send estimates and invoices, all from your phone. It's on top of the ${PRICES.trialDays}-day free trial, so ${mo(months+1)} free, no card needed. Tap to claim it: ${link}`;}
+function giftCardHTML(){
+  if(isTech()||!AUTH||!PLAN||!PLAN.comp)return "";
+  if(!GIFTS.list&&!GIFTS.loading){GIFTS.loading=true;setTimeout(()=>loadGifts().finally(()=>{GIFTS.loading=false;}),0);}
+  const F=GIFTS.form,isMail=/@/.test(F.contact),digits=String(F.contact).replace(/\D/g,"");
+  const L=GIFTS.list||[];
+  return `<div class="form" id="giftSet"><p class="formh">🎁 Gift free months</p>
+    <p class="help full" style="margin:0">Send another mechanic free time on the app. They get it when they create their own account from your link. It's added on top of the ${PRICES.trialDays}-day trial. Only your account can send these.</p>
+    <label>Their name<input id="g-name" data-giftf="name" value="${esc(F.name)}" placeholder="e.g. Mike Torres" autocomplete="off"></label>
+    <label>Phone or email<input id="g-contact" data-giftf="contact" value="${esc(F.contact)}" placeholder="732-555-0100 or mike@email.com" autocomplete="off" inputmode="email"></label>
+    <div class="full"><span class="help" style="display:block;margin-bottom:6px">How much free time?</span><div class="seg" role="group" aria-label="Free months">${[1,2,3].map(n=>`<button type="button" data-giftm="${n}" aria-pressed="${F.months===n}">${mo(n)}</button>`).join("")}</div></div>
+    <div class="full formacts">
+      ${CAN_CAL?`<button class="btn primary" type="button" data-act="giftsend" data-via="text" ${GIFTS.busy?"disabled":""}>💬 Text it</button>`:""}
+      <button class="btn${CAN_CAL?"":" primary"}" type="button" data-act="giftsend" data-via="email" ${GIFTS.busy?"disabled":""}>✉️ Email it</button>
+      <button class="btn" type="button" data-act="giftsend" data-via="copy" ${GIFTS.busy?"disabled":""}>Copy link</button></div>
+    ${GIFTS.msg?`<p class="help full" style="margin:0;color:var(--bad)">${esc(GIFTS.msg)}</p>`:""}
+    ${L.length?`<div class="full gift-list"><div class="group-h" style="margin:6px 0">Sent</div>${L.map(g=>`<div class="gift-row"><div><strong>${esc(g.to_name||g.to_contact||"Gift link")}</strong> · ${mo(g.months)}<br><span class="help">Sent ${esc(fmtDate(String(g.created_at).slice(0,10),{month:"short",day:"numeric"}))}${g.to_contact&&g.to_name?" · "+esc(g.to_contact):""}</span></div>
+      <div class="gift-st">${g.redeemed_at?`<span class="st st-paid">Claimed</span><br><span class="help">${esc(g.email||"")}</span>`:g.expired?`<span class="st st-cancel">Expired</span>`:`<span class="st st-sched">Not claimed yet</span><br><button class="mini" type="button" data-giftcopy="${esc(g.token)}">Copy link</button> <button class="mini del" type="button" data-giftcancel="${esc(g.token)}">Cancel</button>`}</div></div>`).join("")}</div>`:""}
+  </div>`;}
+async function giftSend(via){const F=GIFTS.form,c=F.contact.trim();
+  if(via==="text"&&!/\d{7,}/.test(c.replace(/\D/g,""))){GIFTS.msg="Enter their phone number to text it.";rerenderKeep();document.getElementById("g-contact")?.focus();return;}
+  if(via==="email"&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)){GIFTS.msg="Enter their email address to email it.";rerenderKeep();document.getElementById("g-contact")?.focus();return;}
+  GIFTS.busy=true;GIFTS.msg="";rerenderKeep();
+  try{const tok=await supa("/rest/v1/rpc/create_gift",{method:"POST",body:{p_months:F.months,p_name:F.name.trim(),p_contact:c}});
+    const link=giftLink(tok),msg=giftMsg(F.name,F.months,link);
+    GIFTS.busy=false;GIFTS.form={name:"",contact:"",months:1};loadGifts();
+    if(via==="text"){location.href=smsHref(c,msg);toast("Gift ready. Send the text.");}
+    else if(via==="email"){location.href=`mailto:${encodeURIComponent(c)}?subject=${encodeURIComponent(`${mo(F.months)} free of the Honestech Mobile Mechanic App`)}&body=${encodeURIComponent(msg)}`;toast("Gift ready. Send the email.");}
+    else{copyText(msg);toast("Gift message copied. Paste it anywhere.");}
+    rerenderKeep();}
+  catch(e){GIFTS.busy=false;GIFTS.msg=(e&&e.msg)||"Couldn't create the gift. Check your connection.";rerenderKeep();}}
+
 let RECOVERY=null;
 (()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
   if(q.get("type")==="recovery"&&q.get("access_token"))RECOVERY={token:q.get("access_token"),msg:"",busy:false};
@@ -2013,7 +2078,7 @@ function custDetailHTML(c,js){
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
-function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2600)}
+function toast(msg,ms){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms||2600)}
 const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
 function bizName(){return APP.settings.biz||"Your business name";}
 /* ---- distance from home base (address is private: used only here, never printed) ---- */
@@ -2583,6 +2648,7 @@ function renderSettings(){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Your business</div><h2>Settings</h2><p class="when">This information appears on your reports, invoices, and booking confirmations.</p></div>
   ${cloudSettingsHTML()}
+  ${giftCardHTML()}
   <div class="form" id="setBusiness">
     <p class="formh">Business</p>
     <div class="full logo-row">
@@ -4229,7 +4295,7 @@ document.addEventListener("click",e=>{
       .catch(e=>{if(RECOVERY){RECOVERY.busy=false;RECOVERY.msg=e&&e.msg||"Couldn't change the password";}render();});return;}
   if(d.act==="signin"||d.act==="signup"){const create=d.act==="signup";CLOUD_FORM.email=document.getElementById("cEmail")?.value||CLOUD_FORM.email;CLOUD_FORM.pw=document.getElementById("cPw")?.value||CLOUD_FORM.pw;
     CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
-    cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
+    cloudSignIn(CLOUD_FORM.email,CLOUD_FORM.pw,create).then(()=>{CLOUD_FORM={email:"",pw:"",busy:false,msg:""};render();if(GIFT_NOTE){const m=GIFT_NOTE;GIFT_NOTE="";toast(m,7000);return;}toast(create?"Account created. Your data is syncing.":"Signed in. Your data is syncing.");})
       .catch(e=>{CLOUD_FORM.busy=false;let m=e&&e.msg||"Couldn't sign in";if(/invalid login|invalid_credentials/i.test(m))m="Wrong email or password.";if(/already registered|already been registered|exists/i.test(m))m="That email already has an account. Tap Sign in.";if(e.code==="offline")m="No internet connection. Try again when you're online.";CLOUD_FORM.msg=m;rerenderKeep();});return;}
   if(d.act==="buy"||d.act==="portal"){if(BUY_BUSY)return;const sel=document.getElementById("teamSeats");if(sel)TEAM_SEATS=+sel.value||0;
     BUY_BUSY=d.act==="portal"?"portal":d.plan+d.int;rerenderKeep();
@@ -4272,6 +4338,12 @@ document.addEventListener("click",e=>{
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
+  if(d.act==="giftDrop"){giftDrop();render();return;}
+  if(d.act==="giftsend"){giftSend(d.via);return;}
+  if(d.giftm){GIFTS.form.months=+d.giftm;rerenderKeep();return;}
+  if(d.giftcopy){const g=(GIFTS.list||[]).find(x=>x.token===d.giftcopy);copyText(giftMsg(g&&g.to_name,g?g.months:1,giftLink(d.giftcopy)));toast("Gift message copied");return;}
+  if(d.giftcancel){if(GIFTS.cdel!==d.giftcancel){GIFTS.cdel=d.giftcancel;toast("Tap Cancel again to cancel this gift link");return;}
+    GIFTS.cdel=null;supa("/rest/v1/rpc/cancel_gift",{method:"POST",body:{p_token:d.giftcancel}}).then(()=>{toast("Gift link canceled");loadGifts();}).catch(e=>toast((e&&e.msg)||"Couldn't cancel it"));return;}
   if(d.act==="inviteDrop"){INVITE=null;try{localStorage.removeItem("honestech-invite");}catch(e){}render();return;}
   if(d.techinv){inviteTech((APP.settings.techs||[]).find(x=>x.id===d.techinv));return;}
   if(d.techrm){const t=(APP.settings.techs||[]).find(x=>x.id===d.techrm);if(!t)return;const inv=TEAM.list.find(x=>x.tech_id===t.id);
@@ -4491,6 +4563,7 @@ document.addEventListener("input",e=>{
   const t=e.target,d=t.dataset;
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
+  if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
   if(d.jcnote){if(JCTL)JCTL.note=t.value;return;}
   if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.acthrs&&S){S.actualHrs=t.value;clearTimeout(window.__ah);window.__ah=setTimeout(save,400);return;}
@@ -4609,7 +4682,7 @@ setTimeout(()=>autoSnapshot(),1500);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){autoSnapshot();if(AUTH)syncNow();}else if(AUTH)syncNow();});
 window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
-setTimeout(()=>{syncLabel();if(AUTH)syncNow();},800);
+setTimeout(()=>{syncLabel();if(AUTH)syncNow();if(AUTH&&GIFT)redeemGift();},800);
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist().catch(()=>{});}catch(e){}
 setTimeout(()=>{try{tryOpenJob();}catch(e){}},700);
 if(RECOVERY){APP.view="settings";render();setTimeout(()=>document.getElementById("setCloud")?.scrollIntoView({block:"center"}),300);}

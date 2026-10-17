@@ -568,6 +568,10 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 @media(min-width:640px){.tp-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 .tp-stats b{display:block;font-size:17px}.tp-stats small{color:var(--muted);font-size:12px}
 .tp-warn{margin:4px 0;font-size:13px;color:var(--bad);font-weight:600}
+.wh-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.wh-row small{display:block;color:var(--muted);font-size:12px}
+.wh-new{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;margin:6px 0}.wh-new .full{grid-column:1/-1}.wh-new input,.wh-new select{width:100%;box-sizing:border-box}
+.pay-wh{font-size:14px;margin:-2px 0 8px}.pay-wh>div{display:flex;justify-content:space-between;padding:3px 0;color:var(--muted)}.pay-wh .pay-net{color:var(--ink);border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-size:16px}.pay-net b{font-size:20px}
+.set-aside{margin:2px 0 6px;padding:8px 10px;border-radius:8px;background:var(--mon-soft);font-size:14px}
 .pay-card .dc-h h3{display:flex;align-items:center;gap:6px}
 .pay-terms{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 10px;font-size:14px}
 .pay-nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 10px}
@@ -924,7 +928,7 @@ const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));retur
 const uid=()=>Math.random().toString(36).slice(2,9);
 
 /* ================= state ================= */
-function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:6.625,pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true,techs:[],ppiDisc:"This report describes the vehicle's condition at the time of inspection, based on a visual and operational check without disassembly. It is not a warranty or guarantee of future condition. Some problems may not be detectable during a single inspection.",warranty:"",reviewLink:"",reviewMsg:""};}
+function defaultSettings(){return {biz:"",owner:"",phone:"",email:"",web:"",fee:100,laborRate:"",jobAlert:"60",mapsApp:"apple",fuMonths:"3",freeMiles:10,perMile:2,taxOn:false,taxRate:"",pay:"",terms:"Payment due when the work is complete.",prefix:"INV-",next:1001,estPrefix:"EST-",estNext:1001,estValid:30,menu:[],mileRate:"0.725",roundTrip:true,techs:[],ppiDisc:"This report describes the vehicle's condition at the time of inspection, based on a visual and operational check without disassembly. It is not a warranty or guarantee of future condition. Some problems may not be detectable during a single inspection.",warranty:"",reviewLink:"",reviewMsg:""};}
 const isSvc=j=>!!j&&j.type==="service";
 const LINE_KINDS=[["labor","Labor (hourly)"],["flat","Flat fee"],["part","Part"],["fee","Fee"]];
 const RK={labor:"Labor",flat:"Flat fee",part:"Part",fee:"Fee"};
@@ -2090,14 +2094,29 @@ const corpExempt=ti=>ti&&/^(llcs|llcc|scorp|ccorp)$/.test(ti.entity);
 function techJobs(t){return APP.jobs.filter(j=>{const o=techOf(j);return o&&o.id===t.id;});}
 function payoutsOf(tid,year){return (APP.settings.payouts||[]).filter(x=>x.techId===tid&&(!year||String(x.date).slice(0,4)===String(year)));}
 function unpaidJobs(t){return techJobs(t).filter(j=>j.status==="done"&&!j.paidOut&&jobPay(j)>0).sort((a,b)=>jDate(a).localeCompare(jDate(b)));}
-let PAY_EDIT=null,PAY_RUN=null,PAY_TAX=null,PAY_DONE=null,PAY_UNDO=null;
+let PAY_EDIT=null,PAY_RUN=null,PAY_TAX=null,PAY_DONE=null,PAY_UNDO=null,WH_NEW=null;
+const WH_SUGGEST=[["State income tax","","w2"],["Federal income tax","","w2"],["Social Security","6.2","w2"],["Medicare","1.45","w2"],["State disability / family leave","","w2"],["City or local tax","","w2"],["Backup withholding (no tax ID)","24","1099"]];
+const WH_APPLIES={w2:"Employees (W-2)","1099":"Contractors (1099)",all:"Everyone"};
+function withholdFor(type){return (APP.settings.withholdings||[]).filter(w=>num(w.pct)>0&&(w.applies==="all"||w.applies===type));}
+function calcWithhold(type,base,tech){const ti=taxInfoOf(tech);return withholdFor(type).filter(w=>!(w.onlyNoTin&&ti&&ti.tin)).map(w=>({name:w.name,pct:num(w.pct),amt:r2(base*num(w.pct)/100)}));}
+function whSetupHTML(){const L=APP.settings.withholdings||[],st=APP.settings.state;
+  return `<div class="dash-card" id="whSet"><div class="dc-h"><h3>Taxes taken out of pay</h3><span class="ts">${st?esc(stateName(st)):"Set your state in Settings"}</span></div>
+    <p class="help" style="margin:0 0 8px">Add the taxes you hold back from each payment, at your ${st?esc(stateName(st))+" ":"state's "}rates. They're subtracted on every pay run and listed on the statement. Most shops leave this empty and let a payroll service handle employee taxes.</p>
+    ${L.length?L.map(w=>`<div class="wh-row"><span><strong>${esc(w.name)}</strong> · ${esc(String(num(w.pct)))}%<small>${esc(WH_APPLIES[w.applies]||"")}${w.onlyNoTin?" · only when no tax ID is on file":""}</small></span><button class="mini del" type="button" data-whdel="${esc(w.id)}">Remove</button></div>`).join(""):`<p class="empty" style="margin:4px 0 8px">Nothing taken out. Techs get the full amount.</p>`}
+    ${WH_NEW?`<div class="wh-new"><label class="full">Name<input data-whn="name" value="${esc(WH_NEW.name)}" placeholder="e.g. ${st?esc(st)+" ":""}state income tax"></label>
+      <label>Percent<input data-whn="pct" inputmode="decimal" value="${esc(WH_NEW.pct)}" placeholder="e.g. 3.5"></label>
+      <label>Take out from<select data-whn="applies">${Object.entries(WH_APPLIES).map(([k,l])=>`<option value="${k}" ${WH_NEW.applies===k?"selected":""}>${l}</option>`).join("")}</select></label>
+      <div class="acts full"><button class="mini go" type="button" data-act="whsave">Add</button><button class="mini" type="button" data-act="whcancel">Cancel</button>${st?`<button class="mini" type="button" data-lookstate="withholding">Look up ${esc(stateName(st))} withholding rates</button>`:""}</div></div>`
+    :`<div class="lk-chips">${WH_SUGGEST.map(([n,pc,ap],i)=>L.some(w=>w.name===n)?"":`<button type="button" class="lk-chip" data-whadd="${i}">+ ${esc(n)}${pc?" "+pc+"%":""}</button>`).join("")}<button type="button" class="lk-chip" data-whadd="-1">+ Other</button></div>`}
+    <p class="help" style="margin:8px 0 0">If you hold back taxes yourself, you have to send them to the IRS and your state and file their payroll forms. A payroll service does that for you. Rates change every year; check them each January.</p></div>`;}
+
 function openPay(tid){APP.view="pay";PAY_RUN=null;PAY_EDIT=null;PAY_TAX=null;PAY_DONE=null;APP.payFocus=tid||"";render();window.scrollTo(0,0);
   if(tid)setTimeout(()=>document.getElementById("pay-"+tid)?.scrollIntoView({block:"start"}),60);}
 function payStatement(po){const t=teamList().find(x=>x.id===po.techId)||{name:"Technician"};
   const js=po.jobIds.map(id=>APP.jobs.find(j=>j.id===id)).filter(Boolean);
   return [`${bizName()}: pay statement for ${t.name}`,`Paid ${fmtDate(po.date,{month:"short",day:"numeric",year:"numeric"})} by ${po.method}`,"",
     ...js.map(j=>{const p=payTerms(j);return `${fmtDate(jDate(j),{month:"short",day:"numeric"})} · ${j.info.customer||"Job"} · ${isSvc(j)?(j.info.work||"Service"):"Inspection"}: ${money(jobPay(j))}${p?` (${payTermsLabel(p)}${isPctBasis(p.basis)?" of "+money(payBase(j,p)):p.basis==="hourly"?" × "+jobHours(j)+" hr":""})`:""}`;}),
-    "",`Jobs: ${money(po.gross)}`,num(po.adj)?`${num(po.adj)>0?"Bonus":"Deduction"}${po.adjNote?" ("+po.adjNote+")":""}: ${money(po.adj)}`:"",`Total paid: ${money(po.total)}`].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");}
+    "",`Jobs: ${money(po.gross)}`,num(po.adj)?`${num(po.adj)>0?"Bonus":"Deduction"}${po.adjNote?" ("+po.adjNote+")":""}: ${money(po.adj)}`:"",...((po.withheld||[]).length?[`Gross pay: ${money(po.total)}`,...po.withheld.map(x=>`${x.name} (${x.pct}%): −${money(x.amt)}`),`Net paid: ${money(po.net)}`]:[`Total paid: ${money(po.total)}`])].filter((x,k,a)=>x!==""||a[k-1]!=="").join("\n");}
 function techPayCardHTML(t){
   const p=techPayCfg(t),Y=TODAY.slice(0,4),un=unpaidJobs(t),unAmt=r2(un.reduce((a,j)=>a+jobPay(j),0));
   const paidY=r2(payoutsOf(t.id,Y).reduce((a,x)=>a+num(x.total),0)),ti=taxInfoOf(t),type=(t.pay&&t.pay.type)||"1099";
@@ -2107,7 +2126,7 @@ function techPayCardHTML(t){
   return `<div class="dash-card pay-card" id="pay-${esc(t.id)}">
     <div class="dc-h"><h3><span class="tm-dot sm" style="background:${esc(t.color||"#15202b")}"></span> ${esc(t.name)}</h3><span class="ts">${type==="w2"?"Employee (W-2)":"Contractor (1099)"}</span></div>
     ${E?payEditHTML(t,E):`<div class="pay-terms"><span>${p?`<strong>${esc(payTermsLabel(p))}</strong>`:`<span class="vin-warn">No pay rate set</span>`}${t.pay&&t.pay.show?` · sees earnings in their app`:""}</span><button class="mini" type="button" data-payedit="${esc(t.id)}">${p?"Change":"Set pay"}</button></div>`}
-    <div class="pay-nums"><div><b>${money(unAmt)}</b><small>Owed now · ${un.length} job${un.length===1?"":"s"}</small></div><div><b>${money(paidY)}</b><small>Paid in ${Y}</small></div></div>
+    <div class="pay-nums"><div><b>${money(unAmt)}</b><small>Owed now · ${un.length} job${un.length===1?"":"s"}</small></div><div><b>${money(paidY)}</b><small>Paid in ${Y}${payoutsOf(t.id,Y).some(x=>(x.withheld||[]).length)?" (before taxes)":""}</small></div></div>
     ${un.length&&!(PAY_RUN&&PAY_RUN.techId===t.id)?`<button class="btn primary" type="button" data-payrun="${esc(t.id)}" style="width:100%">Pay ${esc(t.name.split(" ")[0])}</button>`:""}
     ${PAY_RUN&&PAY_RUN.techId===t.id?payRunHTML(t,un):""}
     ${PAY_DONE&&PAY_DONE.techId===t.id?payDoneHTML(PAY_DONE):""}
@@ -2125,24 +2144,26 @@ function payEditHTML(t,E){
     <p class="help full" style="margin:0">Changes apply to jobs finished from now on. Finished jobs keep the rate they were done at.</p>
     <div class="acts full"><button class="mini go" type="button" data-act="paysave">Save pay</button><button class="mini" type="button" data-act="paycancel">Cancel</button></div></div>`;}
 function payRunHTML(t,un){const R=PAY_RUN;const sel=un.filter(j=>R.sel[j.id]!==false);const gross=r2(sel.reduce((a,j)=>a+jobPay(j),0)),tot=r2(gross+num(R.adj));
+  const wh=calcWithhold((t.pay&&t.pay.type)||"1099",tot,t),net=r2(tot-wh.reduce((a,x)=>a+x.amt,0));
   return `<div class="pay-run"><div class="group-h" style="margin:6px 0">Jobs to pay</div>
     ${un.map(j=>{const p=payTerms(j);return `<label class="pay-job"><input type="checkbox" data-payj="${j.id}" ${R.sel[j.id]!==false?"checked":""}><span><strong>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))} · ${esc(j.info.customer||"Job")}</strong><small>${esc(isSvc(j)?(j.info.work||"Service"):"Inspection")}${j.stopped?" · stopped":""} · ${esc(payTermsLabel(p))}${isPctBasis(p.basis)?" of "+money(payBase(j,p)):p.basis==="hourly"?" × "+jobHours(j)+" hr":""}</small></span><b>${money(jobPay(j))}</b></label>`;}).join("")}
     <div class="pay-row2"><label>Bonus or deduction (−)<input data-payr="adj" inputmode="decimal" value="${esc(R.adj||"")}" placeholder="0"></label><label>Reason<input data-payr="adjNote" value="${esc(R.adjNote||"")}" placeholder="Optional"></label></div>
     <div class="pay-row2"><label>Paid by<select data-payr="method">${PAY_METHODS.map(m=>`<option ${R.method===m?"selected":""}>${m}</option>`).join("")}</select></label><label>Date<input type="date" data-payr="date" value="${esc(R.date)}"></label></div>
-    <div class="pay-total"><span>Total</span><b>${money(tot)}</b></div>
-    <div class="acts"><button class="btn primary" type="button" data-act="payrecord" ${sel.length?"":"disabled"}>Record ${money(tot)} paid</button><button class="btn" type="button" data-act="payruncancel">Cancel</button></div>
+    <div class="pay-total"><span>${wh.length?"Gross pay":"Total"}</span><b id="payGross">${money(tot)}</b></div>
+    ${wh.length?`<div class="pay-wh">${wh.map(x=>`<div><span>${esc(x.name)} (${x.pct}%)</span><span>−${money(x.amt)}</span></div>`).join("")}<div class="pay-net"><span>Net pay</span><b>${money(net)}</b></div></div>`:""}
+    <div class="acts"><button class="btn primary" type="button" data-act="payrecord" ${sel.length?"":"disabled"}>Record ${money(wh.length?net:tot)} paid</button><button class="btn" type="button" data-act="payruncancel">Cancel</button></div>
     <p class="help" style="margin:4px 0 0">This records the payment in the app. Send the money the way you normally do.</p></div>`;}
 function payDoneHTML(po){const t=teamList().find(x=>x.id===po.techId)||{};const txt=payStatement(po);
-  return `<div class="pay-done"><strong>✓ Recorded ${money(po.total)} paid to ${esc((t.name||"").split(" ")[0])}.</strong> Send them the statement:
+  return `<div class="pay-done"><strong>✓ Recorded ${money(po.withheld&&po.withheld.length?po.net:po.total)} paid to ${esc((t.name||"").split(" ")[0])}.</strong> Send them the statement:
     <div class="acts">${t.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(t.phone,txt))}">💬 Text it</a>`:""}<button class="mini" type="button" data-paycopy="${esc(po.id)}">Copy statement</button><button class="mini" type="button" data-act="paydoneclose">Done</button></div></div>`;}
 function payHistHTML(t){const L=payoutsOf(t.id).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);if(!L.length)return "";
-  return `<details class="pay-hist" ${PAY_UNDO&&L.some(x=>x.id===PAY_UNDO)?"open":""}><summary>Payment history</summary>${L.map(x=>`<div class="pay-h-row"><span>${esc(fmtDate(x.date,{month:"short",day:"numeric",year:"numeric"}))} · ${esc(x.method)} · ${x.jobIds.length} job${x.jobIds.length===1?"":"s"}</span><b>${money(x.total)}</b>
+  return `<details class="pay-hist" ${PAY_UNDO&&L.some(x=>x.id===PAY_UNDO)?"open":""}><summary>Payment history</summary>${L.map(x=>`<div class="pay-h-row"><span>${esc(fmtDate(x.date,{month:"short",day:"numeric",year:"numeric"}))} · ${esc(x.method)} · ${x.jobIds.length} job${x.jobIds.length===1?"":"s"}${(x.withheld||[]).length?` · ${money(x.net)} after taxes`:""}</span><b>${money(x.total)}</b>
     <span class="acts"><button class="mini" type="button" data-paycopy="${esc(x.id)}">Statement</button>${PAY_UNDO===x.id?`<button class="mini del" type="button" data-payundo="${esc(x.id)}">Tap to undo</button>`:`<button class="mini" type="button" data-payundo="${esc(x.id)}">Undo</button>`}</span></div>`).join("")}</details>`;}
 function taxBlockHTML(t,ti,type){
   const T=PAY_TAX&&PAY_TAX.id===t.id?PAY_TAX:null;
   if(T)return taxFormHTML(T.d,"payt",`Tax info for ${t.name}`,`<div class="acts full"><button class="mini go" type="button" data-act="paytaxsave">Save</button><button class="mini" type="button" data-act="paytaxcancel">Cancel</button></div>`);
   const fromTech=t.userId&&APP.techInfo&&APP.techInfo[t.userId];
-  if(ti&&(ti.legal||ti.biz))return `<div class="pay-tax ok">✓ <strong>Tax info on file</strong>${fromTech?" (entered by "+esc(t.name.split(" ")[0])+")":""}<br>${esc(ti.biz||ti.legal)}${ti.biz&&ti.legal?" · "+esc(ti.legal):""} · ${esc(entLabel(ti.entity)||"")}${ti.tin?` · ${ti.tinType==="ssn"?"SSN":"EIN"} ${esc(maskTin(ti.tin))}`:" · <span class='vin-warn'>no tax ID</span>"}
+  if(ti&&(ti.legal||ti.biz))return `<div class="pay-tax ok">✓ <strong>Tax info on file</strong>${fromTech?" (entered by "+esc(t.name.split(" ")[0])+")":""}<br>${esc(ti.biz||ti.legal)}${ti.biz&&ti.legal?" · "+esc(ti.legal):""} · ${esc(entLabel(ti.entity)||"")}${ti.state?" · lives in "+esc(stateName(ti.state)):""}${ti.tin?` · ${ti.tinType==="ssn"?"SSN":"EIN"} ${esc(maskTin(ti.tin))}`:" · <span class='vin-warn'>no tax ID</span>"}
       ${corpExempt(ti)?`<br><span class="help">Corporations usually don't get a 1099-NEC. Confirm with your accountant.</span>`:""}${ti.signedAt?`<br><span class="help">Certified correct on ${esc(fmtDate(ti.signedAt,{month:"short",day:"numeric",year:"numeric"}))}</span>`:""}
       ${fromTech?"":`<button class="mini" type="button" data-paytax="${esc(t.id)}">Edit</button>`}</div>`;
   return `<div class="pay-tax">${type==="w2"?"Employee tax forms (W-4, I-9) are handled in your payroll service.":`<strong>No tax info yet.</strong> ${t.userId?`${esc(t.name.split(" ")[0])} can fill it in from their app: Settings → My tax info.`:`You can enter it, or invite ${esc(t.name.split(" ")[0])} to the app to fill it in.`} You also need a signed <a href="https://www.irs.gov/pub/irs-pdf/fw9.pdf" target="_blank" rel="noopener">IRS Form W-9</a> on file.`}
@@ -2155,6 +2176,8 @@ function taxFormHTML(d,pre,title,acts){d=d||{};const f=(k,l,extra="",cls="")=>`<
     <div class="full seg" role="group" aria-label="Tax ID type"><button type="button" data-${pre}t="ein" aria-pressed="${d.tinType!=="ssn"}">EIN (business)</button><button type="button" data-${pre}t="ssn" aria-pressed="${d.tinType==="ssn"}">SSN</button></div>
     ${f("tin",d.tinType==="ssn"?"Social Security number":"EIN (12-3456789)",'inputmode="numeric" autocomplete="off"',"full")}
     ${f("addr","Mailing address","autocomplete=\"street-address\"","full")}
+    <label class="full">State you live in${stateSelectHTML(`data-${pre}="state"`,d.state||"","Pick a state")}</label>
+    ${pre==="mytax"?`<label class="full">Set aside for taxes (%)<input data-mytax="setAside" inputmode="decimal" value="${esc(d.setAside||"")}" placeholder="e.g. 25"><span class="help">Optional. Your own estimate of federal + ${d.state?esc(stateName(d.state)):"state"} + self-employment tax. Your earnings will show how much to put aside. Only you and the shop owner see this.</span></label>`:""}
     ${f("email","Email",'inputmode="email" autocapitalize="off"')}${f("phone","Phone",'inputmode="tel"')}
     <label class="check full"><input type="checkbox" data-${pre}="signed" ${d.signed?"checked":""}> I certify this information is correct.</label>
     <p class="help full" style="margin:0">Used for the 1099-NEC at year end. Only the shop owner can see it. A single-member LLC usually uses the owner's name and the LLC's EIN.</p>
@@ -2166,20 +2189,23 @@ function payTaxNotesHTML(){const Y=TODAY.slice(0,4);
       <li><strong>Get a signed W-9</strong> from every contractor before the first payment. If they won't give a tax ID, you may have to hold back 24% (backup withholding).</li>
       <li><strong>LLCs and corporations:</strong> a single-member LLC is treated like the person; it still gets a 1099. LLCs taxed as S or C corps and corporations usually don't.</li>
       <li><strong>Employee (W-2):</strong> commission is wages. Run it through a payroll service so taxes are withheld; the app tracks the gross for you.</li>
-      <li><strong>New Jersey is strict</strong> about who counts as a contractor (the "ABC test"). Someone who works only for you, on your schedule, doing your core work is often legally an employee. Ask your accountant before paying anyone as a 1099.</li>
+      <li><strong>Contractor or employee?</strong> ${APP.settings.state==="NJ"?`New Jersey is strict about this (the "ABC test").`:APP.settings.state?`${esc(stateName(APP.settings.state))} has its own rules.`:"Each state has its own rules."} Someone who works only for you, on your schedule, doing your core work is often legally an employee. Ask your accountant before paying anyone as a 1099.</li>
+      <li><strong>State taxes:</strong> employees' state income tax (and in some states disability or family-leave tax) is withheld from pay. Some states also want a copy of each 1099. A tech who lives in a different state than your business may owe tax in both. Your accountant or payroll service will know your state's rules.</li>
     </ul><p class="help">This is general information, not tax or legal advice.</p></details>`;}
 function payYearCSV(Y){const q=v=>{v=String(v==null?"":v);return /[",\n]/.test(v)?`"${v.replace(/"/g,'""')}"`:v;};
-  const rows=[["Technician","Worker type","Legal name","Business name","Tax classification","Tax ID type","Tax ID","Address","Email","Paid in "+Y,"Payments","1099-NEC needed"]];
+  const rows=[["Technician","Worker type","Legal name","Business name","Tax classification","Tax ID type","Tax ID","Address","State","Email","Paid in "+Y+" (gross)","Taxes withheld","Net paid","Payments","1099-NEC needed"]];
   (APP.settings.techs||[]).forEach(t=>{const ti=taxInfoOf(t)||{},type=(t.pay&&t.pay.type)||"1099",ps=payoutsOf(t.id,Y),tot=r2(ps.reduce((a,x)=>a+num(x.total),0));if(!tot&&!ps.length)return;
-    rows.push([t.name,type==="w2"?"W-2 employee":"1099 contractor",ti.legal,ti.biz,entLabel(ti.entity),ti.tin?(ti.tinType==="ssn"?"SSN":"EIN"):"",ti.tin||"",ti.addr,ti.email,tot.toFixed(2),ps.length,type==="1099"&&!corpExempt(ti)&&tot>=NEC_MIN(Y)?"Yes":"No"]);});
-  rows.push([]);rows.push(["Date","Technician","Method","Jobs","Job pay","Bonus/deduction","Note","Total"]);
-  (APP.settings.payouts||[]).filter(x=>String(x.date).slice(0,4)===String(Y)).sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(x=>{const t=teamList().find(z=>z.id===x.techId)||{name:"?"};rows.push([x.date,t.name,x.method,x.jobIds.length,num(x.gross).toFixed(2),num(x.adj).toFixed(2),x.adjNote||"",num(x.total).toFixed(2)]);});
+    const whT=r2(ps.reduce((a,x)=>a+(x.withheld||[]).reduce((b,w)=>b+num(w.amt),0),0));
+    rows.push([t.name,type==="w2"?"W-2 employee":"1099 contractor",ti.legal,ti.biz,entLabel(ti.entity),ti.tin?(ti.tinType==="ssn"?"SSN":"EIN"):"",ti.tin||"",ti.addr,ti.state||"",ti.email,tot.toFixed(2),whT.toFixed(2),r2(tot-whT).toFixed(2),ps.length,type==="1099"&&!corpExempt(ti)&&tot>=NEC_MIN(Y)?"Yes":"No"]);});
+  rows.push([]);rows.push(["Date","Technician","Method","Jobs","Job pay","Bonus/deduction","Note","Gross","Taxes withheld","Net"]);
+  (APP.settings.payouts||[]).filter(x=>String(x.date).slice(0,4)===String(Y)).sort((a,b)=>String(a.date).localeCompare(String(b.date))).forEach(x=>{const t=teamList().find(z=>z.id===x.techId)||{name:"?"};const w=r2((x.withheld||[]).reduce((b,z)=>b+num(z.amt),0));rows.push([x.date,t.name,x.method,x.jobIds.length,num(x.gross).toFixed(2),num(x.adj).toFixed(2),x.adjNote||"",num(x.total).toFixed(2),w.toFixed(2),r2(num(x.total)-w).toFixed(2)]);});
   return rows.map(r=>r.map(q).join(",")).join("\n");}
 function renderPay(){
   if(isTech())return "";
   const ts=APP.settings.techs||[],Y=TODAY.slice(0,4),owed=r2(ts.reduce((a,t)=>a+unpaidJobs(t).reduce((b,j)=>b+jobPay(j),0),0));
   return `<div class="stage-head"><div class="eyebrow">Team</div><h2>Tech pay</h2><p class="when">Set how each tech is paid. The app works out what they've earned on every finished job and tracks what you've paid.${owed?` <strong>${money(owed)} owed</strong> right now.`:""}</p></div>
     ${ts.length?ts.map(techPayCardHTML).join(""):`<div class="emptybox">Add technicians in Settings → Team first.</div>`}
+    ${ts.length?whSetupHTML():""}
     ${ts.length?`<div class="dash-card"><div class="dc-h"><h3>Year-end</h3></div><p class="help" style="margin:0 0 8px">Totals paid to each tech with their tax info, for your accountant or for filing 1099s.</p>
       <div class="acts"><button class="mini go" type="button" data-paycsv="${Y}">Download ${Y} summary</button><button class="mini" type="button" data-paycsv="${+Y-1}">${+Y-1}</button></div></div>`:""}
     ${payTaxNotesHTML()}`;}
@@ -2191,7 +2217,8 @@ function myPayHTML(){
   return `<div class="form"><p class="formh">💵 My earnings</p>
     <div class="pay-nums full"><div><b>${money(sum(j=>jDate(j)>=wk))}</b><small>This week</small></div><div><b>${money(sum(j=>jDate(j)>=mo))}</b><small>This month</small></div>
     <div><b>${money(sum(j=>!j.paidOut))}</b><small>Not paid yet</small></div><div><b>${money(sum(j=>j.paidOut&&jDate(j).slice(0,4)===Y))}</b><small>Paid in ${Y}</small></div></div>
-    <p class="help full" style="margin:0">From jobs you finished. Ask the office about anything that looks off.</p></div>`;}
+    ${num((APP.myTax||{}).setAside)>0?`<p class="full set-aside">Set aside about <strong>${money(r2(sum(j=>!j.paidOut||jDate(j).slice(0,4)===Y)*num(APP.myTax.setAside)/100))}</strong> for taxes this year (${esc(String(num(APP.myTax.setAside)))}% of what you've earned in ${Y}).</p>`:""}
+    <p class="help full" style="margin:0">From jobs you finished, before any taxes. Ask the office about anything that looks off.</p></div>`;}
 function myTaxHTML(){
   const d=APP.myTaxDraft||APP.myTax||{};const has=APP.myTax&&(APP.myTax.legal||APP.myTax.biz);
   if(!APP.myTaxDraft&&has)return `<div class="form"><p class="formh">🧾 My tax info</p><p class="full" style="margin:0">✓ On file: ${esc(APP.myTax.biz||APP.myTax.legal)} · ${esc(entLabel(APP.myTax.entity))}${APP.myTax.tin?` · ${APP.myTax.tinType==="ssn"?"SSN":"EIN"} ${esc(maskTin(APP.myTax.tin))}`:""}</p><div class="full"><button class="mini" type="button" data-act="mytaxedit">Update</button></div></div>`;
@@ -2573,6 +2600,9 @@ function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfi
 
 /* ---------- money math ---------- */
 /* Finished or paid invoices keep the rates they were billed at, so a reprint next year matches. */
+const US_STATES=[["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","District of Columbia"],["FL","Florida"],["GA","Georgia"],["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],["KS","Kansas"],["KY","Kentucky"],["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],["SD","South Dakota"],["TN","Tennessee"],["TX","Texas"],["UT","Utah"],["VT","Vermont"],["VA","Virginia"],["WA","Washington"],["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"],["PR","Puerto Rico"]];
+const stateName=c=>(US_STATES.find(x=>x[0]===c)||[0,""])[1];
+function stateSelectHTML(attr,val,ph){return `<select ${attr}><option value="">${esc(ph||"Pick a state")}</option>${US_STATES.map(([c,n])=>`<option value="${c}" ${val===c?"selected":""}>${n}</option>`).join("")}</select>`;}
 const RATE_KEYS=["taxRate","freeMiles","perMile"];
 function rates(job){const L=job&&job.invoice&&job.invoice.lock;return L?{...APP.settings,...L}:APP.settings;}
 function rateLock(){const st=APP.settings,o={at:TODAY};RATE_KEYS.forEach(k=>{o[k]=st[k];});return o;}
@@ -3012,8 +3042,9 @@ function renderSettings(){
     ${f("mileRate","Mileage deduction rate ($ per mile)",'inputmode="decimal"',"","For your mileage log. The IRS rate for 2026 is $0.725. Check irs.gov each January.")}
     <label class="check full"><input type="checkbox" data-setc="roundTrip" ${s.roundTrip!==false?"checked":""}> Count job miles there and back (round trip) in the mileage log</label>
     <p class="help full" style="margin:0" id="priceEx">${priceExample()}</p>
+    <label class="full">Your business's state${stateSelectHTML('data-setsel="state"',s.state||"","Pick your state")}<span class="help">Used for tax notes and look-ups. Each person on your team can set their own state for their pay.</span></label>
     <label class="check full"><input type="checkbox" id="s-taxOn" data-setc="taxOn" ${s.taxOn?"checked":""}> Charge sales tax by default</label>
-    ${f("taxRate","Tax rate (%)",'inputmode="decimal"',"","Check with your accountant whether inspections are taxable in your state")}
+    ${f("taxRate","Sales tax rate (%)",'inputmode="decimal" placeholder="e.g. 6.625"',"",`Enter your ${s.state?esc(stateName(s.state))+" ":""}rate, including any county or city tax. Whether labor and inspections are taxable depends on your state; ask your accountant.${s.state?` <button class="mini" type="button" data-lookstate="sales">Look up ${esc(stateName(s.state))} sales tax</button>`:""}`)}
   </div>
   <div class="form" id="setInvoices">
     <p class="formh">Invoices</p>
@@ -3611,7 +3642,7 @@ function renderService(){
     <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(rates(S).freeMiles)} mi free, then ${money(rates(S).perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</div>
       <label class="ln-amt">Amount<input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}"></label></div>
     ${discHTML()}
-    <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
+    <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(rates(S).taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     ${jobCostHTML()}
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
@@ -3751,7 +3782,7 @@ function estimateText(){
   (S.invoice.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q);row(x.k==="flat"?`${x.d||"Labor"} (flat fee)`:`${x.d||RK[x.k]}${q!==1||x.k==="labor"?` (${q}${x.k==="labor"?" hr":""} × ${money(num(x.p))})`:""}`,lineAmt(x));});
   if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
   if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
-  if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
+  if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${rates(S).taxRate}%`,t.tax);}
   row("ESTIMATED TOTAL",t.total);
   if(i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
   L.push(...mpiText(S));
@@ -3801,7 +3832,7 @@ function renderInvoice(){
       </tbody></table></div>
     ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><button class="mini" type="button" data-act="additem">＋ Add line item</button>
-      <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
+      <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(rates(S).taxRate)}%</label></div>
     <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     <div class="rep-sec"><h4>Payment</h4>
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
@@ -3837,7 +3868,7 @@ function invoiceText(){
   if(t.travel.fee)row(`Travel${i.dist?" ("+i.dist+" mi)":""}`,t.travel.fee);
   if(!t.svc)inv.items.filter(x=>x.d||num(x.a)).forEach(x=>row(x.d||"Item",num(x.a)));
   if(t.disc)L.push(`${t.discLabel.padEnd(30," ")} ${negMoney(t.disc).padStart(10," ")}`);
-  if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${st.taxRate}%`,t.tax);}
+  if(t.taxOn){row("Subtotal",t.sub);row(`Sales tax ${rates(S).taxRate}%`,t.tax);}
   row(inv.paid?"PAID":"TOTAL DUE",t.total);
   if(t.svc&&i.recs){L.push("");L.push("RECOMMENDATIONS");L.push(i.recs);}
   if(t.svc)L.push(...mpiText(S));
@@ -4046,7 +4077,7 @@ function buildInvoicePdf(job,est){
   if(t.disc){if(!svc)tl0("Before discount",money(t.pre));P.font(10,"normal",PC.good);const dl=P.wrap(t.discLabel,170);P.text(dl,tx,P.y);P.font(10,"bold",PC.good);P.text("-"+money(t.disc),PW-PM-8,P.y,{align:"right"});P.y+=16+(dl.length-1)*12;}
   function tl0(k,v){P.font(10,"normal",PC.muted);P.text(k,tx,P.y);P.font(10,"bold");P.text(v,PW-PM-8,P.y,{align:"right"});P.y+=16;}
   const tl=(k,v,big)=>{P.font(big?13:10,big?"bold":"normal",big?PC.ink:PC.muted);P.text(k,tx,P.y);P.font(big?13:10,"bold");P.text(v,PW-PM-8,P.y,{align:"right"});P.y+=big?22:16;};
-  if(t.taxOn){tl("Subtotal",money(t.sub));tl(`Sales tax ${s.taxRate}%`,money(t.tax));}
+  if(t.taxOn){tl("Subtotal",money(t.sub));tl(`Sales tax ${rates(job).taxRate}%`,money(t.tax));}
   doc.setDrawColor(...PC.ink);doc.setLineWidth(1);doc.line(tx,P.y-8,PW-PM,P.y-8);P.y+=6;
   tl(est?"Estimated total":inv.paid?"Total paid":"Total due",money(t.total),true);
   if(est){
@@ -4687,6 +4718,12 @@ document.addEventListener("click",e=>{
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
   if(d.gopay!==undefined){openPay(d.gopay);return;}
+  if(d.whadd!==undefined){const k=+d.whadd,sg=WH_SUGGEST[k];WH_NEW=sg?{name:sg[0],pct:sg[1],applies:sg[2],onlyNoTin:k===WH_SUGGEST.length-1}:{name:"",pct:"",applies:"w2"};rerenderKeep();setTimeout(()=>document.querySelector(WH_NEW.name?'[data-whn="pct"]':'[data-whn="name"]')?.focus(),40);return;}
+  if(d.act==="whsave"&&WH_NEW){const n=(WH_NEW.name||"").trim(),pc=num(WH_NEW.pct);if(!n){toast("Name it, e.g. State income tax");return;}if(!(pc>0&&pc<100)){toast("Enter the percent");return;}
+    (APP.settings.withholdings=APP.settings.withholdings||[]).push({id:"wh"+uid(),name:n,pct:pc,applies:WH_NEW.applies||"w2",onlyNoTin:!!WH_NEW.onlyNoTin});WH_NEW=null;save();rerenderKeep();toast("Added");return;}
+  if(d.act==="whcancel"){WH_NEW=null;rerenderKeep();return;}
+  if(d.whdel){APP.settings.withholdings=(APP.settings.withholdings||[]).filter(w=>w.id!==d.whdel);save();rerenderKeep();return;}
+  if(d.lookstate){const st=stateName(APP.settings.state||"")||"";LOOK.veh="";LOOK.jobId="";LOOK.q=d.lookstate==="sales"?`${st} sales tax rate on auto repair labor ${TODAY.slice(0,4)}`:`${st} payroll withholding rates ${TODAY.slice(0,4)} employer`;lkOpen("web");return;}
   if(d.payedit){const t=(APP.settings.techs||[]).find(x=>x.id===d.payedit);if(t){const p=t.pay||{};PAY_EDIT={id:t.id,type:p.type||"1099",basis:p.basis||"labor",rate:p.rate!=null?String(p.rate):"",show:!!p.show};rerenderKeep();}return;}
   if(d.paye&&PAY_EDIT){const [k,v]=d.paye.split(":");if(k==="show")PAY_EDIT.show=!PAY_EDIT.show;else PAY_EDIT[k]=v;rerenderKeep();return;}
   if(d.act==="paysave"&&PAY_EDIT){const t=(APP.settings.techs||[]).find(x=>x.id===PAY_EDIT.id);const r=num(PAY_EDIT.rate);
@@ -4698,6 +4735,7 @@ document.addEventListener("click",e=>{
   if(d.act==="payruncancel"){PAY_RUN=null;rerenderKeep();return;}
   if(d.act==="payrecord"&&PAY_RUN){const t=(APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId);const sel=unpaidJobs(t).filter(j=>PAY_RUN.sel[j.id]!==false);if(!sel.length)return;
     const gross=r2(sel.reduce((a,j)=>a+jobPay(j),0)),adj=r2(PAY_RUN.adj),po={id:"po"+uid(),techId:t.id,date:PAY_RUN.date||TODAY,method:PAY_RUN.method||"Cash",jobIds:sel.map(j=>j.id),gross,adj,adjNote:(PAY_RUN.adjNote||"").trim(),total:r2(gross+adj),type:(t.pay&&t.pay.type)||"1099",at:Date.now()};
+    po.withheld=calcWithhold(po.type,po.total,t);po.net=r2(po.total-po.withheld.reduce((a,x)=>a+x.amt,0));
     sel.forEach(j=>{if(!j.payLock){const p=payTerms(j);if(p)j.payLock=p;}j.paidOut=po.id;});
     (APP.settings.payouts=APP.settings.payouts||[]).push(po);PAY_RUN=null;PAY_DONE=po;save();rerenderKeep();return;}
   if(d.act==="paydoneclose"){PAY_DONE=null;rerenderKeep();return;}
@@ -4950,7 +4988,10 @@ document.addEventListener("input",e=>{
   if(d.paye==="show"&&PAY_EDIT){PAY_EDIT.show=t.checked;return;}
   if(d.payj&&PAY_RUN){PAY_RUN.sel[d.payj]=t.checked;rerenderKeep();return;}
   if(d.pays&&PAY_EDIT){PAY_EDIT[d.pays]=t.value;if(d.pays==="basis")rerenderKeep();return;}
-  if(d.payr&&PAY_RUN){PAY_RUN[d.payr]=t.value;if(d.payr==="adj"){const el=document.querySelector(".pay-total b");if(el){const t2=(APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId);const g=r2(unpaidJobs(t2).filter(j=>PAY_RUN.sel[j.id]!==false).reduce((a,j)=>a+jobPay(j),0));el.textContent=money(r2(g+num(t.value)));const b=document.querySelector('[data-act="payrecord"]');if(b)b.textContent="Record "+money(r2(g+num(t.value)))+" paid";}}return;}
+  if(d.payr&&PAY_RUN){PAY_RUN[d.payr]=t.value;if(d.payr==="adj"&&withholdFor((((APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId)||{}).pay||{}).type||"1099").length){clearTimeout(PAY_RUN._t);PAY_RUN._t=setTimeout(()=>{rerenderKeep();const i=document.querySelector('[data-payr="adj"]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},500);return;}
+  if(d.payr==="adj"){const el=document.querySelector(".pay-total b");if(el){const t2=(APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId);const g=r2(unpaidJobs(t2).filter(j=>PAY_RUN.sel[j.id]!==false).reduce((a,j)=>a+jobPay(j),0));el.textContent=money(r2(g+num(t.value)));const b=document.querySelector('[data-act="payrecord"]');if(b)b.textContent="Record "+money(r2(g+num(t.value)))+" paid";}}return;}
+  if(d.whn&&WH_NEW){WH_NEW[d.whn]=t.value;return;}
+  if(d.setsel){APP.settings[d.setsel]=t.value;save();if(d.setsel==="state")rerenderKeep();return;}
   if(d.payt&&PAY_TAX){PAY_TAX.d[d.payt]=t.type==="checkbox"?t.checked:t.value;return;}
   if(d.mytax&&APP.myTaxDraft){APP.myTaxDraft[d.mytax]=t.type==="checkbox"?t.checked:t.value;return;}
   if(d.lk){LOOK[d.lk]=t.value;if(d.lk==="q"){const b=document.getElementById("lkDtc");if(b)b.innerHTML=dtcHTML(dtcInfo(t.value));}return;}

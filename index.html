@@ -555,6 +555,20 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .lk-dtc:empty{display:none}.lk-dtc{background:var(--mon-soft);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
 .lk-recent{display:flex;flex-direction:column}
 .jctl .lk-job{margin-left:auto}
+.tp-head,.tp-row{display:grid;grid-template-columns:minmax(0,1.6fr) .7fr 1fr .7fr .8fr;gap:6px;align-items:center}
+.tp-head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 4px 6px;border-bottom:1px solid var(--line)}
+.tp-head span:not(:first-child),.tp-row>span:not(:first-child){text-align:right}
+.tp-row{position:relative;width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:11px 4px 13px;color:var(--ink);font-size:14px;text-align:left}
+.tp-row small{display:block;font-size:11px;color:var(--muted)}
+.tp-name{display:flex;align-items:center;gap:6px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tp-bar{position:absolute;left:4px;bottom:4px;height:3px;border-radius:2px;opacity:.7;max-width:calc(100% - 8px)}
+@media(max-width:520px){.tp-head,.tp-row{grid-template-columns:repeat(4,minmax(0,1fr))}.tp-head span:first-child{display:none}.tp-name{grid-column:1/-1;margin-bottom:2px}
+  .tp-head span:nth-child(2),.tp-row>span:nth-child(2){text-align:left}}
+.tp-detail{padding:10px 4px 12px;border-bottom:1px solid var(--line)}
+.tp-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:8px}
+@media(min-width:640px){.tp-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.tp-stats b{display:block;font-size:17px}.tp-stats small{color:var(--muted);font-size:12px}
+.tp-warn{margin:4px 0;font-size:13px;color:var(--bad);font-weight:600}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -1971,6 +1985,7 @@ function renderDash(){
   </div>
   ${today.length||upcoming.length?`<div class="dash-card"><div class="dc-h"><h3>${today.length?"Today":"Coming up"}</h3><button class="mini" type="button" data-nav="jobs">Schedule</button></div>${(today.length?today:upcoming.slice(0,3)).map(jobRow).join("")}${today.length&&upcoming.length>today.length?`<p class="ts" style="margin:8px 0 0">${upcoming.length-today.length} more coming up</p>`:""}</div>`:`<div class="dash-card"><div class="dc-h"><h3>Coming up</h3></div><p class="empty">Nothing booked. Tap <strong>+ Book a job</strong>.</p></div>`}
   ${unpaid.length?`<div class="dash-card" id="dashUnpaid"><div class="dc-h"><h3>Unpaid invoices</h3><span class="ts">${money(unpaidAmt)}</span></div>${unpaid.map(j=>{const days=Math.round((new Date(TODAY)-new Date(jDate(j)))/864e5);return `<button type="button" class="hist-row" ${isSvc(j)?`data-open="${j.id}"`:`data-openinv="${j.id}"`}><span>${esc(j.info.customer||"Customer")}</span><span class="tag ${days>14?"tag-bad":""}">${days<=0?"today":days+"d"}</span><span class="hist-what">${esc(j.invoice.num||"")}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`;}).join("")}</div>`:""}
+  ${techProdHTML(P,start,label)}
   ${jobTimesHTML()}
   <div class="dash-card"><div class="dc-h"><h3>Where the money came from</h3><span class="ts">${esc(label)}</span></div>
     ${billed?Object.entries(b).filter(([k,v])=>v>0).map(([k,v])=>hb(k,v,bMax)).join(""):`<p class="empty">No completed jobs ${esc(label.toLowerCase())}.</p>`}</div>
@@ -1978,6 +1993,56 @@ function renderDash(){
   ${top.length?`<div class="dash-card"><div class="dc-h"><h3>Top customers</h3><span class="ts">All time</span></div>${top.map(x=>`<button type="button" class="hist-row" data-gocust="${x.c.id}"><span>${esc(x.c.name)}</span><span class="tag">${custJobs(x.c).length} job${custJobs(x.c).length===1?"":"s"}</span><span class="hist-what">${esc(x.c.vehicles.map(vehName).filter(Boolean).join(", "))}</span><span class="hist-amt">${money(x.billed)}</span></button>`).join("")}</div>`:""}
   ${fuDue?`<button type="button" class="dash-card dash-link" data-nav="jobs"><span><strong>${fuDue} service reminder${fuDue===1?"":"s"}</strong> due in the next 2 weeks</span><span>›</span></button>`:""}</div>`;
 }
+
+/* ================= technician productivity (owner's Home screen) ================= */
+let TP_OPEN=null;const usd0=x=>"$"+Math.round(num(x)).toLocaleString();
+function techStats(t,start){
+  const mine=APP.jobs.filter(j=>{const o=techOf(j);return (o?o.id:"me")===t.id;});
+  const inP=d=>d&&d>=start&&d<=TODAY;
+  const fin=mine.filter(j=>j.status==="done"&&inP(jDate(j)));
+  const done=fin.filter(j=>!j.stopped),stopped=fin.filter(j=>j.stopped);
+  const canceled=mine.filter(j=>j.status==="canceled"&&inP(j.info.date));
+  const billed=fin.reduce((a,j)=>a+jobTotal(j),0);
+  const labor=fin.reduce((a,j)=>{const x=totals(j);return a+(x.svc?x.labor:x.fee);},0);
+  const timed=fin.filter(j=>jobHours(j)>0),clock=timed.reduce((a,j)=>a+jobHours(j),0);
+  const billedHrs=timed.reduce((a,j)=>a+(j.invoice.lines||[]).filter(l=>l.k==="labor").reduce((b,l)=>b+num(l.q),0),0);
+  const sched=mine.filter(j=>j.startedAt&&j.info.time&&inP(j.info.date));
+  const onTime=sched.filter(j=>j.startedAt<=new Date(`${j.info.date}T${j.info.time}:00`).getTime()+15*60000).length;
+  const holds=[];mine.forEach(j=>(j.log||[]).forEach(e=>{if(e.ev==="hold"){const x=new Date(e.at),d=`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;if(inP(d))holds.push(e.reason||"Other");}}));
+  const why={};holds.forEach(r=>why[r]=(why[r]||0)+1);const topHold=Object.entries(why).sort((a,b)=>b[1]-a[1])[0];
+  const open=mine.filter(j=>isOpenJob(j)),late=open.filter(j=>(j.info.date||"")<TODAY),onHold=open.filter(j=>j.status==="hold");
+  const upcoming=open.filter(j=>(j.info.date||"")>=TODAY);
+  return {t,fin,done,stopped,canceled,billed,labor,clock,timedN:timed.length,billedHrs,perHr:clock?billed/clock:0,eff:clock&&billedHrs?billedHrs/clock:0,avg:timed.length?clock/timed.length:0,
+    onTimeN:sched.length,onTime,holds:holds.length,topHold,late,onHold,upcoming};}
+function techProdHTML(P,start,label){
+  if(!hasTeam())return "";
+  const rows=teamList().map(t=>techStats(t,start)).filter(r=>r.fin.length||r.canceled.length||r.upcoming.length||r.late.length||!r.t.me);
+  if(!rows.length)return "";
+  const max=Math.max(1,...rows.map(r=>r.billed));
+  const pct=x=>Math.round(x*100)+"%";
+  return `<div class="dash-card tp-card" id="techProd"><div class="dc-h"><h3>Technician productivity</h3><span class="ts">${esc(label)}</span></div>
+    <div class="tp-head"><span>Tech</span><span>Jobs</span><span>Billed</span><span>Hours</span><span>$/hr</span></div>
+    ${rows.sort((a,b)=>b.billed-a.billed).map(r=>{const open=TP_OPEN===r.t.id;
+      return `<button type="button" class="tp-row${open?" open":""}" data-tp="${esc(r.t.id)}" aria-expanded="${open}">
+        <span class="tp-name"><span class="tm-dot sm" style="background:${esc(r.t.color||"#15202b")}"></span>${esc(r.t.me?(r.t.name+" (you)"):r.t.name)}</span>
+        <span>${r.done.length}${r.stopped.length?`<small>+${r.stopped.length} stopped</small>`:""}</span>
+        <span>${usd0(r.billed)}</span><span>${r.clock?r.clock.toFixed(1):"—"}</span><span>${r.perHr?usd0(r.perHr):"—"}</span>
+        <i class="tp-bar" style="width:${(r.billed/max*100).toFixed(1)}%;background:${esc(r.t.color||"var(--accent)")}"></i></button>
+      ${open?`<div class="tp-detail">
+        <div class="tp-stats">
+          <div><b>${money(r.labor)}</b><small>Labor billed</small></div>
+          <div><b>${r.eff?pct(r.eff):"—"}</b><small>Efficiency${r.eff?` (${r.billedHrs.toFixed(1)} billed ÷ ${r.clock.toFixed(1)} on clock)`:""}</small></div>
+          <div><b>${r.avg?fmtHM(r.avg):"—"}</b><small>Avg time per job</small></div>
+          <div><b>${r.onTimeN?pct(r.onTime/r.onTimeN):"—"}</b><small>Started on time${r.onTimeN?` (${r.onTime} of ${r.onTimeN})`:""}</small></div>
+          <div><b>${r.holds}</b><small>Put on hold${r.topHold?` · mostly ${esc(r.topHold[0].toLowerCase())}`:""}</small></div>
+          <div><b>${r.canceled.length}</b><small>Canceled</small></div></div>
+        ${r.late.length||r.onHold.length?`<p class="tp-warn">${r.late.length?`⚠️ ${r.late.length} past-due job${r.late.length===1?"":"s"} not finished`:""}${r.late.length&&r.onHold.length?" · ":""}${r.onHold.length?`${r.onHold.length} on hold now`:""}</p>`:""}
+        ${r.upcoming.length?`<p class="help" style="margin:4px 0">${r.upcoming.length} upcoming job${r.upcoming.length===1?"":"s"} assigned.</p>`:""}
+        ${r.fin.length?`<div class="tp-jobs">${r.fin.sort((a,b)=>jDate(b).localeCompare(jDate(a))).slice(0,8).map(j=>`<button type="button" class="hist-row" data-open="${j.id}"><span>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))}</span><span class="hist-what">${esc(j.info.customer||"")} · ${esc(isSvc(j)?(j.info.work||"Service"):"Inspection")}${j.stopped?" · stopped":""}</span><span class="hist-amt">${jobHours(j)?jobHours(j)+" hr · ":""}${money(jobTotal(j))}</span></button>`).join("")}</div>`:`<p class="empty">No finished jobs ${esc(label.toLowerCase())}.</p>`}
+      </div>`:""}`;}).join("")}
+    <p class="help" style="margin:8px 0 0">Hours come from the job clock (Start, Hold, Stop) or the Actual hours box. Efficiency compares labor hours billed to hours on the clock; over 100% means beating book time.</p>
+  </div>`;}
+
 function barChart(vals){
   const W=600,H=230,padL=84,padR=8,top=20,bot=36,max=Math.max(1,...vals.map(v=>v.v)),bw=(W-padL-padR)/vals.length;
   const nice=(()=>{const raw=max;const p=Math.pow(10,Math.floor(Math.log10(raw)));const m=raw/p;return (m<=1?1:m<=2?2:m<=5?5:10)*p;})();
@@ -4463,6 +4528,7 @@ document.addEventListener("click",e=>{
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
+  if(d.tp!==undefined){TP_OPEN=TP_OPEN===d.tp?null:d.tp;rerenderKeep();return;}
   if(d.act==="relock"){if(S&&S.invoice){S.invoice.lock=rateLock();save();rerenderKeep();toast("Updated to today's rates");}return;}
   if(d.act==="giftDrop"){giftDrop();render();return;}
   if(d.act==="giftsend"){giftSend(d.via);return;}

@@ -542,6 +542,8 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .az-bar button.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .az-bar button:disabled{opacity:.3}
 .az-h{font-family:var(--f-display);font-weight:700;font-size:15px;color:var(--accent);padding:10px 4px 2px;border-bottom:1px solid var(--line);margin-bottom:4px}
+.lock-note{margin:6px 0 0;font-size:12px}.lock-note .mini{margin-left:4px}
+.inv-hits{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}.inv-hit{display:grid!important;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;text-align:left;width:100%}
 .help-btn{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-weight:700;font-size:16px;color:var(--accent);margin-left:8px;display:grid;place-items:center;padding:0}
 .help-q{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px;min-height:46px;font:inherit;color:var(--ink);margin:4px 0 0}
 .help-list{display:flex;flex-direction:column;gap:6px}
@@ -945,6 +947,7 @@ function markSaved(ok){const el=document.getElementById("savedLbl");if(!el)retur
   if(!ok){el.textContent="Not saved: storage full";el.classList.remove("flash");return;}
   el.textContent="✓ Saved "+new Date().toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});el.classList.add("flash");clearTimeout(savedT);savedT=setTimeout(()=>el.classList.remove("flash"),900);}
 function save(){
+  try{lockInvoices();}catch(e){}
   try{syncCustomers();}catch(e){console.error(e);}
   try{ localStorage.setItem(KEY,JSON.stringify(APP)); markSaved(true); }
   catch(e){ markSaved(false); if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
@@ -1194,7 +1197,7 @@ async function syncNow(full){
           continue;}
         const c=applyRemote(r);changed+=c;if(r.deleted)BASE.del(k);else BASE.put(k,r.data);if(k in lh||r.deleted)delete lh[k];}
       saveMeta();if(rows.length<500)break;}
-    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();}
+    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();if(lockInvoices())changed++;}
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
     now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
@@ -1987,7 +1990,7 @@ function renderCustomers(){
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Your customers</div><h2>Customers</h2>
   <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p></div>
-  <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
+  <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name, phone or invoice #" autocomplete="off" inputmode="search"></label>
   ${(APP.customers||[]).some(c=>c.fleet&&!c.hidden)?`<div class="seg cust-filter" role="group" aria-label="Show"><button type="button" data-custf="" aria-pressed="${!APP.custF}">All</button><button type="button" data-custf="fleet" aria-pressed="${APP.custF==="fleet"}">Fleet accounts</button></div>`:""}
   ${(()=>{const all=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet));if(all.length<2)return "";
     return `<div class="az-wrap"><div class="seg az-sort" role="group" aria-label="Sort"><button type="button" data-custsort="" aria-pressed="${APP.custSort!=="az"&&!APP.custL}">Recent</button><button type="button" data-custsort="az" aria-pressed="${APP.custSort==="az"||!!APP.custL}">A–Z</button></div>
@@ -1999,9 +2002,13 @@ function custListHTML(q){
   const az=APP.custSort==="az"||!!APP.custL;
   const list=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet)&&(!APP.custL||custL(c)===APP.custL)&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
     .sort(az?(a,b)=>((custL(a)==="#")-(custL(b)==="#"))||normName(a.name).localeCompare(normName(b.name)):(a,b)=>((a.last||"")>(b.last||"")?-1:1));
+  const iq=String(q||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+  const invHits=iq&&/\d/.test(iq)?(APP.jobs||[]).filter(j=>j.invoice&&j.invoice.num&&String(j.invoice.num).toLowerCase().replace(/[^a-z0-9]/g,"").includes(iq)).sort((a,b)=>(b.invoice.date||b.info.date||"").localeCompare(a.invoice.date||a.info.date||"")).slice(0,15):[];
+  const invHTML=invHits.length?`<div class="az-h">Invoices</div><div class="inv-hits">${invHits.map(j=>`<button type="button" class="hist-row inv-hit" data-open="${j.id}"><span class="mono">#${esc(j.invoice.num)}</span><span class="hist-what">${esc(j.info.customer||"Customer")} · ${esc(fmtDate(j.invoice.date||j.info.date,{month:"short",day:"numeric",year:"numeric"}))}</span><span class="hist-amt">${money(jobTotal(j))}${j.status==="done"?(j.invoice.paid?" ✓":" due"):""}</span></button>`).join("")}</div>${list.length?`<div class="az-h">Customers</div>`:""}`:"";
+  if(!list.length&&invHTML)return invHTML;
   if(!list.length)return `<div class="emptybox">${APP.custL?`No customers under ${esc(APP.custL)}${q?" match":""}.`:q?"No customers match.":"No customers yet. They're added automatically when you book a job."}</div>`;
   let lastL="";
-  return list.map(c=>{const L=custL(c),hdr=az&&!APP.custL&&L!==lastL?`<div class="az-h" id="az-${L==="#"?"num":L}">${L}</div>`:"";lastL=L;return hdr+custItemHTML(c);}).join("");
+  return invHTML+list.map(c=>{const L=custL(c),hdr=az&&!APP.custL&&L!==lastL?`<div class="az-h" id="az-${L==="#"?"num":L}">${L}</div>`:"";lastL=L;return hdr+custItemHTML(c);}).join("");
 }
 function custItemHTML(c){
     const js=custJobs(c),billed=js.filter(j=>j.status==="done").reduce((a,j)=>a+jobTotal(j),0),open=CUST_OPEN===c.id;
@@ -2267,8 +2274,20 @@ function stats(job=S){
 function suggestVerdict(st){ if(st.bad>=4)return"pass"; if(st.bad>0)return"buyfix"; return"buy"; }
 
 /* ---------- money math ---------- */
+/* Finished or paid invoices keep the rates they were billed at, so a reprint next year matches. */
+const RATE_KEYS=["taxRate","freeMiles","perMile"];
+function rates(job){const L=job&&job.invoice&&job.invoice.lock;return L?{...APP.settings,...L}:APP.settings;}
+function rateLock(){const st=APP.settings,o={at:TODAY};RATE_KEYS.forEach(k=>{o[k]=st[k];});return o;}
+function lockInvoices(){if(isTech()||APP.sample)return 0;let n=0;
+  for(const j of APP.jobs||[]){const inv=j.invoice;if(!inv)continue;const fin=j.status==="done"||!!inv.paid;
+    if(fin&&!inv.lock){inv.lock=rateLock();n++;}
+    else if(!fin&&inv.lock&&j.status!=="canceled"){delete inv.lock;n++;}}
+  return n;}
+function lockNoteHTML(job){const L=job&&job.invoice&&job.invoice.lock;if(!L||isTech())return "";
+  const cur=APP.settings,diff=RATE_KEYS.some(k=>String(L[k]??"")!==String(cur[k]??""));
+  return `<p class="help lock-note">🔒 Billed at: tax ${esc(String(num(L.taxRate)))}%, travel ${money(L.perMile)}/mi after ${esc(String(num(L.freeMiles)))} mi.${diff?` Your rates have changed since; this invoice keeps the old ones. <button class="mini" type="button" data-act="relock">Use today's rates</button>`:""}</p>`;}
 function travelCalc(job){
-  const st=APP.settings, inv=job.invoice;
+  const st=rates(job), inv=job.invoice;
   if(inv.travelOverride!==""&&inv.travelOverride!=null) return {fee:num(inv.travelOverride),auto:false};
   const d=num(job.info.dist), billable=Math.max(0,d-num(st.freeMiles));
   return {fee:Math.round(billable*num(st.perMile)),auto:true,billable,d};
@@ -2293,7 +2312,7 @@ function discHTML(){
   </div>`;
 }
 function totals(job){
-  const inv=job.invoice, st=APP.settings;
+  const inv=job.invoice, st=rates(job);
   if(isSvc(job)){
     const ls=inv.lines||[],sum=k=>ls.filter(x=>x.k===k).reduce((a,x)=>a+lineAmt(x),0);
     const labor=sum("labor")+sum("flat"),parts=sum("part"),fees=sum("fee"),tr=travelCalc(job);
@@ -3289,11 +3308,11 @@ function renderService(){
     <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor (hourly)</button><button class="mini" type="button" data-addline="flat">＋ Flat fee</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
     <div class="copyrow menu-row"><button class="mini go" type="button" data-act="menuopen">📋 Service menu</button>${(inv.lines||[]).some(x=>x.d||num(x.p))?`<button class="mini" type="button" data-act="menusave">☆ Save to menu</button>`:""}</div>
     ${menuPanel()}
-    <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</div>
+    <div class="ln travel-ln"><div class="ln-top"><strong>Travel</strong><span class="help">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(rates(S).freeMiles)} mi free, then ${money(rates(S).perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</div>
       <label class="ln-amt">Amount<input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}"></label></div>
     ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
-    <dl class="totals" id="totals">${totalsHTML(t)}</dl>
+    <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     ${jobCostHTML()}
     ${mode==="est"?estPanelHTML(t):`<div class="rep-sec"><h4>Payment</h4>
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
@@ -3476,14 +3495,14 @@ function renderInvoice(){
       <thead><tr><th>Description</th><th>Amount</th></tr></thead>
       <tbody>
         <tr><td>Pre-purchase inspection<span class="sub">${esc(vehOf(i))}</span></td><td class="amt"><input id="inv-fee" data-inv="fee" inputmode="decimal" value="${esc(inv.fee)}" aria-label="Inspection fee"></td></tr>
-        <tr><td>Travel<span class="sub rowx">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(st.freeMiles)} mi free, then ${money(st.perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</td>
+        <tr><td>Travel<span class="sub rowx">Distance <input class="dist" id="inv-dist" data-info="dist" inputmode="decimal" value="${esc(i.dist)}" aria-label="One-way distance in miles"> mi · first ${esc(rates(S).freeMiles)} mi free, then ${money(rates(S).perMile)}/mi</span>${hasHQ()&&i.location?`<span class="rowx dist-row"><span class="help dist-msg" id="distMsgI"></span><button class="mini dist-btn" type="button" data-calcdist="info">📍 Calculate from home base</button></span>`:""}</td>
           <td class="amt"><input id="inv-travel" data-inv="travelOverride" inputmode="decimal" placeholder="${t.travel.auto?t.travel.fee:""}" value="${esc(inv.travelOverride)}" aria-label="Travel fee"></td></tr>
         ${inv.items.map((x,k)=>`<tr><td><div class="rowx"><input id="it-d-${k}" data-itd="${k}" value="${esc(x.d)}" placeholder="Description"><button class="xbtn" type="button" data-delitem="${k}" aria-label="Remove line">×</button></div></td><td class="amt"><input id="it-a-${k}" data-ita="${k}" inputmode="decimal" value="${esc(x.a)}" placeholder="0"></td></tr>`).join("")}
       </tbody></table></div>
     ${discHTML()}
     <div class="copyrow" style="margin-top:8px"><button class="mini" type="button" data-act="additem">＋ Add line item</button>
       <label class="mini"><input type="checkbox" id="inv-tax" data-invc="tax" ${t.taxOn?"checked":""} style="display:inline;width:18px;height:18px"> Sales tax ${esc(st.taxRate)}%</label></div>
-    <dl class="totals" id="totals">${totalsHTML(t)}</dl>
+    <dl class="totals" id="totals">${totalsHTML(t)}</dl><div id="lockNote">${lockNoteHTML(S)}</div>
     <div class="rep-sec"><h4>Payment</h4>
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>
       ${payBoxHTML(t.total)}
@@ -3720,7 +3739,7 @@ function buildInvoicePdf(job,est){
       P.font(7.5,"bold",PC.muted);P.text(x.k==="flat"?"FLAT FEE":RK[x.k].toUpperCase(),PM+8,P.y+12+(dl.length-1)*12);
       P.y+=20+(dl.length-1)*12;P.rule(P.y);P.y+=18;});
   }else line("Pre-purchase inspection",vehOf(i),t.fee);
-  if(t.travel.fee)line("Travel",i.dist?`${i.dist} mi one way${t.travel.auto?` · first ${s.freeMiles} mi free, then ${money(s.perMile)}/mi`:""}`:"",t.travel.fee);
+  if(t.travel.fee)line("Travel",i.dist?`${i.dist} mi one way${t.travel.auto?` · first ${rates(job).freeMiles} mi free, then ${money(rates(job).perMile)}/mi`:""}`:"",t.travel.fee);
   if(!svc)inv.items.filter(x=>x.d||num(x.a)).forEach(x=>line(x.d||"Item","",num(x.a)));
   const tx=PW-PM-200;
   if(svc){tl0("Labor",money(t.labor));tl0("Parts",money(t.parts));if(t.fees)tl0("Fees",money(t.fees));if(t.travel.fee)tl0("Travel",money(t.travel.fee));}
@@ -4359,6 +4378,7 @@ document.addEventListener("click",e=>{
     else if(k==="uselabor"||k==="useavg"){const hrs=k==="useavg"?catStats(jobCat(S),S.id).avg:jobHours(S);const ls=S.invoice.lines||(S.invoice.lines=[]);let l=ls.find(x=>x.k==="labor");
       if(!l){l={k:"labor",d:S.info.work?("Labor – "+S.info.work).slice(0,60):"Labor",q:"",p:APP.settings.laborRate||""};ls.push(l);}l.q=String(hrs);toast(`Labor set to ${hrs} hr`);}
     save();rerenderKeep();tickTimer();return;}
+  if(d.act==="relock"){if(S&&S.invoice){S.invoice.lock=rateLock();save();rerenderKeep();toast("Updated to today's rates");}return;}
   if(d.act==="giftDrop"){giftDrop();render();return;}
   if(d.act==="giftsend"){giftSend(d.via);return;}
   if(d.giftm){GIFTS.form.months=+d.giftm;rerenderKeep();return;}
@@ -4649,7 +4669,7 @@ document.addEventListener("input",e=>{
     save();renderChrome();
   }
 });
-function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S);box.innerHTML=totalsHTML(t);const tr=$("#inv-travel");if(tr)tr.placeholder=t.travel.auto?String(t.travel.fee):"";}
+function refreshTotals(){const box=$("#totals");if(!box)return;const t=totals(S);box.innerHTML=totalsHTML(t);const ln=$("#lockNote");if(ln)ln.innerHTML=lockNoteHTML(S);const tr=$("#inv-travel");if(tr)tr.placeholder=t.travel.auto?String(t.travel.fee):"";}
 document.addEventListener("change",e=>{
   const t=e.target,d=t.dataset;
   if(d.setc){APP.settings[d.setc]=t.checked;save();return;}

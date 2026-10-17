@@ -596,6 +596,10 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .cty-row{position:relative;width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:11px 4px 13px;color:var(--ink);font-size:14px;text-align:left}
 .cty-n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cty-row i{position:absolute;left:4px;bottom:4px;height:3px;border-radius:2px;background:var(--accent);opacity:.6;max-width:calc(100% - 8px)}
+.imp-steps{margin:4px 0 0;padding-left:20px;line-height:1.5}.imp-steps li{margin-bottom:4px}
+.imp-prev{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}.imp-prev p{margin:8px 0}.imp-file{padding:4px 0;font-size:13px}
+.imp-done{color:var(--good,#2b8a3e);font-weight:700}
+.form label.btn{display:inline-flex;flex-direction:row;align-items:center;justify-content:center;text-transform:none;letter-spacing:0;font-size:15px;color:var(--ink)}.form label.btn.primary{color:#fff}
 .pay-card .dc-h h3{display:flex;align-items:center;gap:6px}
 .pay-terms{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 10px;font-size:14px}
 .pay-nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 10px}
@@ -1438,6 +1442,100 @@ function renderLookup(){
     <button class="mini" type="button" data-act="lkclear" style="margin-top:8px">Clear recent</button>`:""}`;}
 const SEARCH_ICON=`<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true" style="vertical-align:-3px"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg>`;
 function dtcHTML(d){return d?`<strong>${esc(d.code)}</strong> · ${esc(d.sys)}${d.sub?" · "+esc(d.sub):""}<br><span class="help">${esc(d.gen)}. Tap Code meaning for the full description and causes.</span>`:"";}
+
+
+/* ================= import from Zoho Invoice / Zoho Books (CSV exports) ================= */
+function parseCSV(text){text=String(text||"").replace(/^﻿/,"");const rows=[];let row=[],f="",q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true;else if(c===","){row.push(f);f="";}else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(f);f="";if(row.some(x=>x!==""))rows.push(row);row=[];}else f+=c;}
+  row.push(f);if(row.some(x=>x!==""))rows.push(row);
+  if(!rows.length)return [];const head=rows[0].map(h=>h.trim());
+  return rows.slice(1).map(r=>{const o={};head.forEach((h,k)=>{o[h]=(r[k]||"").trim();});return o;});}
+const zKey=h=>String(h||"").toLowerCase().replace(/^cf\./,"").replace(/[^a-z0-9]/g,"");
+function zGet(o,...names){const keys=Object.keys(o);for(const n of names){const want=zKey(n);const k=keys.find(x=>zKey(x)===want);if(k&&o[k]!=="")return o[k];}return "";}
+function zFind(o,re){const k=Object.keys(o).find(x=>re.test(zKey(x)));return k?o[k]:"";}
+const zNum=v=>{const n=parseFloat(String(v||"").replace(/[^0-9.\-]/g,""));return isFinite(n)?n:0;};
+function zDate(v){v=String(v||"").trim();if(!v)return "";let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];
+  m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);if(m){const y=m[3].length===2?"20"+m[3]:m[3];return `${y}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;}
+  const d=new Date(v);return isNaN(d)?"":`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+function zAddr(o,pre){const a=zGet(o,pre+" Address",pre+" Street",pre+" Address Line1"),a2=zGet(o,pre+" Street2",pre+" Address Line2"),c=zGet(o,pre+" City"),st=zGet(o,pre+" State"),z=zGet(o,pre+" Code",pre+" Zip",pre+" Zip Code",pre+" Postal Code");
+  return [[a,a2].filter(Boolean).join(" "),c,[st,z].filter(Boolean).join(" ")].filter(Boolean).join(", ");}
+function zKind(rows){const h=rows.length?Object.keys(rows[0]).map(zKey):[];
+  if(h.includes("invoicenumber"))return "invoices";if(h.includes("displayname")||h.includes("contactname")||h.includes("customername")&&h.some(x=>/email|phone/.test(x)))return "contacts";return "";}
+function zContacts(rows){return rows.map(o=>{const first=zGet(o,"First Name"),last=zGet(o,"Last Name"),company=zGet(o,"Company Name"),disp=zGet(o,"Display Name","Contact Name","Customer Name")||company||[first,last].filter(Boolean).join(" ");
+    const sub=zGet(o,"Customer Sub Type","Contact Sub Type").toLowerCase(),type=zGet(o,"Contact Type").toLowerCase();
+    return {name:disp,first,last,company,email:zGet(o,"EmailID","Email","Email Address"),phone:zGet(o,"MobilePhone","Mobile Phone","Mobile","Phone","Billing Phone","Work Phone"),
+      location:zAddr(o,"Billing")||zAddr(o,"Shipping"),notes:zGet(o,"Notes","Remarks"),business:sub==="business"||(!!company&&company!==disp&&!first)||false,
+      status:zGet(o,"Status").toLowerCase(),vendor:/vendor/.test(type)};}).filter(c=>c.name&&!c.vendor);}
+function zInvoices(rows){const by=new Map();
+  rows.forEach(o=>{const num=zGet(o,"Invoice Number");if(!num)return;const k=num+"|"+zGet(o,"Customer Name");
+    let v=by.get(k);if(!v){v={num,customer:zGet(o,"Customer Name"),date:zDate(zGet(o,"Invoice Date","Date")),status:zGet(o,"Invoice Status","Status"),total:zNum(zGet(o,"Total")),balance:zNum(zGet(o,"Balance")),
+      paidDate:zDate(zGet(o,"Last Payment Date","Payment Date")),notes:zGet(o,"Notes","Customer Notes"),po:zGet(o,"PurchaseOrder","Purchase Order","Reference#","Reference Number"),
+      phone:zGet(o,"Billing Phone","Phone","Mobile Phone"),email:zGet(o,"Email","EmailID","Customer Email"),location:zAddr(o,"Billing")||zAddr(o,"Shipping"),
+      adj:zNum(zGet(o,"Adjustment")),adjDesc:zGet(o,"Adjustment Description"),disc:zNum(zGet(o,"Entity Discount Amount","Discount Amount (Entity)","Invoice Discount Amount")),
+      shipping:zNum(zGet(o,"Shipping Charge","Shipping Charges")),
+      vin:(zFind(o,/vin$|^vin|vehicleidentification/)||"").toUpperCase(),year:zFind(o,/^(vehicle)?year$/),make:zFind(o,/^(vehicle)?make$/),model:zFind(o,/^(vehicle)?model$/),miles:zFind(o,/mileage|odometer|^miles$/),veh:zFind(o,/^vehicle$|vehicleinfo|ymm/),
+      lines:[],tax:0};by.set(k,v);}
+    const name=zGet(o,"Item Name","Item"),desc=zGet(o,"Item Desc","Item Description","Description");
+    if(name||desc){const q=zNum(zGet(o,"Quantity"))||1,price=zNum(zGet(o,"Item Price","Rate","Item Rate")),tot=zNum(zGet(o,"Item Total","Amount","Line Total"));
+      const ld=zNum(zGet(o,"Discount Amount","Item Discount Amount"));
+      v.lines.push({d:(name||desc).slice(0,120),desc:name&&desc&&desc!==name?desc.slice(0,200):"",q,p:price||(tot&&q?tot/q:0),disc:ld});}
+    v.tax+=zNum(zGet(o,"Item Tax Amount","Tax Amount"));});
+  return [...by.values()];}
+const zStat=s=>{s=String(s||"").toLowerCase();return /void/.test(s)?"void":/draft/.test(s)?"draft":/paid/.test(s)&&!/partial|unpaid/.test(s)?"paid":/partial/.test(s)?"partial":"open";};
+let IMP=null;
+function importCardHTML(){
+  const I=IMP||{};const files=I.files||[];
+  const cts=files.filter(f=>f.kind==="contacts").flatMap(f=>f.items),invs=files.filter(f=>f.kind==="invoices").flatMap(f=>f.items);
+  const keep=invs.filter(v=>!/void|draft/.test(zStat(v.status))),dupe=keep.filter(v=>APP.jobs.some(j=>j.invoice&&j.invoice.num===v.num&&normName(j.info.customer)===normName(v.customer)));
+  const newCts=cts.filter(c=>!findCustomer({customer:c.name,phone:c.phone}));
+  const paid=keep.filter(v=>!dupe.includes(v)&&zStat(v.status)==="paid").length;
+  return `<div class="form" id="zohoImport"><p class="formh">📥 Import from Zoho</p>
+    <p class="help full" style="margin:0">Bring your customers and past invoices over from Zoho Invoice or Zoho Books.</p>
+    <ol class="help full imp-steps"><li>In Zoho, open <strong>Customers</strong> (Contacts) → <strong>⋯ More</strong> → <strong>Export</strong>. Pick <strong>CSV</strong>.</li><li>Open <strong>Invoices</strong> → <strong>⋯ More</strong> → <strong>Export Invoices</strong>, Status <strong>All</strong>, the whole date range, <strong>CSV</strong>.</li><li>Pick both files below. You'll see what comes in before anything is added.</li></ol>
+    <div class="full formacts"><label class="btn${files.length?"":" primary"}" for="zohoFiles">${files.length?"Add another file":"Pick Zoho CSV files"}<input type="file" id="zohoFiles" accept=".csv,text/csv,text/plain" multiple data-zoho="1" hidden></label>${files.length?`<button class="btn" type="button" data-act="zohoclear">Start over</button>`:""}</div>
+    ${files.length?`<div class="full imp-prev">
+      ${files.map(f=>`<div class="imp-file">📄 <strong>${esc(f.name)}</strong> · ${f.kind==="contacts"?`${f.items.length} customer${f.items.length===1?"":"s"}`:f.kind==="invoices"?`${f.items.length} invoice${f.items.length===1?"":"s"}`:`<span class="vin-warn">Not a Zoho customers or invoices export</span>`}</div>`).join("")}
+      ${cts.length?`<p>👤 <strong>${newCts.length}</strong> new customer${newCts.length===1?"":"s"}${cts.length-newCts.length?` · ${cts.length-newCts.length} already in the app (their missing details get filled in)`:""}</p>`:""}
+      ${invs.length?`<p>🧾 <strong>${keep.length-dupe.length}</strong> invoice${keep.length-dupe.length===1?"":"s"} to add · ${money(keep.filter(v=>!dupe.includes(v)).reduce((a,v)=>a+v.total,0))} total · ${paid} paid${invs.length-keep.length?` · ${invs.length-keep.length} void or draft skipped`:""}${dupe.length?` · ${dupe.length} already imported`:""}</p>`:""}
+      ${I.done?`<p class="imp-done">✓ ${esc(I.done)}</p>`:`<button class="btn primary" type="button" data-act="zohogo" ${(newCts.length||cts.length||keep.length-dupe.length)?"":"disabled"}>Import</button>`}
+    </div>`:""}
+    ${I.err?`<p class="vin-warn full">${esc(I.err)}</p>`:""}
+  </div>`;}
+async function zohoRead(fileList){IMP=IMP||{files:[]};IMP.err="";IMP.done="";
+  for(const f of fileList){if(/\.xlsx?$/i.test(f.name)){IMP.err=`${f.name} is an Excel file. In Zoho, choose CSV as the export format and pick that file instead.`;continue;}
+    try{const rows=parseCSV(await f.text());const kind=zKind(rows);IMP.files.push({name:f.name,kind,items:kind==="contacts"?zContacts(rows):kind==="invoices"?zInvoices(rows):[]});}
+    catch(e){IMP.err=`Couldn't read ${f.name}.`;}}
+  rerenderKeep();}
+function zohoImport(){
+  const files=IMP.files,cts=files.filter(f=>f.kind==="contacts").flatMap(f=>f.items),invs=files.filter(f=>f.kind==="invoices").flatMap(f=>f.items);
+  const cs=APP.customers||(APP.customers=[]);let nc=0,uc=0,ni=0;
+  for(const z of cts){const c=findCustomer({customer:z.name,phone:z.phone});
+    if(c){let ch=false;["phone","email","location"].forEach(k=>{if(!c[k]&&z[k]){c[k]=z[k];ch=true;}});if(z.notes&&!(c.notes||"").includes(z.notes)){c.notes=[c.notes,z.notes].filter(Boolean).join("\n");ch=true;}if(ch)uc++;}
+    else{cs.push({id:"c"+uid(),name:z.name,phone:z.phone,email:z.email,location:z.location,dist:"",notes:z.notes,vehicles:[],last:"",fleet:z.business,contact:z.business?[z.first,z.last].filter(Boolean).join(" "):"",from:"zoho"});nc++;}}
+  for(const v of invs){const st=zStat(v.status);if(st==="void"||st==="draft")continue;
+    if(APP.jobs.some(j=>j.invoice&&j.invoice.num===v.num&&normName(j.info.customer)===normName(v.customer)))continue;
+    const zc=cts.find(c=>normName(c.name)===normName(v.customer))||{};
+    let year=v.year,make=v.make,model=v.model;if(!make&&v.veh){const m=v.veh.match(/\b((?:19|20)\d\d)\s+([A-Za-z-]+)\s+(.+)/);if(m){year=m[1];make=m[2];model=m[3];}}
+    const j=newJob({customer:v.customer,phone:v.phone||zc.phone||"",location:v.location||zc.location||"",date:v.date||TODAY,work:(v.lines[0]&&v.lines[0].d)||"Service",
+      year:year||"",make:make||"",model:model||"",vin:/^[A-HJ-NPR-Z0-9]{17}$/.test(v.vin)?v.vin:"",miles:v.miles||"",po:v.po||"",
+      notes:[`Imported from Zoho invoice ${v.num}`,v.notes].filter(Boolean).join("\n")},"service");
+    j.status="done";j.imported="zoho";j.docMode="inv";
+    const L=v.lines.map(x=>({k:"flat",d:x.d+(x.desc?" – "+x.desc:""),q:String(x.q),p:String(r2(x.p))}));
+    v.lines.forEach(x=>{if(x.disc)L.push({k:"fee",d:`Discount on ${x.d}`.slice(0,80),q:"1",p:String(-r2(x.disc))});});
+    if(v.disc)L.push({k:"fee",d:"Discount",q:"1",p:String(-r2(v.disc))});
+    if(v.shipping)L.push({k:"fee",d:"Shipping",q:"1",p:String(r2(v.shipping))});
+    if(v.adj)L.push({k:"fee",d:v.adjDesc||"Adjustment",q:"1",p:String(r2(v.adj))});
+    if(v.tax)L.push({k:"fee",d:"Sales tax (from Zoho)",q:"1",p:String(r2(v.tax))});
+    j.invoice.lines=L;j.invoice.tax=false;j.invoice.travelOverride="0";j.invoice.num=v.num;j.invoice.date=v.date||TODAY;
+    const got=r2(L.reduce((a,x)=>a+lineAmt(x),0));if(v.total&&Math.abs(got-v.total)>=0.01)L.push({k:"fee",d:"Other (to match Zoho total)",q:"1",p:String(r2(v.total-got))});
+    if(st==="paid"){j.invoice.paid=true;j.invoice.paidDate=v.paidDate||v.date||TODAY;j.invoice.paidVia="Zoho";}
+    else if(st==="partial"&&v.balance){j.info.notes+=`\nPartly paid in Zoho: ${money(v.balance)} still owed.`;}
+    APP.jobs.push(j);ni++;}
+  syncCustomers();save();setTimeout(()=>countyFill(30),1500);
+  IMP.done=`Imported ${nc} new customer${nc===1?"":"s"}${uc?`, updated ${uc}`:""}${ni?` and ${ni} invoice${ni===1?"":"s"}`:""}. Find them under Customers; each customer's past jobs show their invoices.`;
+  rerenderKeep();toast("Import finished");}
 
 let RECOVERY=null;
 (()=>{const h=location.hash||"";if(!/access_token=|error_code=/.test(h))return;const q=new URLSearchParams(h.slice(1));
@@ -3180,6 +3278,7 @@ function renderSettings(){
   ${menuSettingsHTML()}
   ${themeSectionHTML()}
   ${renderChecklistSettings()}
+  ${isTech()?"":importCardHTML()}
   <div class="form" id="backup">
     <p class="formh">Backup &amp; restore</p>
     <p class="help full" style="margin:0">${AUTH?"<strong>You don't need to do anything here.</strong> Your jobs, customers, expenses, photos and receipts save to your account automatically. A backup file is just an extra copy you keep yourself, if you want one.":"Your data lives only in this app on this phone. Copy a backup and paste it into Notes or email it to yourself. Service-job photos and videos stay on the phone (backups keep small previews)."} ${APP.lastBackup?`Last backup: <strong>${esc(fmtDate(APP.lastBackup,{month:"short",day:"numeric",year:"numeric"}))}</strong>.`:(AUTH?"":"<strong>No backup yet.</strong>")}</p>
@@ -4867,6 +4966,8 @@ document.addEventListener("click",e=>{
   if(d.act==="mytaxsave"&&APP.myTaxDraft){const v={...APP.myTaxDraft};if(!(v.legal||"").trim()){toast("Enter your legal name");return;}if(!v.signed){toast("Check the box to certify it's correct");return;}
     v.signedAt=TODAY;delete v.at;APP.myTax=v;APP.myTaxDraft=null;save();rerenderKeep();toast("Saved and sent to the office");return;}
   if(d.tp!==undefined){TP_OPEN=TP_OPEN===d.tp?null:d.tp;rerenderKeep();return;}
+  if(d.act==="zohogo"&&IMP){zohoImport();return;}
+  if(d.act==="zohoclear"){IMP=null;rerenderKeep();return;}
   if(d.act==="bgimgrm"){delete APP.settings.bgImg;save();rerenderKeep();toast("Background picture removed");return;}
   if(d.act==="relock"){if(S&&S.invoice){S.invoice.lock=rateLock();save();rerenderKeep();toast("Updated to today's rates");}return;}
   if(d.act==="giftDrop"){giftDrop();render();return;}
@@ -5190,6 +5291,7 @@ document.addEventListener("change",e=>{
       $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with <strong>${esc(f.name)}</strong> (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;
       $("#restoreActs").scrollIntoView({block:"center"});};
     fr.onerror=()=>toast("Couldn't open that file.");fr.readAsText(f);return;}
+  if(d.zoho){const fl=[...(t.files||[])];t.value="";if(fl.length)zohoRead(fl);return;}
   if(d.bgimg){const f=t.files&&t.files[0];if(!f)return;toast("Adding picture…");
     loadBgImg(f).then(u=>{t.value="";if(!u){toast("Couldn't read that picture. Try a JPG or PNG.");return;}APP.settings.bgImg=u;if(APP.settings.bgDim==null||APP.settings.bgDim==="")APP.settings.bgDim=50;save();rerenderKeep();toast("Background set");});return;}
   if(d.bgblur){APP.settings.bgBlur=t.checked;save();applyTheme();return;}

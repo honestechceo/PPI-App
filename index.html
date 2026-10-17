@@ -24,6 +24,15 @@
   color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+html.has-bgimg{background:var(--bg)}
+html.has-bgimg body{background:transparent}
+html.has-bgimg body::before{content:"";position:fixed;inset:-12px;z-index:-2;background-position:center;background-size:cover;background-repeat:no-repeat;pointer-events:none}
+html.has-bgimg body::after{content:"";position:fixed;inset:0;z-index:-1;background:var(--bg);pointer-events:none}
+.bgimg-row{display:flex;gap:12px;align-items:center}
+.bgimg-prev{flex:0 0 72px;height:96px;border-radius:10px;border:1px solid var(--line);background:var(--bg) center/cover no-repeat;display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center}
+.bgimg-acts{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
+.bgimg-acts input[type=range]{width:100%}
+.form .bgimg-acts label{text-transform:none;letter-spacing:0;font-size:13px}.form .bgimg-acts label.mini{font-size:13px;color:#fff;display:inline-flex}.form .bgimg-acts label.check{flex-direction:row;color:var(--ink);font-size:14px}
 button,input,textarea,select{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
@@ -1038,11 +1047,11 @@ async function cloudSignIn(email,pw,create){
   setAuth(j,email);
   let joined=false;
   if(INVITE){try{await acceptInvite();joined=true;}catch(e){AUTH=null;saveAuth();throw {msg:(e&&e.msg)||"Couldn't join the shop. Ask the owner for a new invite link."};}}
-  if(joined){const keep=APP.settings;APP=blankApp(null);APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.jobs=[];APP.view="jobs";SMETA={};AUTH.role="tech";saveAuth();applyRole();}
+  if(joined){const keep=APP.settings;APP=blankApp(null);APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg,bgImg:keep.bgImg,bgDim:keep.bgDim,bgBlur:keep.bgBlur};APP.jobs=[];APP.view="jobs";SMETA={};AUTH.role="tech";saveAuth();applyRole();}
   const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:(shop&&shop.my_shop)||shop;saveAuth();
   if(GIFT&&!joined)await redeemGift();
   // first time on this device: samples are never uploaded
-  if(APP.sample&&!joined){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
+  if(APP.sample&&!joined){const keep=APP.settings;APP=blankApp(null);APP.view="settings";APP.settings={...defaultSettings(),theme:keep.theme,themeMode:keep.themeMode,themeAccent:keep.themeAccent,themeBg:keep.themeBg,bgImg:keep.bgImg,bgDim:keep.bgDim,bgBlur:keep.bgBlur};APP.expenses=[];APP.trips=[];APP.requests=[];APP.customers=[];SMETA={};}
   SMETA.cursor="";SMETA.shop=AUTH.shop_id;saveMeta();
   try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}
   SYNC.state="idle";await fetchPlan();await syncNow(true);
@@ -1272,7 +1281,7 @@ function applyRemote(r){
     if(isTech()){if(AUTH&&r.id===AUTH.user_id){APP.myTax=r.data;SMETA.h["techinfo:"+r.id]=h32(JSON.stringify(r.data));return 1;}return 0;}
     APP.techInfo=APP.techInfo||{};const same=JSON.stringify(APP.techInfo[r.id]||null)===JSON.stringify(r.data);APP.techInfo[r.id]=r.data;return same?0:1;}
   if(r.kind==="techcfg"){if(!isTech()||r.deleted)return 0;const k="techcfg:main",hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;
-    const keep={theme:APP.settings.theme,themeMode:APP.settings.themeMode,themeBg:APP.settings.themeBg};Object.assign(APP.settings,r.data,keep);SMETA.h[k]=hh;return 1;}
+    const keep={theme:APP.settings.theme,themeMode:APP.settings.themeMode,themeBg:APP.settings.themeBg,bgImg:APP.settings.bgImg,bgDim:APP.settings.bgDim,bgBlur:APP.settings.bgBlur};Object.assign(APP.settings,r.data,keep);SMETA.h[k]=hh;return 1;}
   const k=r.kind+":"+r.id,mapK={job:"jobs",customer:"customers",expense:"expenses",trip:"trips",request:"requests"}[r.kind];
   if(r.kind==="settings"){if(r.deleted)return 0;const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
   if(!mapK)return 0;const arr=APP[mapK]||(APP[mapK]=[]);const i=arr.findIndex(x=>String(x.id)===String(r.id));
@@ -2993,7 +3002,17 @@ function applyTheme(){
   else{const c=themeColors(st);
     [["--accent",c.acc],["--accent-ink",c.ink],["--accent-soft",c.soft],["--bg",c.bg],["--surface",c.surf],["--line",c.line]].forEach(([k,v])=>root.style.setProperty(k,rgb2hex(v)));}
   const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=getComputedStyle(root).getPropertyValue("--surface").trim()||"#15202b";
+  applyBgImg(st);
 }
+let BG_LAST="";
+function applyBgImg(st){const img=st.bgImg||"",dim=st.bgDim==null||st.bgDim===""?50:num(st.bgDim),blur=!!st.bgBlur,key=img.length+"|"+img.slice(-40)+"|"+dim+"|"+blur;
+  if(key===BG_LAST)return;BG_LAST=key;const root=document.documentElement;
+  let el=document.getElementById("bgImgStyle");if(!el){el=document.createElement("style");el.id="bgImgStyle";document.head.appendChild(el);}
+  root.classList.toggle("has-bgimg",!!img);
+  el.textContent=img?`html.has-bgimg body::before{background-image:url("${img}");${blur?"filter:blur(6px);":""}}html.has-bgimg body::after{opacity:${Math.max(0,Math.min(90,dim))/100}}`:"";}
+async function loadBgImg(f){const im=await imgFromBlob(f);if(!im)return null;
+  let max=1600,q=0.75,u="";for(let k=0;k<4;k++){u=drawTo(im,im.naturalWidth,im.naturalHeight,max).toDataURL("image/jpeg",q);if(u.length<450000)break;max=Math.round(max*0.8);q-=0.07;}
+  return u;}
 try{matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{applyTheme();if(APP.view==="settings")render();});}catch(e){}
 function themeSectionHTML(){
   const s=APP.settings,mode=s.themeMode||"auto",acc=(s.themeAccent||ACCENTS[0][1]).toLowerCase(),bgK=BGS[s.themeBg]?s.themeBg:"steel";
@@ -3002,18 +3021,23 @@ function themeSectionHTML(){
   return `<div class="form" id="setAppear">
     <p class="formh">Appearance</p>
     <div class="full"><span class="lbl">Mode</span><div class="seg seg3" role="group" aria-label="Light or dark">${[["auto","Auto"],["light","Light"],["dark","Dark"]].map(([k,l])=>`<button type="button" data-thememode="${k}" aria-pressed="${mode===k}">${l}</button>`).join("")}</div><span class="help">Auto follows your phone's light/dark setting.</span></div>
-    <div class="full"><span class="lbl">App color</span><div class="acc-row">${ACCENTS.map(([n,h])=>`<button type="button" class="acc-sw" data-themeacc="${h}" aria-pressed="${acc===h}" aria-label="${n}" title="${n}" style="--c:${h}"></button>`).join("")}
+    ${isTech()?"":`<div class="full"><span class="lbl">App color</span><div class="acc-row">${ACCENTS.map(([n,h])=>`<button type="button" class="acc-sw" data-themeacc="${h}" aria-pressed="${acc===h}" aria-label="${n}" title="${n}" style="--c:${h}"></button>`).join("")}
       <label class="acc-sw acc-custom" aria-pressed="${!isPreset}" title="Pick any color" style="--c:${acc}"><input type="color" id="s-themeAccent" data-themecustom="1" value="${acc}" aria-label="Pick any color"><span>＋</span></label></div>
-      <span class="help">Buttons, headings and highlights. Tap ＋ to pick any color, like the one in your logo.</span></div>
+      <span class="help">Buttons, headings and highlights. Tap ＋ to pick any color, like the one in your logo.</span></div>`}
     <div class="full"><span class="lbl">Background</span><div class="bg-row">${Object.keys(BGS).map(sw).join("")}</div></div>
-    <label class="check full"><input type="checkbox" id="s-pdfAccent" data-setc="pdfAccent" ${s.pdfAccent?"checked":""}> Use my app color on PDF reports and invoices</label>
+    <div class="full"><span class="lbl">Background picture</span>
+      <div class="bgimg-row"><div class="bgimg-prev" style="${s.bgImg?`background-image:url('${s.bgImg}')`:""}">${s.bgImg?"":"None"}</div>
+      <div class="bgimg-acts"><div class="formacts" style="margin:0"><label class="mini go" for="s-bgimg">${s.bgImg?"Change picture":"Upload a picture"}<input type="file" id="s-bgimg" accept="image/*" data-bgimg="1" hidden></label>${s.bgImg?`<button class="mini del" type="button" data-act="bgimgrm">Remove</button>`:""}</div>
+        ${s.bgImg?`<label class="help" style="margin:0">Fade the picture so text is easy to read<input type="range" min="0" max="90" step="5" value="${s.bgDim==null||s.bgDim===""?50:num(s.bgDim)}" data-bgdim="1" aria-label="Fade"></label>
+        <label class="check" style="margin:0"><input type="checkbox" data-bgblur="1" ${s.bgBlur?"checked":""}> Blur it</label>`:`<span class="help">Your shop, your truck, your logo. It shows behind the app on all your phones.</span>`}</div></div></div>
+    ${isTech()?"":`<label class="check full"><input type="checkbox" id="s-pdfAccent" data-setc="pdfAccent" ${s.pdfAccent?"checked":""}> Use my app color on PDF reports and invoices</label>`}
     ${s.themeAccent||s.themeBg||s.themeMode?`<div class="full"><button class="mini" type="button" data-act="themereset">Reset to the original look</button></div>`:""}
   </div>`;
 }
 
 /* ================= settings ================= */
 function renderSettings(){
-  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${pushCardHTML()}${myPayHTML()}${myTaxHTML()}${cloudSettingsHTML()}`;
+  if(isTech())return `<div class="stage-head"><div class="eyebrow">Technician</div><h2>Settings</h2><p class="when">You're signed in as a technician for ${esc(APP.settings.biz||"your shop")}. You see the jobs assigned to you. Prices, invoices and the shop's settings stay with the owner.</p></div>${pushCardHTML()}${myPayHTML()}${myTaxHTML()}${themeSectionHTML()}${cloudSettingsHTML()}`;
   const s=APP.settings;
   const f=(id,label,extra="",cls="",help="")=>`<label class="${cls}">${label}<input id="s-${id}" data-set="${id}" value="${esc(s[id])}" ${extra}>${help?`<span class="help">${help}</span>`:""}</label>`;
   return `${sampleBanner()}
@@ -4756,6 +4780,7 @@ document.addEventListener("click",e=>{
   if(d.act==="mytaxsave"&&APP.myTaxDraft){const v={...APP.myTaxDraft};if(!(v.legal||"").trim()){toast("Enter your legal name");return;}if(!v.signed){toast("Check the box to certify it's correct");return;}
     v.signedAt=TODAY;delete v.at;APP.myTax=v;APP.myTaxDraft=null;save();rerenderKeep();toast("Saved and sent to the office");return;}
   if(d.tp!==undefined){TP_OPEN=TP_OPEN===d.tp?null:d.tp;rerenderKeep();return;}
+  if(d.act==="bgimgrm"){delete APP.settings.bgImg;save();rerenderKeep();toast("Background picture removed");return;}
   if(d.act==="relock"){if(S&&S.invoice){S.invoice.lock=rateLock();save();rerenderKeep();toast("Updated to today's rates");}return;}
   if(d.act==="giftDrop"){giftDrop();render();return;}
   if(d.act==="giftsend"){giftSend(d.via);return;}
@@ -4995,6 +5020,7 @@ document.addEventListener("input",e=>{
   if(d.setsel){APP.settings[d.setsel]=t.value;save();if(d.setsel==="state")rerenderKeep();return;}
   if(d.payt&&PAY_TAX){PAY_TAX.d[d.payt]=t.type==="checkbox"?t.checked:t.value;return;}
   if(d.mytax&&APP.myTaxDraft){APP.myTaxDraft[d.mytax]=t.type==="checkbox"?t.checked:t.value;return;}
+  if(d.bgdim){APP.settings.bgDim=+t.value;applyTheme();clearTimeout(applyBgImg._t);applyBgImg._t=setTimeout(save,400);return;}
   if(d.lk){LOOK[d.lk]=t.value;if(d.lk==="q"){const b=document.getElementById("lkDtc");if(b)b.innerHTML=dtcHTML(dtcInfo(t.value));}return;}
   if(d.jcnote){if(JCTL)JCTL.note=t.value;return;}
   if(d.helpq){HELP_Q=t.value;render();const q=document.getElementById("helpQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
@@ -5072,6 +5098,9 @@ document.addEventListener("change",e=>{
       $("#restoreActs").innerHTML=`<div class="confirm" style="width:100%"><span>Replace everything on this phone with <strong>${esc(f.name)}</strong> (${o.jobs.length} job${o.jobs.length===1?"":"s"}, ${esc(o.settings.biz||"no business name")})?</span><button class="btn danger" type="button" data-act="doRestore">Replace with backup</button><button class="btn" type="button" data-act="cancelRestore">Cancel</button></div>`;
       $("#restoreActs").scrollIntoView({block:"center"});};
     fr.onerror=()=>toast("Couldn't open that file.");fr.readAsText(f);return;}
+  if(d.bgimg){const f=t.files&&t.files[0];if(!f)return;toast("Adding picture…");
+    loadBgImg(f).then(u=>{t.value="";if(!u){toast("Couldn't read that picture. Try a JPG or PNG.");return;}APP.settings.bgImg=u;if(APP.settings.bgDim==null||APP.settings.bgDim==="")APP.settings.bgDim=50;save();rerenderKeep();toast("Background set");});return;}
+  if(d.bgblur){APP.settings.bgBlur=t.checked;save();applyTheme();return;}
   if(d.logo){const f=t.files&&t.files[0];if(!f)return;
     loadLogo(f).then(r=>{if(!r){toast("Couldn't read that image. Try a PNG or JPG.");return;}
       Object.assign(APP.settings,r);save();render();toast("Logo saved");});return;}

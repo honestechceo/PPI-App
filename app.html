@@ -1388,12 +1388,25 @@ function dtcInfo(q){const m=DTC_RE.exec(q||"");if(!m)return null;const sys={P:"P
 function openLookup(job){const j=job||(APP.view==="job"?S:null);
   if(j){LOOK.veh=[j.info.year,j.info.make,j.info.model,j.info.engine].filter(Boolean).join(" ");LOOK.vin=j.info.vin||"";LOOK.jobId=j.id;}
   APP.view="lookup";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("lk-q")?.focus(),60);}
-const LK_TOPICS=[["Code meaning","code meaning causes"],["How to fix","how to replace repair"],["Torque specs","torque specs"],["Fluid capacity","oil type capacity"],["Fuse / relay","fuse relay location"],["Wiring diagram","wiring diagram"],["TSB / known issues","TSB common problems"],["Parts location","location"]];
+const LK_TOPICS=[["Code meaning","code meaning causes","What does {q} mean on a {v}, and what are the most common causes and fixes?"],
+  ["How to fix","how to replace repair","How do I fix {q} on a {v}? Give the steps, tools and parts needed."],
+  ["Torque specs","torque specs","What are the torque specs for {q} on a {v}?"],
+  ["Fluid capacity","oil type capacity","What oil and fluid types and capacities does a {v} take?"],
+  ["Fuse / relay","fuse relay location","Where is the fuse or relay for {q} on a {v}?"],
+  ["Wiring diagram","wiring diagram","Show the wiring diagram and pinout for {q} on a {v}."],
+  ["TSB / known issues","TSB common problems","What TSBs, recalls and known problems are there for {q} on a {v}?"],
+  ["Parts location","location","Where is the {q} located on a {v}, and how do I get to it?"]];
 function lkQuery(extra){const d=dtcInfo(LOOK.q);return [LOOK.veh,d?d.code:LOOK.q,extra].map(x=>String(x||"").trim()).filter(Boolean).join(" ");}
-function lkURL(kind,q){const e=encodeURIComponent(q);return kind==="yt"?`https://www.youtube.com/results?search_query=${e}`:kind==="img"?`https://www.google.com/search?tbm=isch&q=${e}`:`https://www.google.com/search?q=${e}`;}
+// "ai" opens Google's AI Mode tab (udm=50): a written answer with sources instead of a list of links.
+function lkURL(kind,q){const e=encodeURIComponent(q);return kind==="yt"?`https://www.youtube.com/results?search_query=${e}`:kind==="img"?`https://www.google.com/search?tbm=isch&q=${e}`:kind==="ai"?`https://www.google.com/search?udm=50&q=${e}`:`https://www.google.com/search?q=${e}`;}
+const lkMain=()=>LOOK.mode==="web"?"web":"ai";
+try{const o=JSON.parse(localStorage.getItem("honestech-look")||"null");if(o&&o.mode)LOOK.mode=o.mode;}catch(e){}
+function lkOpenRaw(kind,text){lkRemember();const w=window.open(lkURL(kind,text),"_blank","noopener");if(!w)location.href=lkURL(kind,text);}
+function lkRemember(){const r=LOOK.recent.filter(x=>!(x.q===LOOK.q&&x.veh===LOOK.veh));if(LOOK.q.trim())r.unshift({q:LOOK.q.trim(),veh:LOOK.veh.trim()});LOOK.recent=r.slice(0,12);
+  try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent,mode:LOOK.mode||"ai"}));}catch(e){}}
 function lkOpen(kind,extra){const q=lkQuery(extra);if(!q){toast("Type a code or what you're looking for");document.getElementById("lk-q")?.focus();return;}
   const r=LOOK.recent.filter(x=>!(x.q===LOOK.q&&x.veh===LOOK.veh));if(LOOK.q.trim())r.unshift({q:LOOK.q.trim(),veh:LOOK.veh.trim()});LOOK.recent=r.slice(0,12);
-  try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent}));}catch(e){}
+  try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent,mode:LOOK.mode||"ai"}));}catch(e){}
   const w=window.open(lkURL(kind,q),"_blank","noopener");if(!w)location.href=lkURL(kind,q);}
 function renderLookup(){
   const d=dtcInfo(LOOK.q),j=LOOK.jobId&&APP.jobs.find(x=>x.id===LOOK.jobId);
@@ -1405,9 +1418,11 @@ function renderLookup(){
     <label class="full">Code or problem<input id="lk-q" data-lk="q" value="${esc(LOOK.q)}" placeholder="e.g. P0420, rough idle, front brake pads" autocomplete="off" autocapitalize="characters" enterkeyhint="search"></label>
     <div class="full lk-dtc" id="lkDtc">${dtcHTML(d)}</div>
     <div class="full lk-go">
-      <button class="btn primary" type="button" data-lkgo="web">${SEARCH_ICON} Google</button>
+      <button class="btn primary" type="button" data-lkgo="${lkMain()}">${lkMain()==="ai"?"✨ Google AI Mode":SEARCH_ICON+" Google"}</button>
       <button class="btn lk-yt" type="button" data-lkgo="yt">▶ YouTube videos</button>
       <button class="btn" type="button" data-lkgo="img">Images</button></div>
+    <div class="full seg lk-mode" role="group" aria-label="Google results"><button type="button" data-lkmode="ai" aria-pressed="${lkMain()==="ai"}">✨ AI Mode answers</button><button type="button" data-lkmode="web" aria-pressed="${lkMain()==="web"}">All results</button></div>
+    <p class="help full" style="margin:-4px 0 0">${lkMain()==="ai"?"Google writes an answer for this vehicle with links to its sources. Double-check specs like torque against a service manual.":"Regular Google results: a list of websites, forums and videos."}</p>
     <div class="full"><span class="help" style="display:block;margin:4px 0 6px">Quick searches</span>
       <div class="lk-chips">${LK_TOPICS.map(([l,x],i)=>`<button type="button" class="lk-chip" data-lktopic="${i}">${esc(l)}</button>`).join("")}</div></div>
     ${LOOK.vin&&/^[A-HJ-NPR-Z0-9]{17}$/i.test(LOOK.vin)?`<div class="full"><a class="btn" href="https://www.nhtsa.gov/recalls?vin=${esc(LOOK.vin)}" target="_blank" rel="noopener">Check open recalls for this VIN</a></div>`:""}
@@ -4252,7 +4267,7 @@ function navBack(){
   window.scrollTo(0,b.y||0);NAV.y=b.y||0;return true;
 }
 window.addEventListener("scroll",()=>{if(!NAV.restoring)NAV.y=window.scrollY;},{passive:true});
-document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target&&(e.target.id==="lk-q"||e.target.id==="lk-veh")){e.preventDefault();e.target.blur();lkOpen("web");}});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target&&(e.target.id==="lk-q"||e.target.id==="lk-veh")){e.preventDefault();e.target.blur();lkOpen(lkMain());}});
 let NAV_WAIT=null;
 window.addEventListener("popstate",()=>{clearTimeout(NAV_WAIT);NAV_WAIT=null;
   // phone back gesture closes an open photo, scanner or guide first
@@ -4675,7 +4690,12 @@ document.addEventListener("click",e=>{
   if(d.navback){navBackTap();return;}
   if(d.look){if(d.look==="job"&&S)openLookup(S);else{if(APP.view!=="job"){LOOK.jobId="";}openLookup(APP.view==="job"?S:null);}return;}
   if(d.lkgo){lkOpen(d.lkgo);return;}
-  if(d.lktopic!==undefined){const t=LK_TOPICS[+d.lktopic];if(t)lkOpen(t[0]==="Code meaning"||t[0]==="How to fix"?"web":"web",t[1]);return;}
+  if(d.lktopic!==undefined){const t=LK_TOPICS[+d.lktopic];if(!t)return;
+    if(lkMain()==="ai"&&t[2]){const dd=dtcInfo(LOOK.q),qq=(dd?dd.code:LOOK.q).trim(),v=LOOK.veh.trim();
+      if(!qq&&!v){toast("Type a code or what you're looking for");document.getElementById("lk-q")?.focus();return;}
+      const text=t[2].replace("{q}",qq||"this").replace("{v}",v||"my vehicle").replace(/\s+/g," ");lkOpenRaw("ai",text);return;}
+    lkOpen(lkMain(),t[1]);return;}
+  if(d.lkmode){LOOK.mode=d.lkmode;try{localStorage.setItem("honestech-look",JSON.stringify({recent:LOOK.recent,mode:LOOK.mode}));}catch(e){}rerenderKeep();return;}
   if(d.lkrecent!==undefined){const r=LOOK.recent[+d.lkrecent];if(r){LOOK.q=r.q;LOOK.veh=r.veh;rerenderKeep();}return;}
   if(d.act==="lkclear"){LOOK.recent=[];try{localStorage.removeItem("honestech-look");}catch(e){}rerenderKeep();return;}
   if(d.nav){TECH_NEW=null;TECH_DEL=null;if(d.nav!=="expenses"||EXP_RET){EXP_DRAFT=null;EXP_RET=null;}if(d.nav!=="requests"){REQ_PASTE=null;REQ_EDIT=null;}REQ_NO=null;APP.view=d.nav;APP.adding=false;CUST_OPEN=null;save();render();window.scrollTo(0,0);return;}
@@ -4802,7 +4822,7 @@ document.addEventListener("click",e=>{
     (APP.settings.withholdings=APP.settings.withholdings||[]).push({id:"wh"+uid(),name:n,pct:pc,applies:WH_NEW.applies||"w2",onlyNoTin:!!WH_NEW.onlyNoTin});WH_NEW=null;save();rerenderKeep();toast("Added");return;}
   if(d.act==="whcancel"){WH_NEW=null;rerenderKeep();return;}
   if(d.whdel){APP.settings.withholdings=(APP.settings.withholdings||[]).filter(w=>w.id!==d.whdel);save();rerenderKeep();return;}
-  if(d.lookstate){const st=stateName(APP.settings.state||"")||"";LOOK.veh="";LOOK.jobId="";LOOK.q=d.lookstate==="sales"?`${st} sales tax rate on auto repair labor ${TODAY.slice(0,4)}`:`${st} payroll withholding rates ${TODAY.slice(0,4)} employer`;lkOpen("web");return;}
+  if(d.lookstate){const st=stateName(APP.settings.state||"")||"";LOOK.veh="";LOOK.jobId="";LOOK.q=d.lookstate==="sales"?`${st} sales tax rate on auto repair labor ${TODAY.slice(0,4)}`:`${st} payroll withholding rates ${TODAY.slice(0,4)} employer`;lkOpen(lkMain());return;}
   if(d.payedit){const t=(APP.settings.techs||[]).find(x=>x.id===d.payedit);if(t){const p=t.pay||{};PAY_EDIT={id:t.id,type:p.type||"1099",basis:p.basis||"labor",rate:p.rate!=null?String(p.rate):"",show:!!p.show};rerenderKeep();}return;}
   if(d.paye&&PAY_EDIT){const [k,v]=d.paye.split(":");if(k==="show")PAY_EDIT.show=!PAY_EDIT.show;else PAY_EDIT[k]=v;rerenderKeep();return;}
   if(d.act==="paysave"&&PAY_EDIT){const t=(APP.settings.techs||[]).find(x=>x.id===PAY_EDIT.id);const r=num(PAY_EDIT.rate);

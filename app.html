@@ -581,6 +581,17 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .wh-new{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px;margin:6px 0}.wh-new .full{grid-column:1/-1}.wh-new input,.wh-new select{width:100%;box-sizing:border-box}
 .pay-wh{font-size:14px;margin:-2px 0 8px}.pay-wh>div{display:flex;justify-content:space-between;padding:3px 0;color:var(--muted)}.pay-wh .pay-net{color:var(--ink);border-top:1px solid var(--line);margin-top:4px;padding-top:8px;font-size:16px}.pay-net b{font-size:20px}
 .set-aside{margin:2px 0 6px;padding:8px 10px;border-radius:8px;background:var(--mon-soft);font-size:14px}
+.cty-chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin:4px 0 6px;scrollbar-width:none}
+.cty-chips button{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font-weight:600;font-size:13px}
+.cty-chips button span{font-size:11px;font-weight:700;background:var(--bg);border-radius:999px;padding:1px 7px;color:var(--muted)}
+.cty-chips button.on{background:var(--accent);border-color:var(--accent);color:#fff}.cty-chips button.on span{background:rgba(255,255,255,.25);color:#fff}
+.cty-tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--accent-soft,#e8eefb);color:var(--accent);vertical-align:1px}
+.cty-head,.cty-row{display:grid;grid-template-columns:minmax(0,1.5fr) .6fr 1fr .8fr .8fr;gap:6px;align-items:center}
+.cty-head{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:0 4px 6px;border-bottom:1px solid var(--line)}
+.cty-head span:not(:first-child),.cty-row>span:not(:first-child){text-align:right}
+.cty-row{position:relative;width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:11px 4px 13px;color:var(--ink);font-size:14px;text-align:left}
+.cty-n{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cty-row i{position:absolute;left:4px;bottom:4px;height:3px;border-radius:2px;background:var(--accent);opacity:.6;max-width:calc(100% - 8px)}
 .pay-card .dc-h h3{display:flex;align-items:center;gap:6px}
 .pay-terms{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:2px 0 10px;font-size:14px}
 .pay-nums{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 10px}
@@ -1271,7 +1282,7 @@ async function syncNow(full){
       chunk.forEach(x=>{if(x.hh){SMETA.h[x.k]=x.hh;BASE.put(x.k,x.row.data);}else{delete SMETA.h[x.k];BASE.del(x.k);}delete SMETA.t[x.k];delete SMETA.lh[x.k];});saveMeta();}
     if(changed){try{localStorage.setItem(KEY,JSON.stringify(APP));}catch(e){}rebuildChecklist(APP.settings);const y=window.scrollY;if(!document.activeElement||!/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)){render();window.scrollTo(0,y);}}
     if(!PLAN||Date.now()-(PLAN.at||0)>10*60000||PLAN.shop_id!==AUTH.shop_id)await fetchPlan();
-    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);setTimeout(mediaSyncUp,0);SMETA.lastAt=SYNC.last;saveMeta();
+    SYNC.state="ok";SYNC.err="";SYNC.last=Date.now();if(OPEN_JOB)setTimeout(tryOpenJob,0);setTimeout(mediaSyncUp,0);setTimeout(()=>countyFill(30),4000);SMETA.lastAt=SYNC.last;saveMeta();
   }catch(e){SYNC.state=e.code==="offline"?"offline":e.code==="signedout"?"off":"error";SYNC.err=e.msg||"Sync failed";}
   finally{SYNC.busy=false;syncLabel();if(SYNC.again){SYNC.again=false;scheduleSync();}}
 }
@@ -1789,7 +1800,7 @@ function renderDispatch(){
       <div class="dj-top"><strong>${i.time?esc(fmtTime(i.time)):"Any time"}</strong><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="st dsp-${stt}">${DSP_LBL[stt]}</span></div>
       <div class="dj-who">${esc(i.customer||"No name")}${num(i.agreed)?` · ${money(i.agreed)}`:""}</div>
       <div class="meta">${esc([vehOf(i),isSvc(j)?i.work:""].filter(Boolean).join(" · ")||"—")}</div>
-      <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}</div>
+      <div class="meta">${esc(i.location||"No address")}${i.county?` · <span class="cty-tag">${esc(i.county)}</span>`:""}${i.dist?` · ${esc(i.dist)} mi`:""}</div>
       <label class="dj-as">Tech<select data-assign="${j.id}"><option value="">Unassigned</option>${team.map(t=>`<option value="${t.id}" ${tc&&tc.id===t.id?"selected":""}>${esc(t.me?t.name+" (you)":t.name)}</option>`).join("")}</select></label>
       ${tc&&j.status!=="done"?`<div class="chips dj-st">${DSP_ST.map(([k,l])=>`<button type="button" data-dspst="${j.id}:${k}" aria-pressed="${stt===k}">${l}</button>`).join("")}</div>`:""}
       <div class="acts">${tc&&!tc.me&&tc.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(tc.phone,jobSheet(j,tc)))}" data-sheetsent="${j.id}">💬 Send to ${esc(tc.name.split(" ")[0])}</a>`:""}${tc&&!tc.me?`<button class="mini" type="button" data-sheetcopy="${j.id}">Copy job sheet</button>`:""}<button class="mini" type="button" data-open="${j.id}">Open</button>${j.sheetAt?`<span class="meta">✓ sent ${esc(new Date(j.sheetAt).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))}</span>`:""}</div>
@@ -2025,6 +2036,7 @@ function renderDash(){
   ${today.length||upcoming.length?`<div class="dash-card"><div class="dc-h"><h3>${today.length?"Today":"Coming up"}</h3><button class="mini" type="button" data-nav="jobs">Schedule</button></div>${(today.length?today:upcoming.slice(0,3)).map(jobRow).join("")}${today.length&&upcoming.length>today.length?`<p class="ts" style="margin:8px 0 0">${upcoming.length-today.length} more coming up</p>`:""}</div>`:`<div class="dash-card"><div class="dc-h"><h3>Coming up</h3></div><p class="empty">Nothing booked. Tap <strong>+ Book a job</strong>.</p></div>`}
   ${unpaid.length?`<div class="dash-card" id="dashUnpaid"><div class="dc-h"><h3>Unpaid invoices</h3><span class="ts">${money(unpaidAmt)}</span></div>${unpaid.map(j=>{const days=Math.round((new Date(TODAY)-new Date(jDate(j)))/864e5);return `<button type="button" class="hist-row" ${isSvc(j)?`data-open="${j.id}"`:`data-openinv="${j.id}"`}><span>${esc(j.info.customer||"Customer")}</span><span class="tag ${days>14?"tag-bad":""}">${days<=0?"today":days+"d"}</span><span class="hist-what">${esc(j.invoice.num||"")}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`;}).join("")}</div>`:""}
   ${techProdHTML(P,start,label)}
+  ${countyCardHTML(start,label)}
   ${jobTimesHTML()}
   <div class="dash-card"><div class="dc-h"><h3>Where the money came from</h3><span class="ts">${esc(label)}</span></div>
     ${billed?Object.entries(b).filter(([k,v])=>v>0).map(([k,v])=>hb(k,v,bMax)).join(""):`<p class="empty">No completed jobs ${esc(label.toLowerCase())}.</p>`}</div>
@@ -2234,6 +2246,42 @@ function myTaxHTML(){
   if(!APP.myTaxDraft)return `<div class="form"><p class="formh">🧾 My tax info</p><p class="help full" style="margin:0">If you're paid as a contractor, the shop needs this for your 1099 at year end. Have your own LLC? Put its name and EIN here.</p><div class="full"><button class="mini go" type="button" data-act="mytaxedit">Fill it in</button></div></div>`;
   return taxFormHTML(d,"mytax","My tax info",`<div class="acts full"><button class="mini go" type="button" data-act="mytaxsave">Save and send to the office</button>${has?`<button class="mini" type="button" data-act="mytaxcancel">Cancel</button>`:`<button class="mini" type="button" data-act="mytaxcancel">Not now</button>`}</div>`);}
 
+
+/* ================= counties: filled in from the address, used to sort and filter ================= */
+const jobCounty=j=>(j&&j.info&&j.info.county||"").trim();
+const custCounty=c=>(c&&c.county||"").trim();
+let CTY_BUSY=false;
+async function countyFill(max){
+  if(CTY_BUSY||APP.sample||isTech()||!navigator.onLine)return;CTY_BUSY=true;let looked=0,changed=false;
+  const todo=[];
+  const jobs=[...APP.jobs].sort((a,b)=>(isOpenJob(b)-isOpenJob(a))||String(jDate(b)).localeCompare(String(jDate(a))));
+  jobs.forEach(j=>{const loc=(j.info.location||"").trim();if(loc&&j.info.countyFor!==loc)todo.push({o:j.info,loc});});
+  (APP.customers||[]).forEach(c=>{const loc=(c.location||"").trim();if(loc&&c.countyFor!==loc)todo.push({o:c,loc});});
+  try{for(const t of todo){if(looked>=(max||30))break;
+      const key=t.loc.toLowerCase().replace(/\s+/g," ");let g=APP.geo&&APP.geo[key];
+      if(!g||g.county===undefined){g=await geocode(t.loc,true);looked++;await new Promise(r=>setTimeout(r,1100));}
+      if((t.o.location||"").trim()!==t.loc)continue;
+      if(g&&g.county){t.o.county=g.county;}
+      t.o.countyFor=t.loc;changed=true;}}
+  catch(e){}
+  finally{CTY_BUSY=false;
+    if(changed){save();if(["jobs","customers","dash"].includes(APP.view)&&!(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)))rerenderKeep();}}}
+function countyChipsHTML(names,cur,attr,label){   // cur: null = all counties, "" = no county yet
+  if(names.length<2&&cur==null)return "";
+  return `<div class="cty-chips" role="group" aria-label="${esc(label)}"><button type="button" ${attr}="*" aria-pressed="${cur==null}" class="${cur==null?"on":""}">All counties</button>${names.map(([n,c])=>`<button type="button" ${attr}="${esc(n)}" aria-pressed="${cur===n}" class="${cur===n?"on":""}">${esc(n||"No county yet")}<span>${c}</span></button>`).join("")}</div>`;}
+function countyCounts(items,get){const m={};items.forEach(x=>{const k=get(x);m[k]=(m[k]||0)+1;});return Object.entries(m).sort((a,b)=>(a[0]===""?1:b[0]===""?-1:b[1]-a[1]));}
+function countyCardHTML(start,label){
+  const done=APP.jobs.filter(j=>j.status==="done"&&jDate(j)>=start&&jDate(j)<=TODAY);
+  const all=new Set(APP.jobs.map(jobCounty));if(all.size<2&&!(all.size===1&&!all.has("")))return "";
+  const by={};done.forEach(j=>{const k=jobCounty(j);(by[k]=by[k]||{n:0,b:0});by[k].n++;by[k].b+=jobTotal(j);});
+  const up={};APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||"")>=TODAY).forEach(j=>{const k=jobCounty(j);up[k]=(up[k]||0)+1;});
+  const keys=[...new Set([...Object.keys(by),...Object.keys(up)])].sort((a,b)=>(a===""?1:b===""?-1:((by[b]||{b:0}).b-(by[a]||{b:0}).b)));
+  if(!keys.length)return "";const max=Math.max(1,...keys.map(k=>(by[k]||{b:0}).b));
+  return `<div class="dash-card" id="dashCounty"><div class="dc-h"><h3>By county</h3><span class="ts">${esc(label)}</span></div>
+    <div class="cty-head"><span>County</span><span>Jobs</span><span>Billed</span><span>Avg</span><span>Upcoming</span></div>
+    ${keys.map(k=>{const r=by[k]||{n:0,b:0};return `<button type="button" class="cty-row" data-ctygo="${esc(k)}"><span class="cty-n">${esc(k||"No county yet")}</span><span>${r.n}</span><span>${usd0(r.b)}</span><span>${r.n?usd0(r.b/r.n):"—"}</span><span>${up[k]||0}</span><i style="width:${(r.b/max*100).toFixed(1)}%"></i></button>`;}).join("")}
+    <p class="help" style="margin:8px 0 0">Counties fill in from each job's address. Tap a county to see its jobs.${keys.includes("")?" Jobs without an address show as No county yet.":""}</p></div>`;}
+
 function barChart(vals){
   const W=600,H=230,padL=84,padR=8,top=20,bot=36,max=Math.max(1,...vals.map(v=>v.v)),bw=(W-padL-padR)/vals.length;
   const nice=(()=>{const raw=max;const p=Math.pow(10,Math.floor(Math.log10(raw)));const m=raw/p;return (m<=1?1:m<=2?2:m<=5?5:10)*p;})();
@@ -2326,6 +2374,7 @@ function renderCustomers(){
   <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p></div>
   <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name, phone or invoice #" autocomplete="off" inputmode="search"></label>
   ${(APP.customers||[]).some(c=>c.fleet&&!c.hidden)?`<div class="seg cust-filter" role="group" aria-label="Show"><button type="button" data-custf="" aria-pressed="${!APP.custF}">All</button><button type="button" data-custf="fleet" aria-pressed="${APP.custF==="fleet"}">Fleet accounts</button></div>`:""}
+  ${countyChipsHTML(countyCounts((APP.customers||[]).filter(c=>!c.hidden),custCounty),APP.custCty==null?null:APP.custCty,"data-custcty","Filter customers by county")}
   ${(()=>{const all=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet));if(all.length<2)return "";
     return `<div class="az-wrap"><div class="seg az-sort" role="group" aria-label="Sort"><button type="button" data-custsort="" aria-pressed="${APP.custSort!=="az"&&!APP.custL}">Recent</button><button type="button" data-custsort="az" aria-pressed="${APP.custSort==="az"||!!APP.custL}">A–Z</button></div>
     ${azBarHTML("data-azc",new Set(all.map(custL)),APP.custL||"","Jump to letter")}</div>`;})()}
@@ -2334,7 +2383,7 @@ function renderCustomers(){
 function custListHTML(q){
   const nq=normName(q),dq=digits(q);
   const az=APP.custSort==="az"||!!APP.custL;
-  const list=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet)&&(!APP.custL||custL(c)===APP.custL)&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
+  const list=(APP.customers||[]).filter(c=>!c.hidden&&(APP.custF!=="fleet"||c.fleet)&&(APP.custCty==null||custCounty(c)===APP.custCty)&&(!APP.custL||custL(c)===APP.custL)&&(!nq||normName(c.name).includes(nq)||(dq.length>=3&&digits(c.phone).includes(dq))))
     .sort(az?(a,b)=>((custL(a)==="#")-(custL(b)==="#"))||normName(a.name).localeCompare(normName(b.name)):(a,b)=>((a.last||"")>(b.last||"")?-1:1));
   const iq=String(q||"").toLowerCase().replace(/[^a-z0-9]/g,"");
   const invHits=iq&&/\d/.test(iq)?(APP.jobs||[]).filter(j=>j.invoice&&j.invoice.num&&String(j.invoice.num).toLowerCase().replace(/[^a-z0-9]/g,"").includes(iq)).sort((a,b)=>(b.invoice.date||b.info.date||"").localeCompare(a.invoice.date||a.info.date||"")).slice(0,15):[];
@@ -2348,7 +2397,7 @@ function custItemHTML(c){
     const js=custJobs(c),billed=js.filter(j=>j.status==="done").reduce((a,j)=>a+jobTotal(j),0),open=CUST_OPEN===c.id;
     return `<div class="job cust${open?" open":""}">
       <button type="button" class="cust-head" data-copen="${c.id}" aria-expanded="${open}">
-        <span class="who">${esc(c.name)}${c.fleet?` <span class="fleet-tag">Fleet</span>`:""}</span>
+        <span class="who">${esc(c.name)}${c.fleet?` <span class="fleet-tag">Fleet</span>`:""}${c.county?` <span class="cty-tag">${esc(c.county)}</span>`:""}</span>
         <span class="meta">${esc([c.fleet&&c.contact,c.phone,c.vehicles.length>2?c.vehicles.length+" vehicles":c.vehicles.map(vehName).filter(Boolean).join(", ")].filter(Boolean).join(" · ")||"No details yet")}</span>
         <span class="meta">${js.length} job${js.length===1?"":"s"}${c.last?" · last "+esc(fmtDate(c.last,{month:"short",day:"numeric",year:"numeric"})):""}${billed?" · "+money(billed)+" billed":""}</span>
       </button>
@@ -2410,6 +2459,7 @@ function custEditHTML(c){
     ${f("name","Name",'autocomplete="off"')}${f("phone","Phone",'inputmode="tel" autocomplete="off"')}
     ${f("email","Email",'inputmode="email" autocomplete="off"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
     ${f("location","Address",'autocomplete="off"',true)}
+    ${f("county","County",'autocomplete="off" placeholder="Fills in from the address"')}
     <label class="check full"><input type="checkbox" id="ce-fleet" ${c.fleet?"checked":""} onchange="document.getElementById('ceFleet').hidden=!this.checked"> Fleet or business account</label>
     <div class="full fleet-box" id="ceFleet" ${c.fleet?"":"hidden"}>
       <label>Contact person<input id="ce-contact" value="${esc(c.contact||"")}" autocomplete="off" placeholder="Fleet manager"></label>
@@ -2445,17 +2495,18 @@ const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
 function bizName(){return APP.settings.biz||"Your business name";}
 /* ---- distance from home base (address is private: used only here, never printed) ---- */
 const hasHQ=()=>!!(APP.settings.hq&&APP.settings.hqLat!=null&&APP.settings.hqFor===APP.settings.hq.trim());
-async function geocode(addr){
+const cleanCounty=c=>String(c||"").replace(/\s+(County|Parish|Borough|Census Area|Municipality)$/i,"").trim();
+async function geocode(addr,needCounty){
   const q=String(addr||"").trim();if(!q)return null;
   const key=q.toLowerCase().replace(/\s+/g," ");APP.geo=APP.geo||{};
-  if(APP.geo[key])return APP.geo[key];
+  if(APP.geo[key]&&(!needCounty||APP.geo[key].county!==undefined))return APP.geo[key];
   const cc=APP.settings.hqCC&&key!==String(APP.settings.hq||"").trim().toLowerCase().replace(/\s+/g," ")?"&countrycodes="+APP.settings.hqCC:"";
   let hit=null;
   try{const r=await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1${cc}&q=${encodeURIComponent(q)}`,{headers:{"Accept-Language":"en"}});
-    const a=await r.json();if(a&&a[0])hit={lat:+a[0].lat,lon:+a[0].lon,cc:(a[0].address&&a[0].address.country_code)||"",name:a[0].display_name||""};}catch(e){}
+    const a=await r.json();if(a&&a[0])hit={lat:+a[0].lat,lon:+a[0].lon,cc:(a[0].address&&a[0].address.country_code)||"",name:a[0].display_name||"",county:cleanCounty(a[0].address&&a[0].address.county)};}catch(e){}
   if(!hit){try{const bias=APP.settings.hqLat!=null?`&lat=${APP.settings.hqLat}&lon=${APP.settings.hqLon}`:"";
     const r=await fetch(`https://photon.komoot.io/api/?limit=1&lang=en${bias}&q=${encodeURIComponent(q)}`);const a=await r.json();const f=a&&a.features&&a.features[0];
-    if(f){const pr=f.properties||{};hit={lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],cc:(pr.countrycode||"").toLowerCase(),name:[pr.name,pr.street,pr.city,pr.state].filter(Boolean).join(", ")};}}catch(e){}}
+    if(f){const pr=f.properties||{};hit={lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0],cc:(pr.countrycode||"").toLowerCase(),name:[pr.name,pr.street,pr.city,pr.state].filter(Boolean).join(", "),county:cleanCounty(pr.county)};}}catch(e){}}
   if(hit){const ks=Object.keys(APP.geo);if(ks.length>300)delete APP.geo[ks[0]];APP.geo[key]=hit;}
   return hit;
 }
@@ -2753,9 +2804,10 @@ function renderJobs(){
     const dt=new Date(d+"T12:00:00");
     return `<button type="button" class="day${counts[d]?" has":""}" data-day="${d}" aria-pressed="${APP.day===d}"><small>${d===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><i></i></button>`}).join("")}</div>`;
   const sortKey=j=>(j.info.date||"")+(j.info.time||"99");
-  let upcoming=APP.jobs.filter(j=>isOpenJob(j)&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
-  const done=APP.jobs.filter(j=>j.status==="done"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
-  const canceled=APP.jobs.filter(j=>j.status==="canceled"&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
+  const ctyF=APP.ctyF==null?null:APP.ctyF,ctyOk=j=>ctyF===null||jobCounty(j)===ctyF;
+  let upcoming=APP.jobs.filter(j=>isOpenJob(j)&&ctyOk(j)&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
+  const done=APP.jobs.filter(j=>j.status==="done"&&ctyOk(j)&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
+  const canceled=APP.jobs.filter(j=>j.status==="canceled"&&ctyOk(j)&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true):""}
@@ -2764,6 +2816,7 @@ function renderJobs(){
   <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
+  ${countyChipsHTML(countyCounts(APP.jobs.filter(j=>isOpenJob(j)||jDate(j)>=addDays(TODAY,-90)),jobCounty),ctyF,"data-ctyf","Filter jobs by county")}
   ${routeHTML()}
   <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
   ${APP.schedMode==="month"?renderMonthCal():`${renderFollowups()}
@@ -2900,7 +2953,7 @@ function jobCard(j){
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
     <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
     <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&isOpenJob(j)&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
-    <div class="meta">${esc(i.location||"No address")}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
+    <div class="meta">${esc(i.location||"No address")}${i.county?` · <span class="cty-tag">${esc(i.county)}</span>`:""}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
       ${confirmDel?`<span class="meta">Delete this job${svc?" and its invoice":" and its inspection"}?</span><button class="mini del" type="button" data-del="${j.id}">Delete</button><button class="mini" type="button" data-act="nodel">Keep</button>`
       :`<button class="mini go" type="button" data-open="${j.id}">${j.status==="canceled"?"Open":j.status==="hold"?"Open job":svc?(j.status==="done"?(isTech()?"Open job":"Open invoice"):j.status==="active"?"Continue job":"Open job"):j.status==="done"?"Open report":j.status==="active"?"Continue inspection":"Start inspection"}</button>
@@ -3266,6 +3319,7 @@ function renderIntake(){
     ${f("date","Date",'type="date"')}
     ${f("time","Time",'type="time"')}
     <div class="full addr-row">${f("location","Inspection address")}${dirLink(i.location,"dirLink")}</div>
+    ${f("county","County",'placeholder="Fills in from the address" autocomplete="off"')}
     ${techFieldHTML("info",i.tech)}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
@@ -3632,6 +3686,7 @@ function renderService(){
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Date",'type="date"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
+    ${f("county","County",'placeholder="Fills in from the address" autocomplete="off"')}
     ${techFieldHTML("info",i.tech)}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}
     ${f("make","Make")}
@@ -4264,7 +4319,7 @@ function saveDraft(){
     setTimeout(()=>afterAssign(sj,_prevTech,!!_ej&&_prevKey!==[sj.info.date,sj.info.time,sj.info.location].join("|")),0);}}
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
   APP.fuFrom=null;APP.reqFrom=null;
-  APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");
+  APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";save();render();toast("Job saved");setTimeout(()=>countyFill(4),800);
 }
 
 
@@ -4895,6 +4950,9 @@ document.addEventListener("click",e=>{
   if(d.act==="dashunpaid"){document.getElementById("dashUnpaid")?.scrollIntoView({behavior:"smooth",block:"start"});return;}
   if(d.gocust){APP.view="customers";CUST_OPEN=d.gocust;render();window.scrollTo(0,0);return;}
   if(d.sugpick){if(SUG_DONE===d.sugpick&&Date.now()-SUG_AT<800)return;sugPick(d.sugpick);return;}
+  if(d.ctyf!==undefined){APP.ctyF=d.ctyf==="*"||APP.ctyF===d.ctyf?null:d.ctyf;save();rerenderKeep();return;}
+  if(d.custcty!==undefined){APP.custCty=d.custcty==="*"?null:(APP.custCty===d.custcty?null:d.custcty);save();rerenderKeep();return;}
+  if(d.ctygo!==undefined){APP.ctyF=d.ctygo;APP.view="jobs";APP.day="";save();render();window.scrollTo(0,0);return;}
   if(d.custf!==undefined){APP.custF=d.custf;APP.custL="";save();render();return;}
   if(d.custsort!==undefined){APP.custSort=d.custsort;if(!d.custsort)APP.custL="";save();rerenderKeep();return;}
   if(d.azc!==undefined){APP.custL=APP.custL===d.azc?"":d.azc;if(APP.custL)APP.custSort="az";save();rerenderKeep();return;}
@@ -4934,6 +4992,7 @@ document.addEventListener("click",e=>{
     if(!nv.name){toast("Add a name for this customer");document.getElementById("ce-name")?.focus();return;}
     c.lock=c.lock||{};
     for(const k of ["name","phone","email","dist","location"])if(nv[k]!==(c[k]||""))c.lock[k]=true;
+    {const cty=val("county");if(cty!==(c.county||"")){c.county=cty;c.countyFor=nv.location;}else if(nv.location!==(c.location||""))c.countyFor="";}
     const jobField={name:"customer",phone:"phone",location:"location",dist:"dist"};
     for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j))for(const [k,f] of Object.entries(jobField))if(nv[k]!==(c[k]||""))j.info[f]=nv[k];
     Object.assign(c,nv);CUST_EDIT=null;CUST_DEL=null;save();const y=window.scrollY;render();window.scrollTo(0,y);toast("Customer saved");return;}
@@ -5015,6 +5074,7 @@ document.addEventListener("input",e=>{
   if(d.pays&&PAY_EDIT){PAY_EDIT[d.pays]=t.value;if(d.pays==="basis")rerenderKeep();return;}
   if(d.payr&&PAY_RUN){PAY_RUN[d.payr]=t.value;if(d.payr==="adj"&&withholdFor((((APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId)||{}).pay||{}).type||"1099").length){clearTimeout(PAY_RUN._t);PAY_RUN._t=setTimeout(()=>{rerenderKeep();const i=document.querySelector('[data-payr="adj"]');if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length);}},500);return;}
   if(d.payr==="adj"){const el=document.querySelector(".pay-total b");if(el){const t2=(APP.settings.techs||[]).find(x=>x.id===PAY_RUN.techId);const g=r2(unpaidJobs(t2).filter(j=>PAY_RUN.sel[j.id]!==false).reduce((a,j)=>a+jobPay(j),0));el.textContent=money(r2(g+num(t.value)));const b=document.querySelector('[data-act="payrecord"]');if(b)b.textContent="Record "+money(r2(g+num(t.value)))+" paid";}}return;}
+  if(d.info==="county"&&S){S.info.countyFor=(S.info.location||"").trim();}
   if(d.whn&&WH_NEW){WH_NEW[d.whn]=t.value;return;}
   if(d.setsel){APP.settings[d.setsel]=t.value;save();if(d.setsel==="state")rerenderKeep();return;}
   if(d.payt&&PAY_TAX){PAY_TAX.d[d.payt]=t.type==="checkbox"?t.checked:t.value;return;}
@@ -5142,7 +5202,7 @@ setTimeout(()=>autoSnapshot(),1500);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){autoSnapshot();if(AUTH)syncNow();}else if(AUTH)syncNow();});
 window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
-setTimeout(()=>{syncLabel();if(AUTH)syncNow();if(AUTH&&GIFT)redeemGift();},800);
+setTimeout(()=>{syncLabel();if(AUTH)syncNow();else setTimeout(()=>countyFill(20),3000);if(AUTH&&GIFT)redeemGift();},800);
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist().catch(()=>{});}catch(e){}
 setTimeout(()=>{try{tryOpenJob();}catch(e){}},700);
 if(RECOVERY){APP.view="settings";render();setTimeout(()=>document.getElementById("setCloud")?.scrollIntoView({block:"center"}),300);}

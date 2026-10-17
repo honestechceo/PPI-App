@@ -1532,11 +1532,33 @@ function parseTimeLoose(str){
   if(/\bmorning\b/.test(t))return "09:00";if(/\bafternoon\b/.test(t))return "13:00";if(/\bevening\b/.test(t))return "17:00";
   return "";
 }
+/* Form emails that arrive as a two-column table (Name | Value): when copied, each cell lands on its own line
+   or the columns are split by tabs. Turn them into "Label: value" lines the parser understands. */
+const REQ_KEYS=new Set(["company","company name","business","business name","name","full name","your name","first name","last name","customer","customer name","contact name","phone","phone number","cell","mobile","email","email address","e-mail","address","street","street address","service address","address line 1","address line 2","city","town","state","zip","zip code","zipcode","postal code","vehicle","car","year","make","model","trim","vin","mileage","miles","service","services","service needed","service requested","details","message","comments","notes","description","additional info","preferred date","preferred time","date","time","best time","source","how did you hear about us","how did you find us","terms agreed","agree","consent"]);
+const normKey=k=>String(k||"").toLowerCase().replace(/[_]+/g," ").replace(/\s+/g," ").replace(/[:：]\s*$/,"").trim();
+function tableToLabels(text){
+  let ls=text.split("\n");
+  if(ls.filter(l=>/\t/.test(l)).length>=3){   // tab-separated rows: "phone<TAB>7325004259"
+    return ls.filter(l=>!/^\s*name\t+value\s*$/i.test(l)).map(l=>{const m=l.match(/^\s*([^\t]+?)\t+(.*)$/)||l.match(/^\s*([^\t]+?)\t*$/);
+      return m&&REQ_KEYS.has(normKey(m[1]))?`${normKey(m[1])}: ${(m[2]||"").trim()}`:l;}).join("\n");}
+  const trimmed=ls.map(l=>l.trim());
+  const keyAt=i=>REQ_KEYS.has(normKey(trimmed[i]))&&!/[:：]\s*\S/.test(trimmed[i]);
+  if(trimmed.filter((l,i)=>keyAt(i)).length<3)return ls.join("\n");
+  const out=[];
+  for(let i=0;i<trimmed.length;i++){
+    const l=trimmed[i];
+    if(/^name$/i.test(l)){let k=i+1;while(k<trimmed.length&&!trimmed[k])k++;if(/^value$/i.test(trimmed[k]||"")){i=k;continue;}}   // the table's header row
+    if(!keyAt(i)){out.push(ls[i]);continue;}
+    const val=[];let j=i+1;
+    for(;j<trimmed.length;j++){if(keyAt(j))break;if(/^submitted (at|on)\b/i.test(trimmed[j]))break;val.push(trimmed[j]);}
+    out.push(`${normKey(l)}: ${val.join("\n").replace(/\n{2,}/g,"\n").trim()}`);
+    i=j-1;}
+  return out.join("\n");}
 function parseRequest(raw){
-  const text=String(raw||"").replace(/\r/g,"").replace(/ /g," ");
+  const text=tableToLabels(String(raw||"").replace(/\r/g,"").replace(/ /g," "));
   const lines=text.split("\n").map(l=>l.replace(/^[>*\-•\s]+/,"").trim());
-  const LBL=/^([A-Za-z][A-Za-z /&()'-]{1,40}?)\s*[:：]\s*(.*)$/;
-  const fields=[];lines.forEach((l,i)=>{const m=l.match(LBL);if(m&&!/^https?$/i.test(m[1]))fields.push({k:m[1].toLowerCase().trim(),v:m[2].trim(),i});});
+  const LBL=/^([A-Za-z][A-Za-z_ /&()'-]{1,40}?)\s*[:：]\s*(.*)$/;
+  const fields=[];lines.forEach((l,i)=>{const m=l.match(LBL);if(m&&!/^https?$/i.test(m[1]))fields.push({k:normKey(m[1]),v:m[2].trim(),i});});
   const get=(re,multi)=>{const f=fields.find(x=>re.test(x.k));if(!f)return "";let v=f.v;
     if(multi||!v){const out=[v];for(let j=f.i+1;j<lines.length;j++){const l=lines[j];if(LBL.test(l)&&fields.some(x=>x.i===j))break;if(!l&&out.join("").trim()&&!multi)break;out.push(l);}v=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();}
     return v;};
@@ -1552,12 +1574,15 @@ function parseRequest(raw){
   let veh=get(/(vehicle|car|year.?make.?model|ymm|truck)/);
   if(yr||mk||md){r.year=(yr.match(/(19|20)\d\d/)||[""])[0];r.make=mk;r.model=md;}
   else{const src=veh||text;const m=src.match(/\b((?:19[6-9]|20[0-3])\d)\s+([A-Za-z][A-Za-z-]+)\s+([A-Za-z0-9][\w-]*(?:\s+[A-Za-z0-9][\w-]*)?)/);
-    if(m){r.year=m[1];r.make=titleMake(m[2]);r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was)$/i,"");}}
+    if(m){r.year=m[1];r.make=titleMake(m[2]);r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was|makes?|keeps?|won'?t|will|does|doesn'?t|sometimes|when|runs?|shakes?|squeaks?|leaks?)$/i,"");}}
   const vin=text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/);if(vin&&/\d/.test(vin[0])&&/[A-Z]/.test(vin[0]))r.vin=vin[0];
   r.work=get(/^(service|services|service needed|service requested|services needed|what do you need|request|issue|problem|concern|repair|repairs|work needed|type of service|reason)/,false)||"";
   const msg=get(/^(message|comments?|details|description|notes|additional info|additional information|tell us more|your message|question)/,true);
   if(!r.work&&msg)r.work=msg.split(/\n/)[0].slice(0,140);
   if(msg&&msg!==r.work)r.notes=msg;
+  {const co=get(/^(company|company name|business|business name)$/),src=get(/^(source|how did you hear about us|how did you find us|referral)$/);
+    if(co){r.company=co;r.notes=[`Company: ${co}`,r.notes].filter(Boolean).join("\n");}
+    if(src)r.notes=[r.notes,`Found you through: ${src}`].filter(Boolean).join("\n");}
   if(!fields.length&&!r.work){const body=lines.filter(Boolean).filter(l=>!/^(from|to|sent|date|subject)\b/i.test(l));r.work=(body.find(l=>l.length>15)||"").slice(0,140);r.notes=body.join("\n").slice(0,800);}
   const dl=get(/(preferred date|appointment date|date requested|requested date|preferred day|best day|day|date|when|availability|available)/);
   r.date=parseDateLoose(dl)||parseDateLoose((text.match(/\b(?:on|for|this|next)\s+((?:next\s+)?(?:sunday|monday|tuesday|wednesday|thursday|friday|saturday|mon|tues?|wed|thu|thurs|fri|sat|sun)\b|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|tomorrow)/i)||["",""])[1]);

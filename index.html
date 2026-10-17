@@ -600,6 +600,13 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.tools-n{font-weight:600;font-size:12px;color:var(--muted);margin-left:6px}
+.tools-for{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}.tools-tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft,#e8eefb);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600}
+.tools-tag button{border:0;background:transparent;font-size:16px;line-height:1;padding:0 6px;color:var(--muted)}
+.tools-list{grid-column:1/-1;display:flex;flex-direction:column}.form .tool-row{text-transform:none;letter-spacing:normal;color:var(--ink);display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px;font-weight:400;cursor:pointer}
+.tool-row input{width:20px;height:20px;margin:0}.tool-row.on span{text-decoration:line-through;color:var(--muted)}.tool-x{border:0;background:transparent;font-size:18px;color:var(--muted);padding:0 6px}
+.tools-add{grid-column:1/-1;display:flex;gap:8px}.tools-add input{flex:1;min-width:0}
+.tools-acts,.tools-pick{grid-column:1/-1}.tools-pick{display:flex;flex-wrap:wrap;gap:6px}
 .inv-del{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}
 .dup-row{border-top:1px solid var(--line);padding:9px 0}.dup-row .acts{margin-top:6px}
 .imp-steps{margin:4px 0 0;padding-left:20px;line-height:1.5}.imp-steps li{margin-bottom:4px}
@@ -1404,6 +1411,7 @@ function openLookup(job){const j=job||(APP.view==="job"?S:null);
   APP.view="lookup";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("lk-q")?.focus(),60);}
 const LK_TOPICS=[["Code meaning","code meaning causes","What does {q} mean on a {v}, and what are the most common causes and fixes?"],
   ["How to fix","how to replace repair","How do I fix {q} on a {v}? Give the steps, tools and parts needed."],
+  ["Tools needed","tools needed special tools socket sizes","What tools and special tools do I need to do {q} on a {v}? List socket and wrench sizes, special tools and torque specs."],
   ["Torque specs","torque specs","What are the torque specs for {q} on a {v}?"],
   ["Fluid capacity","oil type capacity","What oil and fluid types and capacities does a {v} take?"],
   ["Fuse / relay","fuse relay location","Where is the fuse or relay for {q} on a {v}?"],
@@ -3119,6 +3127,52 @@ function dupCardHTML(){if(isTech())return "";const P=dupPairs();if(!P.length)ret
       <div class="acts">${DUPDEL===z.id?`<button class="mini del" type="button" data-invdel="${z.id}">Yes, delete Zoho copy</button><button class="mini" type="button" data-act="dupno">Keep</button>`
         :`<button class="mini del" type="button" data-dupdel="${z.id}">Delete Zoho copy</button><button class="mini" type="button" data-open="${z.id}">Open</button><button class="mini" type="button" data-notdup="${z.id}">Not a duplicate</button>`}</div></div>`).join("")}</div>`;}
 
+
+// ---- Tools for the job: a starting list per repair (works with no signal), editable and saved per shop ----
+const TOOL_BASE=["Floor jack","Jack stands","Wheel chocks","Gloves","Safety glasses","Work light / headlamp","Shop towels"];
+const TOOL_LIB=[
+ ["brakes","Brakes (pads / rotors)",/brake|pad|rotor|caliper|squeal|grind/i,["Lug wrench / impact + lug sockets","Torque wrench (lug nuts)","Socket set (metric) + breaker bar","Caliper bracket bolts: 13–21 mm sockets","Brake caliper piston tool / C-clamp","Wire brush","Brake cleaner","Brake lube / caliper grease","Bungee or caliper hanger","Rubber mallet","Thread locker (bracket bolts)","Turkey baster (for reservoir)"]],
+ ["rearpiston","Rear brakes with electronic parking brake / screw-in piston",/rear brake|parking brake|e-?brake|epb/i,["Caliper wind-back tool kit","Scan tool with EPB service mode","Torx / triple-square bits"]],
+ ["bfluid","Brake fluid flush / bleed",/bleed|brake fluid|flush brake|spongy|soft pedal/i,["Bleeder wrench (8–11 mm)","Clear hose + catch bottle","Vacuum or pressure bleeder","Brake fluid (correct DOT)","Turkey baster","Helper or one-way bleeder valve","Scan tool (ABS bleed, if needed)"]],
+ ["battery","Battery",/batter/i,["Battery tester","10 mm wrench / socket + extension","Terminal puller","Terminal brush","Memory saver","Battery carrier strap","Anti-corrosion spray"]],
+ ["alternator","Alternator / charging",/alternator|charging|not charging|battery light/i,["Multimeter","Battery tester","Serpentine belt tool / long ratchet","Socket set + extensions + swivels","10 mm (disconnect battery)","Belt routing photo","Pry bar"]],
+ ["starter","Starter / no-crank",/starter|no.?crank|clicks|won.?t crank/i,["Multimeter","Remote starter switch","Socket set + long extensions + swivels","Wobble extensions","Flex-head ratchet","10 mm (disconnect battery)","Jump pack"]],
+ ["belt","Serpentine belt / tensioner / idler",/serpentine|belt|tensioner|idler|squeak/i,["Serpentine belt tool","Belt routing photo","Socket set","Pulley/bearing stethoscope","Belt wear gauge"]],
+ ["plugs","Spark plugs / ignition coils",/spark|plug|coil|misfire|tune.?up/i,["Spark plug socket (5/8\" or 14/16 mm)","Long extensions + swivel","Torque wrench (in-lb)","Spark plug gap tool","Dielectric grease","Anti-seize (if maker allows)","Compressed air / blow gun","Scan tool (misfire counts)","Torx bits (coil bolts)"]],
+ ["oil","Oil change",/oil change|oil service|lube|^oil/i,["Drain plug socket/wrench","Oil filter wrench / cap wrench","Drain pan","Funnel","New drain plug washer","Torque wrench","Fender cover","Oil (correct spec)","Oil life reset tool / scan tool"]],
+ ["coolant","Coolant / thermostat / radiator / hoses",/coolant|thermostat|radiator|hose|overheat|antifreeze/i,["Cooling system pressure tester","Spill-free funnel / vacuum fill tool","Hose clamp pliers","Hose pick","Drain pan","Coolant (correct type)","Gasket scraper","Coolant refractometer / test strips"]],
+ ["waterpump","Water pump",/water pump/i,["Cooling system pressure tester","Serpentine belt tool","Gasket scraper","Torque wrench","Drain pan","Spill-free funnel","Fan clutch wrench set (if mechanical fan)"]],
+ ["sensors","Sensors (O2 / MAF / crank / cam)",/o2|oxygen sensor|maf|mass air|crank sensor|cam sensor|sensor/i,["Scan tool","O2 sensor socket","Multimeter / back-probe pins","MAF cleaner","Anti-seize","Socket set + extensions"]],
+ ["electrical","Electrical diagnostics",/electric|wiring|short|draw|parasitic|fuse|relay|no power|light out|diagnos|check engine|cel|code/i,["Scan tool","Multimeter + back-probe pins","Test light","Fused jumper wires","Wiring diagram (look it up)","Fuse puller","Clamp meter (parasitic draw)","Power probe","Trim removal tools","Terminal release tools"]],
+ ["valvecover","Valve cover / PCV / intake gasket",/valve cover|pcv|intake gasket|oil leak/i,["Socket set + extensions","Torque wrench (in-lb)","Gasket scraper (plastic)","Brake/parts cleaner","RTV sealant","Hose pick","Smoke machine (leak test)"]],
+ ["bearing","Wheel bearing / hub",/wheel bearing|hub|humming|axle nut/i,["Axle nut socket (30–36 mm)","Breaker bar / impact","Torque wrench (high range)","Hub puller / slide hammer","Penetrating oil","Wire brush","Rubber mallet","Stethoscope"]],
+ ["steering","Tie rods / sway bar links / suspension",/tie rod|sway bar|link|ball joint|control arm|clunk|suspension/i,["Tie rod end puller / pickle fork","Socket + wrench set","Torx / hex bits (link studs)","Penetrating oil","Pry bar","Torque wrench","Alignment needed? (note for customer)"]],
+ ["fuel","Fuel pressure / fuel filter",/fuel pump|fuel filter|fuel pressure|no start/i,["Fuel pressure gauge","Fuel line disconnect tools","Rags + catch can","Fire extinguisher","Safety glasses","Scan tool"]],
+ ["inspect","Pre-purchase / multipoint inspection",/inspect|ppi|multipoint|mpi|pre.?purchase/i,["Scan tool","Battery tester","Tread depth gauge","Brake pad gauge","Paint thickness gauge","Flashlight","Inspection mirror","Tire pressure gauge","Coolant tester"]]];
+function toolKeys(j){const w=[j.info.work,j.info.performed].join(" "),T=j.tools||{};
+  const auto=TOOL_LIB.filter(x=>x[2].test(w)).map(x=>x[0]);return [...new Set([...auto,...(T.pick||[])])].filter(k=>!(T.unpick||[]).includes(k));}
+function toolListFor(k){const L=(APP.settings.toolLists||{})[k];if(Array.isArray(L))return L;const x=TOOL_LIB.find(y=>y[0]===k);return x?x[3]:[];}
+function toolItems(j){const T=j.tools||{},ks=toolKeys(j),seen=new Set(),out=[];
+  const add=t=>{const n=t.toLowerCase();if(!seen.has(n)&&!(T.hide||[]).includes(t)){seen.add(n);out.push(t);}};
+  ks.forEach(k=>toolListFor(k).forEach(add));if(ks.length&&!T.noBase)TOOL_BASE.forEach(add);(T.extra||[]).forEach(add);return out;}
+function toolsHTML(j){if(!isSvc(j))return "";const T=j.tools||{},ks=toolKeys(j),items=toolItems(j),open=TOOLS_OPEN===j.id,have=T.have||{};
+  const got=items.filter(t=>have[t]).length,veh=vehOf(j.info);
+  return `<div class="form tools-card" id="toolsCard"><p class="formh">🧰 Tools for this job${items.length?` <span class="tools-n">${got}/${items.length} packed</span>`:""}</p>
+    ${ks.length?`<div class="tools-for">${ks.map(k=>{const x=TOOL_LIB.find(y=>y[0]===k);return `<span class="tools-tag">${esc(x?x[1]:k)}<button type="button" aria-label="Remove" data-toolunpick="${k}">×</button></span>`;}).join("")}</div>`
+      :`<p class="help full" style="margin:0">${(j.info.work||"").trim()?"No match for the work requested yet. Pick the repair below or ask Google.":"Type the work requested above, or pick the repair below."}</p>`}
+    <div class="acts tools-acts">
+      <button class="mini go" type="button" data-act="toolai">✨ Ask Google AI${veh?" for this "+esc(j.info.make||"vehicle"):""}</button>
+      <button class="mini" type="button" data-act="toolpickopen">${open?"Done picking":"＋ Pick repair"}</button>
+      ${ks.length?`<button class="mini" type="button" data-act="toolsave">💾 ${ks.length===1?`Save as my ${esc((TOOL_LIB.find(y=>y[0]===ks[0])||[0,"list"])[1])} list`:"Save as my list for…"}</button>`:""}
+      ${got?`<button class="mini" type="button" data-act="toolclear">Uncheck all</button>`:""}</div>
+    ${TOOLS_SAVE===j.id&&ks.length>1?`<div class="tools-pick"><span class="help">Save this list for:</span>${ks.map(k=>`<button type="button" class="lk-chip" data-toolsavek="${k}">${esc((TOOL_LIB.find(y=>y[0]===k)||[0,k])[1])}</button>`).join("")}</div>`:""}
+    ${open?`<div class="tools-pick">${TOOL_LIB.map(x=>`<button type="button" class="lk-chip" aria-pressed="${ks.includes(x[0])}" data-toolpick="${x[0]}">${esc(x[1])}</button>`).join("")}</div>`:""}
+    ${items.length?`<div class="tools-list">${items.map(t=>`<label class="tool-row${have[t]?" on":""}"><input type="checkbox" data-toolhave="${esc(t)}" ${have[t]?"checked":""}><span>${esc(t)}</span><button type="button" class="tool-x" aria-label="Remove ${esc(t)}" data-toolhide="${esc(t)}">×</button></label>`).join("")}</div>`:""}
+    <div class="tools-add"><input id="toolNew" placeholder="Add a tool (e.g. 36 mm axle socket)" autocomplete="off"><button class="mini" type="button" data-act="tooladd">Add</button></div>
+  </div>`;}
+let TOOLS_OPEN=null,TOOLS_SAVE=null;
+// what gets saved for one repair: its list minus what was removed, plus anything added on this job
+function toolSaveList(j,k){const T=j.tools||{};const L=toolListFor(k).filter(t=>!(T.hide||[]).includes(t));(T.extra||[]).forEach(t=>{if(!L.some(x=>x.toLowerCase()===t.toLowerCase()))L.push(t);});return L;}
 function jobCard(j){
   const i=j.info, st=stats(j), svc=isSvc(j);
   const status=j.status==="canceled"?`<span class="st st-cancel">Canceled</span>`:j.status==="hold"?`<span class="st st-hold">On hold${j.hold&&j.hold.reason?" · "+esc(j.hold.reason):""}</span>`:(j.status==="done"&&j.stopped?`<span class="st st-stopped">Stopped</span> `:"")+(j.status==="done"?(isTech()?`<span class="st st-paid">Done</span>`:`<span class="st ${j.invoice.paid?"st-paid":"st-unpaid"}">${j.invoice.paid?"Paid":"Unpaid "+money(jobTotal(j))}</span>`)
@@ -3882,6 +3936,7 @@ function renderService(){
     ${ta("performed","Work performed","What you did, parts replaced, torque specs, test drive",3)}
     ${ta("recs","Recommendations","Anything they should fix soon (shows on the invoice)")}
   </div>
+  ${toolsHTML(S)}
   ${mpiSectionHTML(S)}
   ${timerHTML()}</div>
   <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
@@ -4872,6 +4927,22 @@ document.addEventListener("click",e=>{
   if(d.openinv){openJob(d.openinv,STAGES.length-1);return;}
   if(d.confirm){copyText(confirmText(APP.jobs.find(x=>x.id===d.confirm)),"jobCopy");return;}
   if(d.edit){startAdd(APP.jobs.find(x=>x.id===d.edit));return;}
+  if(d.act&&d.act.startsWith("tool")&&S){const T=S.tools||(S.tools={});
+    if(d.act==="tooladd"){const el=document.getElementById("toolNew"),v=(el&&el.value||"").trim();if(!v){el&&el.focus();return;}
+      T.extra=[...(T.extra||[]).filter(x=>x!==v),v];T.hide=(T.hide||[]).filter(x=>x!==v);save();rerenderKeep();document.getElementById("toolNew")?.focus();return;}
+    if(d.act==="toolai"){const w=(S.info.work||"").trim()||toolKeys(S).map(k=>(TOOL_LIB.find(y=>y[0]===k)||[0,k])[1]).join(", ")||"this repair",v=vehOf(S.info)||"my vehicle";
+      openOutside(lkURL("ai",`What tools and special tools do I need to do ${w} on a ${v}${S.info.vin?" (VIN "+S.info.vin+")":""}? List socket and wrench sizes, special tools, and torque specs.`));return;}
+    if(d.act==="toolpickopen"){TOOLS_OPEN=TOOLS_OPEN===S.id?null:S.id;rerenderKeep();return;}
+    if(d.act==="toolclear"){T.have={};save();rerenderKeep();return;}
+    if(d.act==="toolsave"){const ks=toolKeys(S);if(!ks.length)return;if(ks.length>1){TOOLS_SAVE=TOOLS_SAVE===S.id?null:S.id;rerenderKeep();return;}
+      APP.settings.toolLists={...(APP.settings.toolLists||{}),[ks[0]]:toolSaveList(S,ks[0])};save();rerenderKeep();toast("Saved. Every job with this repair starts with this list.");return;}}
+  if(d.toolsavek&&S){APP.settings.toolLists={...(APP.settings.toolLists||{}),[d.toolsavek]:toolSaveList(S,d.toolsavek)};TOOLS_SAVE=null;save();rerenderKeep();
+    toast(`Saved your ${(TOOL_LIB.find(y=>y[0]===d.toolsavek)||[0,"tool"])[1]} list.`);return;}
+  if(d.toolpick&&S){const T=S.tools||(S.tools={}),k=d.toolpick,on=toolKeys(S).includes(k);
+    if(on){T.pick=(T.pick||[]).filter(x=>x!==k);if(toolKeys(S).includes(k))T.unpick=[...(T.unpick||[]),k];}else{T.unpick=(T.unpick||[]).filter(x=>x!==k);if(!toolKeys(S).includes(k))T.pick=[...(T.pick||[]),k];}
+    save();rerenderKeep();return;}
+  if(d.toolunpick&&S){const T=S.tools||(S.tools={}),k=d.toolunpick;T.pick=(T.pick||[]).filter(x=>x!==k);if(toolKeys(S).includes(k))T.unpick=[...(T.unpick||[]),k];save();rerenderKeep();return;}
+  if(d.toolhide!==undefined&&S){const T=S.tools||(S.tools={}),t=d.toolhide;T.extra=(T.extra||[]).filter(x=>x!==t);if(toolItems(S).includes(t))T.hide=[...(T.hide||[]),t];save();rerenderKeep();return;}
   if(d.invdelask){INVDEL=d.invdelask;rerenderKeep();return;}
   if(d.act==="invdelno"){INVDEL=null;rerenderKeep();return;}
   if(d.dupdel){DUPDEL=d.dupdel;rerenderKeep();return;}
@@ -5274,6 +5345,7 @@ document.addEventListener("input",e=>{
   if(d.menuq){MENU_Q=t.value;const y=window.scrollY;render();window.scrollTo(0,y);const q=document.getElementById("menuQ");if(q){q.focus();q.setSelectionRange(q.value.length,q.value.length);}return;}
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
+  if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];save();rerenderKeep();return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}
   if(d.bulkdate&&BULK){BULK.date=t.value;return;}

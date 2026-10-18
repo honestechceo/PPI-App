@@ -968,6 +968,8 @@ const isoDay=(d)=>{const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezone
 const TODAY=isoDay(new Date());
 const addDays=(iso,n)=>{const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return isoDay(d)};
 const fmtDate=(iso,opt={weekday:"short",month:"short",day:"numeric"})=>iso?new Date(iso+"T12:00:00").toLocaleDateString(undefined,opt):"";
+// "Tue, Oct 20, 2026 at 9:00 AM" for estimates and invoices
+const svcWhen=i=>i&&i.date?fmtDate(i.date,{weekday:"short",month:"short",day:"numeric",year:"numeric"})+(i.time?" at "+fmtTime(i.time):""):"";
 const fmtTime=(t)=>{if(!t)return"";const[h,m]=t.split(":").map(Number);return `${(h%12)||12}:${String(m).padStart(2,"0")} ${h<12?"AM":"PM"}`};
 const money=(n)=>(+n||0).toLocaleString("en-US",{style:"currency",currency:"USD"});
 const num=(v)=>{const n=parseFloat(String(v??"").replace(/[^0-9.\-]/g,""));return isNaN(n)?0:n};
@@ -4026,6 +4028,7 @@ function renderService(){
       :bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
     ${poWarnHTML(S)}${(()=>{const fr=fleetRows(S);const c=jobCust(S);return fr.length||(c&&c.fleet&&c.contact)?`<p class="help fleet-line" style="margin:0 0 8px">${esc(billToLines(S).slice(0,2).join(" · "))}${fr.length?" · "+fr.map(([k,v])=>esc(k+" "+v)).join(" · "):""}</p>`:"";})()}
     ${mode==="inv"&&S.est&&S.est.status==="approved"?`<p class="help" style="margin:0 0 6px">From estimate ${esc(S.est.num)}, approved ${esc(fmtDate(S.est.approvedDate||S.est.date,{month:"short",day:"numeric"}))} for ${money(S.est.total||0)}.</p>`:""}
+    ${svcWhen(i)?`<p class="help svc-when" style="margin:0 0 6px"><strong>Service date:</strong> ${esc(svcWhen(i))}</p>`:""}
     ${i.tech?`<p class="help" style="margin:0 0 6px"><strong>Technician:</strong> ${esc(i.tech)}</p>`:""}
     <div class="lines" id="lines">${(inv.lines||[]).map(lineRow).join("")||`<p class="empty" style="margin:12px 0 0">No labor or parts yet. Add them below.</p>`}</div>
     <div class="copyrow" style="margin-top:10px"><button class="mini" type="button" data-addline="labor">＋ Labor (hourly)</button><button class="mini" type="button" data-addline="flat">＋ Flat fee</button><button class="mini" type="button" data-addline="part">＋ Part</button><button class="mini" type="button" data-addline="fee">＋ Fee</button></div>
@@ -4167,6 +4170,7 @@ function estimateText(){
   L.push(`Date: ${fmtDate(e.date,{month:"short",day:"numeric",year:"numeric"})} · Valid until ${fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"})}`);
   L.push(`For: ${billToLines(S).join(", ")||"—"}`);fleetRows(S).forEach(([k,v])=>L.push(`${k}: ${v}`));
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
+  if(svcWhen(i))L.push(`Service date: ${svcWhen(i)}`);
   if(i.tech)L.push(`Technician: ${i.tech}`);
   if(i.work){L.push("");L.push("WORK REQUESTED");L.push(i.work);}
   L.push("");
@@ -4212,6 +4216,7 @@ function renderInvoice(){
       ${fleetRows(S).map(([k,v])=>`<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("")}
       <div><dt>Vehicle</dt><dd>${esc(vehOf(i)||"—")}</dd></div>
       <div><dt>VIN</dt><dd class="mono">${esc(i.vin||"—")}</dd></div>
+      ${svcWhen(i)?`<div><dt>Inspection date</dt><dd>${esc(svcWhen(i))}</dd></div>`:""}
       ${i.tech?`<div><dt>Technician</dt><dd>${esc(i.tech)}</dd></div>`:""}
     </dl>${poWarnHTML(S)}
     <div style="overflow-x:auto"><table class="inv-table">
@@ -4249,6 +4254,7 @@ function invoiceText(){
   L.push(`Date: ${fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"})}`);
   L.push(`Bill to: ${billToLines(S).join(", ")||"—"}`);fleetRows(S).forEach(([k,v])=>L.push(`${k}: ${v}`));
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
+  if(svcWhen(i))L.push(`${t.svc?"Service":"Inspection"} date: ${svcWhen(i)}`);
   if(i.tech)L.push(`Technician: ${i.tech}`);
   L.push("");
   const row=(d,a)=>L.push(`${d.padEnd(30," ")} ${money(a).padStart(10," ")}`);
@@ -4442,7 +4448,7 @@ function buildInvoicePdf(job,est){
   const svc=t.svc;
   if(est)pdfHeader(P,"Estimate",[job.est.num,fmtDate(job.est.date,{month:"long",day:"numeric",year:"numeric"}),"Valid until "+fmtDate(estValidUntil(job.est),{month:"short",day:"numeric",year:"numeric"})]);
   else pdfHeader(P,svc?"Service Invoice":"Invoice",[inv.num,fmtDate(inv.date,{month:"long",day:"numeric",year:"numeric"})]);
-  pdfKV(P,[["Bill to",billToLines(job).join("\n")],...fleetRows(job),["Vehicle",vehOf(i)+(svc&&i.engine?"\n"+i.engine:"")],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[]),...(i.tech?[["Technician",i.tech]]:[])]);
+  pdfKV(P,[["Bill to",billToLines(job).join("\n")],...fleetRows(job),["Vehicle",vehOf(i)+(svc&&i.engine?"\n"+i.engine:"")],["VIN",i.vin],[svc?"Service date":"Inspection date",fmtDate(i.date,{month:"short",day:"numeric",year:"numeric"})+(i.time?" at "+fmtTime(i.time):"")],svc?["Mileage",i.miles?num(i.miles).toLocaleString()+" mi":""]:["Location",i.location],...(svc?[["Location",i.location]]:[]),...(i.tech?[["Technician",i.tech]]:[])]);
   if(svc&&(i.work||i.performed)){
     const para=(h,txt)=>{if(!txt)return;P.need(40);P.font(8,"bold",PC.muted);P.text(h,PM,P.y);P.y+=13;P.font(10);const l=P.wrap(txt,PW-2*PM);P.need(l.length*13);P.text(l,PM,P.y);P.y+=l.length*13+8;};
     para("WORK REQUESTED",i.work);if(!est)para("WORK PERFORMED",i.performed);

@@ -600,6 +600,7 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.fleet-box[hidden]{display:none!important}
 .tools-n{font-weight:600;font-size:12px;color:var(--muted);margin-left:6px}
 .tools-for{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}.tools-tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft,#e8eefb);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600}
 .tools-tag button{border:0;background:transparent;font-size:16px;line-height:1;padding:0 6px;color:var(--muted)}
@@ -2532,12 +2533,23 @@ function fillFromCustomer(obj,c,v,withVehicle=true){
   Object.assign(obj,{customer:c.name,phone:c.phone||"",location:c.location||"",dist:c.dist||""});
   if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",unit:"",plate:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color,unit:v.unit||"",plate:v.plate||"",miles:v.miles||""}:{});}
 }
-let CUST_OPEN=null,CUST_DEL=null,CUST_EDIT=null;
+let CUST_OPEN=null,CUST_DEL=null,CUST_EDIT=null,CUST_NEW=null;
+const HAS_PICKER=typeof navigator!=="undefined"&&"contacts" in navigator&&typeof window.ContactsManager!=="undefined";
+// a customer card the phone's Contacts app can open (.vcf)
+function vcardOf(c){const e=x=>String(x||"").replace(/\\/g,"\\\\").replace(/\n/g,"\\n").replace(/[,;]/g,m=>"\\"+m);
+  const parts=String(c.name||"").trim().split(/\s+/),last=c.fleet?"":parts.length>1?parts.pop():"",first=c.fleet?"":parts.join(" ");
+  return ["BEGIN:VCARD","VERSION:3.0",`N:${e(last)};${e(first||c.name)};;;`,`FN:${e(c.name)}`,c.fleet?`ORG:${e(c.name)}`:"",c.fleet&&c.contact?`NOTE:${e("Contact: "+c.contact)}`:"",
+    c.phone?`TEL;TYPE=CELL:${e(c.phone)}`:"",c.email?`EMAIL:${e(c.email)}`:"",c.location?`ADR;TYPE=HOME:;;${e(c.location)};;;;`:"","END:VCARD"].filter(Boolean).join("\r\n");}
+async function saveVcard(c){const name=(c.name||"customer").replace(/[^\w ]+/g,"").trim()||"customer",blob=new Blob([vcardOf(c)],{type:"text/vcard"});
+  try{const f=new File([blob],name+".vcf",{type:"text/vcard"});if(navigator.canShare&&navigator.canShare({files:[f]})&&/iPhone|iPad|Android/i.test(navigator.userAgent)){await navigator.share({files:[f],title:c.name});return;}}catch(e){if(e&&e.name==="AbortError")return;}
+  const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name+".vcf";document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u);},1500);}
 function renderCustomers(){
   const q=APP.custQ||"";
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Your customers</div><h2>Customers</h2>
-  <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p></div>
+  <p class="when">Saved automatically from your jobs. Tap a customer for vehicles, past jobs and quick booking.</p>
+  ${isTech()?"":`<div class="acts"><button class="mini go" type="button" data-act="custnew">＋ Add customer</button></div>`}</div>
+  ${CUST_NEW?`<div class="job cust open" id="custNew"><div class="cust-body">${custEditHTML(CUST_NEW)}</div></div>`:""}
   <label class="search"><input id="cust-q" data-custq="1" value="${esc(q)}" placeholder="Search name, phone or invoice #" autocomplete="off" inputmode="search"></label>
   ${(APP.customers||[]).some(c=>c.fleet&&!c.hidden)?`<div class="seg cust-filter" role="group" aria-label="Show"><button type="button" data-custf="" aria-pressed="${!APP.custF}">All</button><button type="button" data-custf="fleet" aria-pressed="${APP.custF==="fleet"}">Fleet accounts</button></div>`:""}
   ${countyChipsHTML(countyCounts((APP.customers||[]).filter(c=>!c.hidden),custCounty),APP.custCty==null?null:APP.custCty,"data-custcty","Filter customers by county")}
@@ -2621,7 +2633,8 @@ function garageHTML(c){
 function custEditHTML(c){
   const f=(k,label,extra="",full=false)=>`<label${full?' class="full"':""}>${label}<input id="ce-${k}" value="${esc(c[k]||"")}" ${extra}></label>`;
   return `<div class="form cust-edit" style="margin:10px 0 0">
-    <p class="formh">Edit customer</p>
+    <p class="formh">${CUST_NEW===c?"New customer":"Edit customer"}</p>
+    ${CUST_NEW===c&&HAS_PICKER?`<div class="full"><button class="mini" type="button" data-act="custpick">📱 Fill from my phone contacts</button></div>`:""}
     ${f("name","Name",'autocomplete="off"')}${f("phone","Phone",'inputmode="tel" autocomplete="off"')}
     ${f("email","Email",'inputmode="email" autocomplete="off"')}${f("dist","Distance (miles)",'inputmode="decimal"')}
     ${f("location","Address",'autocomplete="off"',true)}
@@ -2634,16 +2647,16 @@ function custEditHTML(c){
       <p class="help" style="margin:0">Use the customer name above for the company. Give each vehicle a unit number in the garage.</p>
     </div>
     <label class="full">Notes<textarea id="ce-notes" rows="3" placeholder="Gate code, preferred times, billing contact">${esc(c.notes||"")}</textarea></label>
-    <p class="help full" style="margin:0">Changes also update this customer's upcoming jobs. Finished invoices stay as they were.</p>
-    <div class="formacts full"><button class="btn primary" type="button" data-csave="${c.id}">Save changes</button><button class="btn" type="button" data-ccancel="1">Cancel</button></div>
-    <div class="formacts full"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>
+    ${CUST_NEW===c?"":`<p class="help full" style="margin:0">Changes also update this customer's upcoming jobs. Finished invoices stay as they were.</p>`}
+    <div class="formacts full"><button class="btn primary" type="button" data-csave="${c.id}">${CUST_NEW===c?"Add customer":"Save changes"}</button><button class="btn" type="button" data-ccancel="1">Cancel</button></div>
+    ${CUST_NEW===c?"":`<div class="formacts full"><button class="mini del" type="button" data-cdel="${c.id}">${CUST_DEL===c.id?"Tap again to remove":"Remove customer"}</button></div>`}
   </div>`;
 }
 function custDetailHTML(c,js){
   if(CUST_EDIT===c.id)return `<div class="cust-body">${custEditHTML(c)}</div>`;
   const info=[c.fleet&&["Account","Fleet"+(c.terms?" · "+TERMS.find(t=>t[0]===c.terms)[1]:"")+(c.poReq?" · PO required":"")],c.fleet&&c.contact&&["Contact",c.contact],c.phone&&["Phone",c.phone],c.email&&["Email",c.email],c.location&&["Address",c.location],c.dist&&["Distance",c.dist+" mi"],c.notes&&["Notes",c.notes]].filter(Boolean);
   return `<div class="cust-body">
-    <div class="acts"><button class="mini go" type="button" data-cedit="${c.id}">Edit info</button>${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.email?`<a class="mini" href="mailto:${esc(c.email)}">Email</a>`:""}${c.location?dirLink(c.location):""}</div>
+    <div class="acts"><button class="mini go" type="button" data-cedit="${c.id}">Edit info</button>${c.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(c.phone))}">Call</a><a class="mini" href="${esc(smsHref(c.phone,""))}">Text</a>`:""}${c.email?`<a class="mini" href="mailto:${esc(c.email)}">Email</a>`:""}${c.location?dirLink(c.location):""}${c.phone||c.email?`<button class="mini" type="button" data-vcard="${c.id}">📇 Save to phone</button>`:""}</div>
     ${info.length?`<dl class="cust-info">${info.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>`:`<p class="empty">No phone, email or address yet. Tap Edit info to add them.</p>`}
     ${garageHTML(c)}
     ${js.length?`<div class="group-h" style="margin-top:12px">Past jobs</div>${js.map(j=>`<button type="button" class="hist-row" data-open="${j.id}">
@@ -5260,7 +5273,25 @@ document.addEventListener("click",e=>{
     if(v){c.vehicles=c.vehicles.filter(x=>x!==v);c.vehHidden=[...new Set([...(c.vehHidden||[]),v.key,...(v.alias||[])])];}
     VEH_EDIT=null;VEH_DEL=null;save();relist();toast("Vehicle removed from garage");return;}
   if(d.cedit){CUST_EDIT=d.cedit;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");setTimeout(()=>document.getElementById("ce-name")?.focus(),50);return;}
+  if(d.ccancel&&CUST_NEW&&document.getElementById("custNew")?.contains(t)){CUST_NEW=null;rerenderKeep();return;}
+  if((d.cedit||d.copen)&&CUST_NEW){CUST_NEW=null;document.getElementById("custNew")?.remove();}
   if(d.ccancel){CUST_EDIT=null;CUST_DEL=null;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
+  if(d.act==="custnew"){CUST_NEW={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:"",from:"manual"};CUST_EDIT=null;rerenderKeep();
+    document.getElementById("custNew")?.scrollIntoView({block:"start"});setTimeout(()=>document.getElementById("ce-name")?.focus(),60);return;}
+  if(d.act==="custpick"){(async()=>{try{const r=await navigator.contacts.select(["name","tel","email","address"],{multiple:false});const x=r&&r[0];if(!x)return;
+      const set=(k,v)=>{const el=document.getElementById("ce-"+k);if(el&&v)el.value=v;};set("name",(x.name||[])[0]);set("phone",(x.tel||[])[0]);set("email",(x.email||[])[0]);
+      const a=(x.address||[])[0];if(a)set("location",[(a.addressLine||[]).join(" "),a.city,[a.region,a.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", "));}catch(e){toast("Couldn't open your contacts");}})();return;}
+  if(d.vcard){const c=(APP.customers||[]).find(x=>x.id===d.vcard);if(c)saveVcard(c);return;}
+  if(d.csave&&CUST_NEW&&d.csave===CUST_NEW.id){const val=k=>(document.getElementById("ce-"+k)?.value||"").trim(),c=CUST_NEW;
+    const nv={name:val("name"),phone:val("phone"),email:val("email"),dist:val("dist"),location:val("location"),notes:document.getElementById("ce-notes")?.value||"",
+      fleet:!!document.getElementById("ce-fleet")?.checked,contact:val("contact"),terms:document.getElementById("ce-terms")?.value||"",poReq:!!document.getElementById("ce-poreq")?.checked};
+    if(!nv.name){toast("Add a name for this customer");document.getElementById("ce-name")?.focus();return;}
+    const ex=findCustomer({customer:nv.name,phone:nv.phone});
+    if(ex&&!ex.hidden){CUST_NEW=null;CUST_OPEN=ex.id;rerenderKeep();toast(`${ex.name} is already in your customers`);document.querySelector(`[data-copen="${ex.id}"]`)?.scrollIntoView({block:"center"});return;}
+    if(ex&&ex.hidden){ex.hidden=false;Object.keys(nv).forEach(k=>{if(nv[k])ex[k]=nv[k];});ex.lock={...(ex.lock||{}),name:true,phone:true,email:true,location:true};CUST_NEW=null;CUST_OPEN=ex.id;save();rerenderKeep();toast("Customer added");return;}
+    Object.assign(c,nv);c.lock={name:true,phone:true,email:true,location:true,dist:!!nv.dist};{const cty=val("county");if(cty){c.county=cty;c.countyFor=nv.location;}}
+    delete c.from;APP.customers=APP.customers||[];APP.customers.push(c);CUST_NEW=null;CUST_OPEN=c.id;APP.custL="";save();rerenderKeep();
+    document.querySelector(`[data-copen="${c.id}"]`)?.scrollIntoView({block:"center"});toast("Customer added");if(nv.location&&!c.county)setTimeout(()=>countyFill(5),300);return;}
   if(d.csave){const c=APP.customers.find(x=>x.id===d.csave);if(!c)return;
     const val=k=>(document.getElementById("ce-"+k)?.value||"").trim();
     const nv={name:val("name"),phone:val("phone"),email:val("email"),dist:val("dist"),location:val("location"),notes:document.getElementById("ce-notes")?.value||"",

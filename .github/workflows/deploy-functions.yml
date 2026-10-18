@@ -23,3 +23,5 @@ jobs:
         run: supabase functions deploy stripe-webhook --project-ref "$PROJECT" --no-verify-jwt --use-api
       - name: Deploy notify
         run: supabase functions deploy notify --project-ref "$PROJECT" --no-verify-jwt --use-api
+      - name: Deploy intake
+        run: supabase functions deploy intake --project-ref "$PROJECT" --no-verify-jwt --use-api

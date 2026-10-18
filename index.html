@@ -600,6 +600,10 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.src-tag{background:var(--accent-soft,#e8eefb)}.req-notice{border-color:#e0a100;background:rgba(224,161,0,.08)}.req-code{font-size:26px;font-weight:800;letter-spacing:.12em;margin:4px 0 8px}
+.req-filt{margin-top:16px}.req-filt summary{cursor:pointer;font-weight:700;padding:8px 0;color:var(--muted)}.req-f{opacity:.85}.req-raw{font-size:13px;white-space:pre-wrap;color:var(--muted);margin:4px 0}
+.intake-box{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.intake-box .lbl{grid-column:1/-1;margin:0}
+.intake-val{font-size:12.5px;word-break:break-all}.intake-how summary{cursor:pointer;font-weight:600;font-size:14px;padding:4px 0}.intake-how ol{margin:6px 0 0;padding-left:20px}.intake-how li{margin:4px 0}
 .fleet-box[hidden]{display:none!important}
 .tools-n{font-weight:600;font-size:12px;color:var(--muted);margin-left:6px}
 .tools-for{display:flex;flex-wrap:wrap;gap:6px;grid-column:1/-1}.tools-tag{display:inline-flex;align-items:center;gap:4px;background:var(--accent-soft,#e8eefb);border-radius:999px;padding:3px 4px 3px 10px;font-size:13px;font-weight:600}
@@ -1290,7 +1294,7 @@ async function syncNow(full){
           continue;}
         const c=applyRemote(r);changed+=c;if(r.deleted)BASE.del(k);else BASE.put(k,r.data);if(k in lh||r.deleted)delete lh[k];}
       saveMeta();if(rows.length<500)break;}
-    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();if(lockInvoices())changed++;}
+    if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();if(lockInvoices())changed++;if(parseIncoming())changed++;}
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
     now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
@@ -1511,6 +1515,37 @@ const zStat=(s,v)=>{s=String(s||"").toLowerCase().replace(/[^a-z]/g,"");
   if(/partial/.test(s))return v&&v.hasBal&&v.balance<=0.005&&v.total>0?"paid":"partial";
   if(/^(paid|closed)$/.test(s)||(/paid/.test(s)&&!/unpaid/.test(s)))return "paid";
   if(v&&v.hasBal&&v.balance<=0.005&&v.total>0)return "paid";return "open";};
+// ---- automatic requests: each shop's private form link and forwarding address ----
+const INTAKE_DOMAIN="in.honestechmobileapp.com";
+let INTAKE={key:"",busy:false,err:"",renew:false,tried:false};
+async function loadIntake(renew){if(!AUTH||isTech())return;INTAKE.busy=true;INTAKE.err="";rerenderKeep();
+  try{if(!AUTH.shop_id){const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=shop;saveAuth();}
+    const k=await supa("/rest/v1/rpc/intake_key",{method:"POST",body:{p_shop:AUTH.shop_id,p_new:!!renew}});INTAKE.key=String(k||"").replace(/"/g,"");}
+  catch(e){const m=(e&&e.msg)||"";INTAKE.err=/intake_key|function|404|PGRST202/i.test(m)?"Automatic requests aren't switched on for this account yet.":(m||"Couldn't load your link. Check your connection.");}
+  INTAKE.busy=false;INTAKE.tried=true;INTAKE.renew=false;rerenderKeep();}
+const intakeURL=()=>`${SUPA_URL}/functions/v1/intake?k=${INTAKE.key}`,intakeEmail=()=>`r-${INTAKE.key}@${INTAKE_DOMAIN}`;
+function intakeCardHTML(){
+  if(!AUTH)return "";if(!INTAKE.tried&&!INTAKE.busy)setTimeout(()=>loadIntake(),0);
+  const k=INTAKE.key;
+  return `<div class="form" id="intakeSet"><p class="formh">📨 Get requests automatically</p>
+    <p class="help full" style="margin:0">Website forms and request emails can land in <strong>Requests</strong> by themselves, already filled in, with a notification. Ones with no phone or email (spam calls, "Not provided") go to a Filtered list instead.</p>
+    ${INTAKE.err?`<p class="vin-warn full">${esc(INTAKE.err)}</p>`:""}
+    ${!k?`<p class="help full">${INTAKE.busy?"Loading your private link…":""}</p>${INTAKE.busy?"":`<div class="full"><button class="mini" type="button" data-act="intakeload">Try again</button></div>`}`:`
+    <div class="full intake-box"><div class="lbl">Your forwarding email</div><div class="intake-val mono">${esc(intakeEmail())}</div><button class="mini go" type="button" data-copytxt="${esc(intakeEmail())}">Copy</button></div>
+    <details class="full intake-how"><summary>Forward request emails (Gmail, Outlook, answering service)</summary><ol class="help">
+      <li>On a computer, open Gmail → ⚙️ <strong>See all settings</strong> → <strong>Forwarding and POP/IMAP</strong> → <strong>Add a forwarding address</strong>, and paste the address above.</li>
+      <li>Gmail sends a confirmation code to it. The code shows up at the top of <strong>Requests</strong> here. Copy it into Gmail and tap <strong>Verify</strong>.</li>
+      <li>Make a filter for the emails you want (for example <em>Subject</em>: NEW SERVICE REQUEST, or <em>From</em>: your answering service) → <strong>Create filter</strong> → check <strong>Forward it to</strong> and pick the address.</li>
+      <li>Outlook: Settings → Mail → Rules → Add new rule → <strong>Forward to</strong> the address.</li></ol></details>
+    <div class="full intake-box"><div class="lbl">Your website form link</div><div class="intake-val mono">${esc(intakeURL())}</div><button class="mini go" type="button" data-copytxt="${esc(intakeURL())}">Copy</button></div>
+    <details class="full intake-how"><summary>Connect a website form (Netlify, Jotform, Wix, Zapier…)</summary><ol class="help">
+      <li><strong>Netlify:</strong> open your site → <strong>Project configuration</strong> → <strong>Notifications</strong> → <strong>Emails and webhooks</strong> → under Form submission notifications, <strong>Add notification</strong> → <strong>HTTP POST request</strong>.</li>
+      <li>Event: <strong>New form submission</strong>. URL to notify: paste the link above. Save.</li>
+      <li>Other form tools: look for <strong>Webhook</strong> in the form's settings and paste the same link.</li>
+      <li>Send yourself a test from your website. It should show up in Requests within a minute.</li></ol></details>
+    <p class="help full" style="margin:0">Keep these private. Anyone with them can send requests to your app. If one gets out, make new ones (the old ones stop working, so update Netlify and Gmail).</p>
+    <div class="full"><button class="mini del" type="button" data-act="intakenew">${INTAKE.renew?"Tap again to make new ones":"Make a new link and address"}</button></div>`}
+  </div>`;}
 let IMP=null;
 function importCardHTML(){
   const I=IMP||{};const files=I.files||[];
@@ -1732,7 +1767,7 @@ function jobCostHTML(){
 }
 
 /* ================= requests inbox (quote / appointment requests from email) ================= */
-let REQ_PASTE=null,REQ_EDIT=null,REQ_NO=null;
+let REQ_PASTE=null,REQ_EDIT=null,REQ_NO=null,REQ_BLOCK=null,REQ_FILT_OPEN=false,REQ_FILT_CLR=false;
 const MONTHS=["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
 const WDAYS=["sun","mon","tue","wed","thu","fri","sat"];
 function parseDateLoose(str){
@@ -1757,7 +1792,19 @@ function parseTimeLoose(str){
 /* Form emails that arrive as a two-column table (Name | Value): when copied, each cell lands on its own line
    or the columns are split by tabs. Turn them into "Label: value" lines the parser understands. */
 const REQ_KEYS=new Set(["company","company name","business","business name","name","full name","your name","first name","last name","customer","customer name","contact name","phone","phone number","cell","mobile","email","email address","e-mail","address","street","street address","service address","address line 1","address line 2","city","town","state","zip","zip code","zipcode","postal code","vehicle","car","year","make","model","trim","vin","mileage","miles","service","services","service needed","service requested","details","message","comments","notes","description","additional info","preferred date","preferred time","date","time","best time","source","how did you hear about us","how did you find us","terms agreed","agree","consent"]);
-const normKey=k=>String(k||"").toLowerCase().replace(/[_]+/g," ").replace(/\s+/g," ").replace(/[:：]\s*$/,"").trim();
+const normKey=k=>String(k||"").toLowerCase().replace(/[_]+/g," ").replace(/\s*\([^)]*\)\s*/g," ").replace(/\s*\*\s*/g," ").replace(/\s+/g," ").replace(/[:：]\s*$/,"").trim();
+const NOTGIVEN=/^\s*(not provided|n\/?a|none( reported| given)?|unknown|not (given|available|sure)|-+|\.+)?\s*$/i;
+// "Full Name *:" → "Full Name:", and ALL-CAPS section headings with the answer underneath ("LOCATION" / "Howell, NJ") → "LOCATION: Howell, NJ"
+function headsToLabels(text){
+  const ls=text.split("\n").map(l=>l.replace(/^(\s*[^:\n]{1,60}?)\s*\*\s*:/,"$1:"));const isLbl=l=>/^\s*[A-Za-z][^:]{0,45}:\s*/.test(l);
+  const isHead=l=>{const t=l.trim();return t.length>2&&t.length<45&&!/[:a-z]/.test(t)&&/[A-Z]{3}/.test(t)&&!/\d{3}/.test(t);};
+  const out=[];
+  for(let i=0;i<ls.length;i++){
+    if(isHead(ls[i])&&ls[i+1]&&ls[i+1].trim()&&!isLbl(ls[i+1])&&!isHead(ls[i+1])){
+      const val=[];let j=i+1;for(;j<ls.length&&ls[j].trim()&&!isLbl(ls[j])&&!isHead(ls[j]);j++)val.push(ls[j].trim());
+      out.push(`${ls[i].trim()}: ${val.join(" ")}`);i=j-1;continue;}
+    out.push(ls[i]);}
+  return out.join("\n");}
 function tableToLabels(text){
   let ls=text.split("\n");
   if(ls.filter(l=>/\t/.test(l)).length>=3){   // tab-separated rows: "phone<TAB>7325004259"
@@ -1777,13 +1824,13 @@ function tableToLabels(text){
     i=j-1;}
   return out.join("\n");}
 function parseRequest(raw){
-  const text=tableToLabels(String(raw||"").replace(/\r/g,"").replace(/ /g," "));
+  const text=headsToLabels(tableToLabels(String(raw||"").replace(/\r/g,"").replace(/ /g," ")));
   const lines=text.split("\n").map(l=>l.replace(/^[>*\-•\s]+/,"").trim());
-  const LBL=/^([A-Za-z][A-Za-z_ /&()'-]{1,40}?)\s*[:：]\s*(.*)$/;
+  const LBL=/^([A-Za-z][A-Za-z_ /&()'*-]{1,45}?)\s*[:：]\s*(.*)$/;
   const fields=[];lines.forEach((l,i)=>{const m=l.match(LBL);if(m&&!/^https?$/i.test(m[1]))fields.push({k:normKey(m[1]),v:m[2].trim(),i});});
   const get=(re,multi)=>{const f=fields.find(x=>re.test(x.k));if(!f)return "";let v=f.v;
     if(multi||!v){const out=[v];for(let j=f.i+1;j<lines.length;j++){const l=lines[j];if(LBL.test(l)&&fields.some(x=>x.i===j))break;if(!l&&out.join("").trim()&&!multi)break;out.push(l);}v=out.join("\n").replace(/\n{3,}/g,"\n\n").trim();}
-    return v;};
+    return NOTGIVEN.test(v)?"":v;};
   const r={customer:"",phone:"",email:"",location:"",year:"",make:"",model:"",trim:"",vin:"",work:"",date:"",time:"",type:"service",notes:""};
   let first=get(/^(first name|first)$/),last=get(/^(last name|last|surname)$/);
   r.customer=get(/^(full name|name|your name|customer|customer name|contact name|client)$/)||[first,last].filter(Boolean).join(" ");
@@ -1793,13 +1840,13 @@ function parseRequest(raw){
   const addr=get(/^(address|street|street address|service address|location|where|your address|vehicle location|address line 1)$/),city=get(/^(city|town)$/),st=get(/^(state)$/),zip=get(/^(zip|zip code|postal code|zipcode)$/);
   r.location=[addr,city,[st,zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const yr=get(/^(year|vehicle year)$/),mk=get(/^(make|vehicle make)$/),md=get(/^(model|vehicle model)$/);
-  let veh=get(/(vehicle|car|year.?make.?model|ymm|truck)/);
+  let veh=get(/(^vehicle$|^car$|year\W*make|ymm|truck|^vehicle (info|information|details))/);
   if(yr||mk||md){r.year=(yr.match(/(19|20)\d\d/)||[""])[0];r.make=mk;r.model=md;}
   else{const src=veh||text;const m=src.match(/\b((?:19[6-9]|20[0-3])\d)\s+([A-Za-z][A-Za-z-]+)\s+([A-Za-z0-9][\w-]*(?:\s+[A-Za-z0-9][\w-]*)?)/);
     if(m){r.year=m[1];r.make=titleMake(m[2]);r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was|makes?|keeps?|won'?t|will|does|doesn'?t|sometimes|when|runs?|shakes?|squeaks?|leaks?)$/i,"");}}
   const vin=text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/);if(vin&&/\d/.test(vin[0])&&/[A-Z]/.test(vin[0]))r.vin=vin[0];
-  r.work=get(/^(service|services|service needed|service requested|services needed|what do you need|request|issue|problem|concern|repair|repairs|work needed|type of service|reason)/,false)||"";
-  const msg=get(/^(message|comments?|details|description|notes|additional info|additional information|tell us more|your message|question)/,true);
+  r.work=get(/^(service|services|service needed|service requested|services needed|what do you need|request|issue|problem|concern|repair|repairs|work needed|type of service|reason|choose a service|select a service|service type)/,false)||"";
+  const msg=get(/^(message|comments?|details|description|describe|notes|additional info|additional information|additional notes|tell us more|your message|question)/,true);
   if(!r.work&&msg)r.work=msg.split(/\n/)[0].slice(0,140);
   if(msg&&msg!==r.work)r.notes=msg;
   {const co=get(/^(company|company name|business|business name)$/),src=get(/^(source|how did you hear about us|how did you find us|referral)$/);
@@ -1816,8 +1863,17 @@ function parseRequest(raw){
   if(!r.customer){const m=text.match(/\bmy name is ([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/)||text.match(/(?:thanks|thank you|regards|best|sincerely|cheers)[,!.]?\s*(?:\n\s*)?[-–]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/i)||text.match(/\n\s*[-–]\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/);if(m)r.customer=m[1];}
   {const pv=get(/^(quote|quoted price|price|agreed price|agreed|quote amount|estimate|total)$/);const m=pv.match(/\$?\s*(\d[\d,]*(?:\.\d{1,2})?)/);if(m)r.agreed=m[1].replace(/,/g,"");}
   if(r.type==="ppi"&&!r.work)r.work="Pre-purchase inspection";
+  {const extra=[["Engine",/^engine$/],["Drivable",/drivable|driveable|can it be driven/],["Warning lights",/warning light|dash light/],["Customer parts",/customer.?supplied parts|own parts|parts provided/],["Wants",/requested date|preferred date|requested time/]]
+    .map(([l,re])=>{const v=get(re);return v&&!(l==="Wants"&&r.date)?`${l}: ${v}`:"";}).filter(Boolean);
+    if(extra.length)r.notes=[r.notes,...extra].filter(Boolean).join("\n");}
+  Object.keys(r).forEach(k=>{if(typeof r[k]==="string"&&NOTGIVEN.test(r[k]))r[k]="";});
+  if(r.customer&&!/[a-z]/i.test(r.customer))r.customer="";
   return r;
 }
+// requests that arrived by themselves (website form / forwarded email): read them once, on this phone
+function parseIncoming(){let n=0;(APP.requests||[]).forEach(r=>{if(r.auto&&!r.parsed&&!r.notice&&r.raw){const p=parseRequest(r.raw);
+    Object.keys(p).forEach(k=>{if(p[k]&&!r[k])r[k]=p[k];});r.parsed=true;n++;}});return n;}
+const reqLive=r=>!r.filtered&&!r.notice;
 function dayLoad(d){return APP.jobs.filter(j=>j.info.date===d).sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));}
 function availHTML(rq){
   const d=rq.date||TODAY,start=d<TODAY?TODAY:d,days=[...Array(7)].map((_,k)=>addDays(start,k-(start>TODAY?1:0))).filter(x=>x>=TODAY).slice(0,7);
@@ -1853,11 +1909,13 @@ function declineText(rq,why){
   return `Hi ${first}, thanks for reaching out to ${bizName()} about ${what}. Unfortunately ${reasons[why]||reasons.booked}${other?` I do have an opening on ${fmtDate(other,{weekday:"long",month:"short",day:"numeric"})} if that works for you.`:why==="booked"?"":" I'm sorry I can't help with this one."}${st.owner?"\n\n"+st.owner:""}${st.phone?"\n"+st.phone:""}`;
 }
 function renderRequests(){
-  const rs=[...APP.requests].sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1)||(b.at||0)-(a.at||0));
+  parseIncoming();
+  const rs=[...APP.requests].filter(reqLive).sort((a,b)=>(a.status==="new"?0:1)-(b.status==="new"?0:1)||(b.at||0)-(a.at||0));
+  const filt=APP.requests.filter(r=>r.filtered&&!r.notice).sort((a,b)=>(b.at||0)-(a.at||0)),notes=APP.requests.filter(r=>r.notice);
   const nNew=rs.filter(r=>r.status==="new").length;
   const card=r=>{
     const no=REQ_NO&&REQ_NO.id===r.id;
-    return `<div class="req${r.status==="new"?" is-new":""}"><div class="req-top"><strong>${esc(r.customer||"No name")}</strong><span class="st req-${r.status}">${REQ_ST[r.status]||"New"}</span><span class="tag">${r.type==="ppi"?"PPI":"Service"}</span></div>
+    return `<div class="req${r.status==="new"?" is-new":""}"><div class="req-top"><strong>${esc(r.customer||"No name")}</strong><span class="st req-${r.status}">${REQ_ST[r.status]||"New"}</span><span class="tag">${r.type==="ppi"?"PPI":"Service"}</span>${r.source==="website"?`<span class="tag src-tag">🌐 Website</span>`:r.source==="email"?`<span class="tag src-tag">✉️ Email</span>`:""}</div>
       <div class="meta">${esc([[r.year,r.make,r.model].filter(Boolean).join(" "),r.work].filter(Boolean).join(" · ")||"No details")}${num(r.agreed)?` · <strong>Agreed ${money(r.agreed)}</strong>`:""}</div>
       <div class="meta">${r.date?`Wants ${esc(fmtDate(r.date,{weekday:"short",month:"short",day:"numeric"}))}${r.time?" "+esc(fmtTime(r.time)):""} · ${dayLoad(r.date).length?dayLoad(r.date).length+" job"+(dayLoad(r.date).length===1?"":"s")+" that day":"day is open"}`:"No date asked for"}${r.phone?` · ${esc(r.phone)}`:""}</div>
       <div class="meta req-age">Received ${esc(fmtDate(isoDay(new Date(r.at||Date.now())),{month:"short",day:"numeric"}))}${r.jobId&&APP.jobs.some(j=>j.id===r.jobId)?` · <button class="linkish" type="button" data-open="${r.jobId}">Open job</button>`:""}</div>
@@ -1865,7 +1923,7 @@ function renderRequests(){
         <textarea id="reqNoText" data-reqnotext="1" rows="4">${esc(REQ_NO.text)}</textarea>
         <div class="acts">${r.phone&&CAN_CAL?`<a class="mini go" href="${esc(smsHref(r.phone,REQ_NO.text))}" data-reqdecl="${r.id}">💬 Text</a>`:""}${r.email?`<a class="mini${r.phone&&CAN_CAL?"":" go"}" href="mailto:${esc(r.email)}?subject=${encodeURIComponent("Your request with "+bizName())}&body=${encodeURIComponent(REQ_NO.text)}" data-reqdecl="${r.id}">✉️ Email</a>`:""}<button class="mini" type="button" data-reqdeclonly="${r.id}">Just mark declined</button><button class="mini" type="button" data-act="reqnoclose">Cancel</button></div></div>`
       :`<div class="acts">${r.status==="new"?`<button class="mini go" type="button" data-reqbook="${r.id}">Book it</button>${r.type!=="ppi"?`<button class="mini" type="button" data-reqquote="${r.id}">Send a quote</button>`:""}<button class="mini" type="button" data-reqno="${r.id}">Can't do it</button>`:""}
-        ${r.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(r.phone))}">Call</a>`:""}<button class="mini" type="button" data-reqedit="${r.id}">Review</button><button class="mini del" type="button" data-reqdel="${r.id}">Delete</button></div>`}
+        ${r.phone&&CAN_CAL?`<a class="mini" href="tel:${esc(digits(r.phone))}">Call</a>`:""}<button class="mini" type="button" data-reqedit="${r.id}">Review</button>${r.phone?`<button class="mini del" type="button" data-reqblock="${r.id}">${REQ_BLOCK===r.id?"Tap again to block":"Block number"}</button>`:""}<button class="mini del" type="button" data-reqdel="${r.id}">Delete</button></div>`}
     </div>`;};
   return `${sampleBanner()}
   <div class="stage-head dash-head"><div><div class="eyebrow">Quote &amp; appointment requests</div><h2>Requests</h2></div>
@@ -1874,9 +1932,18 @@ function renderRequests(){
     <p class="help full" style="margin:0">Open the email, press and hold the text, <strong>Select All</strong>, <strong>Copy</strong>, then paste it here. The app picks out the name, phone, car, work and day.</p>
     <label class="full"><textarea id="reqRaw" rows="8" placeholder="Paste the email here">${esc(REQ_PASTE.raw||"")}</textarea></label>
     <div class="formacts full"><button class="btn primary" type="button" data-act="reqread">Read it</button>${navigator.clipboard&&navigator.clipboard.readText?`<button class="btn" type="button" data-act="reqclip">Paste from clipboard</button>`:""}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div></div>`:""}
+  ${notes.map(r=>`<div class="req req-notice"><strong>📧 Gmail sent a forwarding confirmation code</strong>
+    <p class="help" style="margin:4px 0 8px">Enter this code in Gmail's forwarding settings, or tap the link to confirm.</p>
+    ${r.code?`<div class="req-code mono">${esc(r.code)}</div>`:""}
+    <div class="acts">${r.code?`<button class="mini go" type="button" data-copytxt="${esc(r.code)}">Copy code</button>`:""}${r.link?`<a class="mini" href="${esc(r.link)}" target="_blank" rel="noopener">Open confirm link</a>`:""}<button class="mini" type="button" data-reqdel="${r.id}">Done</button></div></div>`).join("")}
   ${REQ_EDIT?reqForm(REQ_EDIT):""}
   ${rs.length?`<p class="when" style="margin:0 0 8px">${nNew} new · ${rs.length} total</p><div class="req-list">${rs.map(card).join("")}</div>`
-    :REQ_PASTE||REQ_EDIT?"":`<div class="emptybox">No requests yet. When a quote or appointment request comes in by email, copy it and tap <strong>📥 Paste request</strong>.</div>`}`;
+    :REQ_PASTE||REQ_EDIT?"":`<div class="emptybox">No requests yet. When a quote or appointment request comes in by email, copy it and tap <strong>📥 Paste request</strong>.${isTech()?"":` Or set up <button class="linkish" type="button" data-gointake="1">automatic requests</button> so they show up here by themselves.`}</div>`}
+  ${filt.length?`<details class="req-filt" ${REQ_FILT_OPEN?"open":""}><summary data-reqfilt="1">🚫 Filtered (${filt.length}) · no phone or email, or a blocked number</summary>
+    ${filt.map(r=>`<div class="req req-f"><div class="meta">${esc(fmtDate(isoDay(new Date(r.at||Date.now())),{month:"short",day:"numeric"}))} · ${r.filtered==="blocked"?"Blocked number":"No phone or email"}${r.source?" · "+(r.source==="website"?"Website":"Email"):""}</div>
+      <div class="req-raw">${esc(String(r.raw||"").replace(/\n{2,}/g,"\n").slice(0,220))}</div>
+      <div class="acts"><button class="mini" type="button" data-reqok="${r.id}">Not spam</button><button class="mini del" type="button" data-reqdel="${r.id}">Delete</button></div></div>`).join("")}
+    <div class="acts"><button class="mini del" type="button" data-act="reqfiltclear">${REQ_FILT_CLR?"Tap again to delete all":"Delete all filtered"}</button></div></details>`:""}`;
 }
 function reqToDraft(r){
   startAdd(null);Object.assign(APP.draft,{type:r.type==="ppi"?"ppi":"service",work:r.type==="ppi"?"":r.work||"",customer:r.customer||"",phone:r.phone||"",location:r.location||"",
@@ -2186,7 +2253,7 @@ function renderDash(){
   </div>
   ${trialBannerHTML()}
   <div class="dash-grid">
-  ${APP.requests.some(r=>r.status==="new")?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new").length} new request${APP.requests.filter(r=>r.status==="new").length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
+  ${APP.requests.some(r=>r.status==="new"&&reqLive(r))?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new request${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
   <div class="dash-card">
     <div class="dc-h"><h3>Billed by month</h3><span class="ts" id="barCap">${esc(fmtDate(mVals[5].m+"-01",{month:"long"}))}: ${money(mVals[5].v)} · ${mVals[5].n} job${mVals[5].n===1?"":"s"}</span></div>
     ${barChart(mVals)}
@@ -2992,7 +3059,7 @@ function renderJobs(){
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true):""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new")?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new").length?` (${APP.requests.filter(r=>r.status==="new").length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   ${countyChipsHTML(countyCounts(APP.jobs.filter(j=>isOpenJob(j)||jDate(j)>=addDays(TODAY,-90)),jobCounty),ctyF,"data-ctyf","Filter jobs by county")}
@@ -3401,6 +3468,7 @@ function renderSettings(){
   ${menuSettingsHTML()}
   ${themeSectionHTML()}
   ${renderChecklistSettings()}
+  ${isTech()?"":intakeCardHTML()}
   ${isTech()?"":importCardHTML()}
   <div class="form" id="backup">
     <p class="formh">Backup &amp; restore</p>
@@ -4807,9 +4875,10 @@ function afterAssign(j,prev,changedDetails){
 }
 // Deep link from a notification: ?job=ID
 let OPEN_JOB=null;
-(()=>{const m=/[?&]job=([^&]+)/.exec(location.search);if(m){OPEN_JOB=decodeURIComponent(m[1]);history.replaceState(null,"",location.pathname);}})();
-function tryOpenJob(){if(!OPEN_JOB)return;const j=APP.jobs.find(x=>String(x.id)===OPEN_JOB);if(j){OPEN_JOB=null;openJob(j.id);}}
-if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type==="open"&&d.url){const m=/[?&]job=([^&]+)/.exec(d.url);if(m){OPEN_JOB=decodeURIComponent(m[1]);tryOpenJob();if(OPEN_JOB&&AUTH)syncNow().then(tryOpenJob);}}});
+(()=>{const m=/[?&]job=([^&]+)/.exec(location.search);if(m){OPEN_JOB=decodeURIComponent(m[1]);history.replaceState(null,"",location.pathname);}
+  if(/[?&]view=requests\b/.test(location.search)){OPEN_JOB="@requests";history.replaceState(null,"",location.pathname);}})();
+function tryOpenJob(){if(!OPEN_JOB)return;if(OPEN_JOB==="@requests"){if(!AUTH||isTech())return;OPEN_JOB=null;APP.view="requests";render();window.scrollTo(0,0);return;}const j=APP.jobs.find(x=>String(x.id)===OPEN_JOB);if(j){OPEN_JOB=null;openJob(j.id);}}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type==="open"&&d.url&&/[?&]view=requests\b/.test(d.url)){OPEN_JOB="@requests";if(AUTH)syncNow().then(tryOpenJob);return;}if(d.type==="open"&&d.url){const m=/[?&]job=([^&]+)/.exec(d.url);if(m){OPEN_JOB=decodeURIComponent(m[1]);tryOpenJob();if(OPEN_JOB&&AUTH)syncNow().then(tryOpenJob);}}});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("button");if(!b)return;const a=b.dataset.act;if(!/^push/.test(a||""))return;e.stopPropagation();
   if(a==="pushOn"){PUSH.busy=true;PUSH.msg="";rerenderKeep();enablePush().then(()=>{PUSH.busy=false;rerenderKeep();toast("Notifications are on");}).catch(err=>{PUSH.busy=false;PUSH.msg=(err&&err.msg)||"Couldn't turn on notifications";rerenderKeep();});return;}
   if(a==="pushOff"){disablePush().then(()=>{rerenderKeep();toast("Notifications are off");});return;}
@@ -4956,6 +5025,16 @@ document.addEventListener("click",e=>{
     save();rerenderKeep();return;}
   if(d.toolunpick&&S){const T=S.tools||(S.tools={}),k=d.toolunpick;T.pick=(T.pick||[]).filter(x=>x!==k);if(toolKeys(S).includes(k))T.unpick=[...(T.unpick||[]),k];save();rerenderKeep();return;}
   if(d.toolhide!==undefined&&S){const T=S.tools||(S.tools={}),t=d.toolhide;T.extra=(T.extra||[]).filter(x=>x!==t);if(toolItems(S).includes(t))T.hide=[...(T.hide||[]),t];save();rerenderKeep();return;}
+  if(d.act==="intakeload"){loadIntake();return;}
+  if(d.act==="intakenew"){if(!INTAKE.renew){INTAKE.renew=true;rerenderKeep();return;}loadIntake(true).then(()=>toast("New link and address made"));return;}
+  if(d.copytxt!==undefined){copyText(d.copytxt);toast("Copied");return;}
+  if(d.gointake){APP.view="settings";render();setTimeout(()=>document.getElementById("intakeSet")?.scrollIntoView({block:"start"}),60);return;}
+  if(d.reqblock){const r=APP.requests.find(x=>x.id===d.reqblock);if(!r)return;if(REQ_BLOCK!==r.id){REQ_BLOCK=r.id;rerenderKeep();return;}
+    const dg=digits(r.phone).replace(/^1(?=\d{10}$)/,"");APP.settings.blocked=[...new Set([...(APP.settings.blocked||[]),dg])];
+    APP.requests.forEach(x=>{if(x.phone&&digits(x.phone).replace(/^1(?=\d{10}$)/,"")===dg&&x.status==="new")x.filtered="blocked";});REQ_BLOCK=null;save();rerenderKeep();toast("Blocked. Requests from that number go to Filtered.");return;}
+  if(d.reqok){const r=APP.requests.find(x=>x.id===d.reqok);if(!r)return;if(r.filtered==="blocked"&&r.phone){const dg=digits(r.phone).replace(/^1(?=\d{10}$)/,"");APP.settings.blocked=(APP.settings.blocked||[]).filter(b=>b!==dg);}
+    delete r.filtered;save();rerenderKeep();toast("Moved to your requests");return;}
+  if(d.act==="reqfiltclear"){if(!REQ_FILT_CLR){REQ_FILT_CLR=true;REQ_FILT_OPEN=true;rerenderKeep();return;}APP.requests=APP.requests.filter(r=>!(r.filtered&&!r.notice));REQ_FILT_CLR=false;save();rerenderKeep();toast("Filtered requests deleted");return;}
   if(d.invdelask){INVDEL=d.invdelask;rerenderKeep();return;}
   if(d.act==="invdelno"){INVDEL=null;rerenderKeep();return;}
   if(d.dupdel){DUPDEL=d.dupdel;rerenderKeep();return;}
@@ -5160,6 +5239,7 @@ document.addEventListener("click",e=>{
     REQ_EDIT=null;save();if(d.act==="reqbook"){reqToDraft(r);render();window.scrollTo(0,0);return;}render();window.scrollTo(0,0);toast("Saved to your requests");return;}
   if(d.reqtype&&REQ_EDIT){REQ_EDIT.type=d.reqtype;if(d.reqtype==="ppi"&&!REQ_EDIT.work)REQ_EDIT.work="Pre-purchase inspection";rerenderKeep();return;}
   if(d.reqday&&REQ_EDIT){REQ_EDIT.date=d.reqday;rerenderKeep();return;}
+  if(d.reqfilt){REQ_FILT_OPEN=!t.closest("details").open;return;}
   if(d.reqedit){const r=APP.requests.find(x=>x.id===d.reqedit);if(r){REQ_EDIT={...r};REQ_PASTE=null;render();window.scrollTo(0,0);}return;}
   if(d.reqdel){APP.requests=APP.requests.filter(x=>x.id!==d.reqdel);save();rerenderKeep();toast("Request deleted");return;}
   if(d.reqbook){const r=APP.requests.find(x=>x.id===d.reqbook);if(r){reqToDraft(r);render();window.scrollTo(0,0);}return;}

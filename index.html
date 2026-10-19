@@ -29,8 +29,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html.has-bgimg{background:var(--bg)}
 html.has-bgimg body{background:transparent}
-html.has-bgimg body::before{content:"";position:fixed;inset:-12px;z-index:-2;background-position:center;background-size:cover;background-repeat:no-repeat;pointer-events:none}
-html.has-bgimg body::after{content:"";position:fixed;inset:0;z-index:-1;background:var(--bg);pointer-events:none}
+#bgLayer{position:fixed;inset:-12px;z-index:-2;background-position:center;background-size:cover;background-repeat:no-repeat;pointer-events:none;display:none}
+#bgShade{position:fixed;inset:0;z-index:-1;background:var(--bg);pointer-events:none;display:none}
+html.has-bgimg #bgLayer,html.has-bgimg #bgShade{display:block}
 .bgimg-row{display:flex;gap:12px;align-items:center}
 .bgimg-prev{flex:0 0 72px;height:96px;border-radius:10px;border:1px solid var(--line);background:var(--bg) center/cover no-repeat;display:grid;place-items:center;color:var(--muted);font-size:12px;text-align:center}
 .bgimg-acts{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
@@ -3368,12 +3369,17 @@ function applyTheme(){
   const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=getComputedStyle(root).getPropertyValue("--surface").trim()||"#15202b";
   applyBgImg(st);
 }
-let BG_LAST="";
-function applyBgImg(st){const img=st.bgImg||"",dim=st.bgDim==null||st.bgDim===""?50:num(st.bgDim),blur=!!st.bgBlur,key=img.length+"|"+img.slice(-40)+"|"+dim+"|"+blur;
-  if(key===BG_LAST)return;BG_LAST=key;const root=document.documentElement;
-  let el=document.getElementById("bgImgStyle");if(!el){el=document.createElement("style");el.id="bgImgStyle";document.head.appendChild(el);}
+// the background picture sits on two real elements (picture + fade). Real elements repaint reliably on iPhone when the picture changes;
+// a CSS ::before layer with a rewritten stylesheet sometimes kept showing the old picture (or nothing) until the second try.
+function applyBgImg(st){const img=st.bgImg||"",dim=st.bgDim==null||st.bgDim===""?50:num(st.bgDim),blur=!!st.bgBlur;
+  const root=document.documentElement;
+  let lay=document.getElementById("bgLayer"),shade=document.getElementById("bgShade");
+  if(!lay&&document.body){lay=document.createElement("div");lay.id="bgLayer";lay.setAttribute("aria-hidden","true");shade=document.createElement("div");shade.id="bgShade";shade.setAttribute("aria-hidden","true");document.body.prepend(shade);document.body.prepend(lay);}
   root.classList.toggle("has-bgimg",!!img);
-  el.textContent=img?`html.has-bgimg body::before{background-image:url("${img}");${blur?"filter:blur(6px);":""}}html.has-bgimg body::after{opacity:${Math.max(0,Math.min(90,dim))/100}}`:"";}
+  if(!lay)return;
+  if(lay._img!==img){lay._img=img;lay.style.backgroundImage=img?`url("${img}")`:"none";}
+  lay.style.filter=blur?"blur(6px)":"none";
+  shade.style.opacity=String(Math.max(0,Math.min(90,dim))/100);}
 async function loadBgImg(f){const im=await imgFromBlob(f);if(!im)return null;
   let max=1600,q=0.75,u="";for(let k=0;k<4;k++){u=drawTo(im,im.naturalWidth,im.naturalHeight,max).toDataURL("image/jpeg",q);if(u.length<450000)break;max=Math.round(max*0.8);q-=0.07;}
   return u;}

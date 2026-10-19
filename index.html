@@ -601,6 +601,9 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+@keyframes swL{from{transform:translateX(36px);opacity:.4}to{transform:none;opacity:1}}@keyframes swR{from{transform:translateX(-36px);opacity:.4}to{transform:none;opacity:1}}
+#main.sw-l{animation:swL .22s ease-out}#main.sw-r{animation:swR .22s ease-out}
+@media (prefers-reduced-motion:reduce){#main.sw-l,#main.sw-r{animation:none}}
 .src-tag{background:var(--accent-soft,#e8eefb)}.req-notice{border-color:#e0a100;background:rgba(224,161,0,.08)}.req-code{font-size:26px;font-weight:800;letter-spacing:.12em;margin:4px 0 8px}
 .req-filt{margin-top:16px}.req-filt summary{cursor:pointer;font-weight:700;padding:8px 0;color:var(--muted)}.req-f{opacity:.85}.req-raw{font-size:13px;white-space:pre-wrap;color:var(--muted);margin:4px 0}
 .intake-box{display:grid;grid-template-columns:1fr auto;gap:4px 8px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:8px 10px}.intake-box .lbl{grid-column:1/-1;margin:0}
@@ -5456,6 +5459,25 @@ function sugPick(val){
 }
 document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b){if(!(SUG_HOLD&&SUG_HOLD.touch))SUG_HOLD=null;return;}
   if(e.pointerType==="touch")return;SUG_HOLD={val:b.dataset.sugpick,x:e.clientX,y:e.clientY};if(e.pointerType==="mouse")e.preventDefault();},true);
+// ---- swipe left/right to move between the top tabs (Home, Schedule, Customers, Expenses, Settings) ----
+const SWIPE_VIEWS=["dash","jobs","customers","expenses","settings"];let SW=null;
+function swipeTabs(){return [...document.querySelectorAll(".tabs .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}
+function swipeBlocked(el){
+  for(let n=el;n&&n!==document.body;n=n.parentElement){
+    if(/^(INPUT|TEXTAREA|SELECT|CANVAS|VIDEO)$/.test(n.tagName)||n.isContentEditable||n.hasAttribute&&n.hasAttribute("data-noswipe"))return true;
+    if(n.scrollWidth>n.clientWidth+4){const ox=getComputedStyle(n).overflowX;if(ox==="auto"||ox==="scroll")return true;}}   // sideways-scrolling rows (letters, days, chips)
+  return false;}
+document.addEventListener("touchstart",e=>{SW=null;if(e.touches.length!==1)return;
+  if(!SWIPE_VIEWS.includes(APP.view)||APP.adding||APP.editing||document.querySelector(".viewer,.modal-open"))return;
+  const t=e.touches[0];if(t.clientX<22||t.clientX>innerWidth-22)return;          // leave the screen edges to the phone
+  if(swipeBlocked(e.target))return;SW={x:t.clientX,y:t.clientY,at:Date.now()};},{passive:true});
+document.addEventListener("touchmove",e=>{if(SW&&e.touches.length>1)SW=null;},{passive:true});
+document.addEventListener("touchend",e=>{const s0=SW;SW=null;if(!s0)return;const t=e.changedTouches[0],dx=t.clientX-s0.x,dy=t.clientY-s0.y;
+  if(Date.now()-s0.at>700||Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.8)return;
+  const sel=window.getSelection&&String(window.getSelection()||"");if(sel)return;
+  const tabs=swipeTabs(),i=tabs.findIndex(b=>b.dataset.nav===APP.view);if(i<0)return;const nx=tabs[i+(dx<0?1:-1)];if(!nx)return;
+  nx.click();const m=document.getElementById("main");if(m){m.classList.remove("sw-l","sw-r");void m.offsetWidth;m.classList.add(dx<0?"sw-l":"sw-r");setTimeout(()=>m.classList.remove("sw-l","sw-r"),300);}
+  nx.scrollIntoView({block:"nearest",inline:"center"});},{passive:true});
 document.addEventListener("touchstart",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b)return;const t=e.touches[0];
   SUG_HOLD={val:b.dataset.sugpick,x:t.clientX,y:t.clientY,touch:true};},{capture:true,passive:true});
 document.addEventListener("touchmove",e=>{const h=SUG_HOLD;if(!h||!h.touch)return;const t=e.touches[0];if(Math.abs(t.clientX-h.x)>12||Math.abs(t.clientY-h.y)>12)SUG_HOLD=null;},{capture:true,passive:true});

@@ -601,6 +601,10 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.svc-tabs{margin:10px 0 4px}.svc-tabs button{font-weight:700}
+.svc-grid.svc-one{grid-template-areas:"a b";grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media (max-width:899px){.svc-grid.svc-one{display:block}}
+.svc-bill{max-width:760px;margin:0 auto}
 @keyframes swL{from{transform:translateX(36px);opacity:.4}to{transform:none;opacity:1}}@keyframes swR{from{transform:translateX(-36px);opacity:.4}to{transform:none;opacity:1}}
 #main.sw-l{animation:swL .22s ease-out}#main.sw-r{animation:swR .22s ease-out}
 @media (prefers-reduced-motion:reduce){#main.sw-l,#main.sw-r{animation:none}}
@@ -3992,17 +3996,22 @@ function shareMedia(){
 }
 
 /* ================= service / repair job ================= */
+// service jobs open on two tabs: the work (Job) and the billing (Estimate / Invoice)
+let SVC_TAB={};
+const svcTab=j=>isTech()?"job":SVC_TAB[j.id]||(j.status==="done"?"bill":"job");
 function renderService(){
-  const mode=docMode(S);
+  const mode=docMode(S),tab=svcTab(S);
   if(mode==="inv")ensureInvoice();else{if(!S.invoice.lines)S.invoice.lines=[];if((S.invoice.lines||[]).length||S.est)ensureEst();}
   const i=S.info, inv=S.invoice, t=totals(S), st=APP.settings, vc=vinCheck(i.vin);
   const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="f-${id}" data-info="${id}" value="${esc(i[id])}" ${extra}></label>`;
   const ta=(id,label,ph,rows=2)=>`<label class="full">${label}<textarea id="f-${id}" data-info="${id}" rows="${rows}" placeholder="${ph}">${esc(i[id])}</textarea></label>`;
   return `${sampleBanner()}
   <div class="stage-head"><div class="eyebrow">Service / repair</div><h2>${esc(i.work||"Service job")}</h2>
-  <p class="when">Fill in the vehicle and the work, then build the estimate or invoice below.</p>
-  <div class="jump"><button class="mini" type="button" data-jump="docSeg">${docMode(S)==="est"?"Estimate":"Invoice"} ↓</button><button class="mini" type="button" data-jump="f-vin">VIN</button><button class="mini" type="button" data-jump="mediaForm">Photos</button></div></div>
-  <div class="svc-grid"><div class="svc-a">
+  ${isTech()?`<p class="when">Fill in the vehicle and the work.</p>`:`<div class="seg svc-tabs" role="tablist" aria-label="Job or billing">
+    <button type="button" role="tab" data-svctab="job" aria-pressed="${tab==="job"}">🔧 Job</button>
+    <button type="button" role="tab" data-svctab="bill" aria-pressed="${tab==="bill"}">🧾 ${mode==="est"?"Estimate":"Invoice"}${(inv.lines||[]).some(x=>num(x.p))||t.total?` · ${money(t.total)}`:""}${mode==="inv"&&inv.paid?" ✓":""}</button></div>`}
+  ${tab==="job"?`<div class="jump"><button class="mini" type="button" data-jump="f-vin">VIN</button><button class="mini" type="button" data-jump="mediaForm">Photos</button><button class="mini" type="button" data-svctab="bill">${mode==="est"?"Estimate":"Invoice"} →</button></div>`:""}</div>
+  ${tab==="bill"?"":`<div class="svc-grid svc-one"><div class="svc-a">
   <div class="form">
     <p class="formh">Customer &amp; vehicle</p>
     <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
@@ -4031,7 +4040,9 @@ function renderService(){
   ${toolsHTML(S)}
   ${mpiSectionHTML(S)}
   ${timerHTML()}</div>
-  <div class="svc-doc"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
+  <div class="svc-b">${renderMedia()}
+  ${renderFollowupForm()}</div></div>`}
+  ${tab!=="bill"?"":`<div class="svc-doc svc-bill"><div class="seg doc-seg" id="docSeg" role="group" aria-label="Estimate or invoice"><button type="button" data-docmode="est" aria-pressed="${mode==="est"}">Estimate</button><button type="button" data-docmode="inv" aria-pressed="${mode==="inv"}">Invoice</button></div>
   <div class="report">
     ${mode==="est"?bizHead("Estimate",`<strong>${esc((S.est&&S.est.num)||"New estimate")}</strong><br>${esc(fmtDate((S.est&&S.est.date)||TODAY,{month:"short",day:"numeric",year:"numeric"}))}${S.est&&S.est.status!=="draft"?`<br><span class="eststamp est-${S.est.status}">${esc((EST_ST.find(x=>x[0]===S.est.status)||[0,""])[1])}</span>`:""}`)
       :bizHead("Service Invoice",`<strong>${esc(inv.num)}</strong><br>${esc(fmtDate(inv.date,{month:"short",day:"numeric",year:"numeric"}))}${inv.paid?`<br><span class="paidstamp">Paid</span>`:""}`)}
@@ -4059,9 +4070,7 @@ function renderService(){
     ${sigBlockHTML(mode==="est"?"est":"inv")}
     ${(st.warranty||"").trim()?`<p class="fineprint"><strong>Warranty:</strong> ${esc(st.warranty.trim())}</p>`:""}
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the text instead.</p>
-  </div></div>
-  <div class="svc-b">${renderMedia()}
-  ${renderFollowupForm()}</div></div>`;
+  </div></div>`}`;
 }
 /* ---- saved service menu ---- */
 let MENU_OPEN=false,MENU_SAVE=false,MENU_Q="";
@@ -4658,7 +4667,7 @@ function saveDraft(opt){
   save();render();toast("Job saved");setTimeout(()=>countyFill(4),800);
 }
 // open a service job on its estimate, ready to add lines and text it
-function openEstimate(j){j.docMode="est";save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),60);toast("Add the work and parts, then text the estimate");
+function openEstimate(j){j.docMode="est";SVC_TAB[j.id]="bill";save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),60);toast("Add the work and parts, then text the estimate");
   if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);}
 
 
@@ -5122,6 +5131,8 @@ document.addEventListener("click",e=>{
   if(d.calday){APP.calDay=d.calday;const y=window.scrollY;render();window.scrollTo(0,y);return;}
   if(d.bookday){APP.calDay=d.bookday;startAdd();APP.draft.date=d.bookday;render();window.scrollTo(0,0);return;}
   if(d.calcdist){calcDist(d.calcdist);return;}
+  if(d.svctab&&S){SVC_TAB[S.id]=d.svctab;render();window.scrollTo(0,0);return;}
+  if(d.jump&&S&&isSvc(S)&&!document.getElementById(d.jump)){SVC_TAB[S.id]=d.jump==="docSeg"?"bill":"job";render();}
   if(d.jump){const el=document.getElementById(d.jump);if(el){el.scrollIntoView({behavior:"smooth",block:"center"});if(el.tagName==="INPUT")setTimeout(()=>el.focus({preventScroll:true}),400);}return;}
   if(d.act==="forgotpw"){CLOUD_FORM.email=document.getElementById("cEmail")?.value||CLOUD_FORM.email;CLOUD_FORM.busy=true;CLOUD_FORM.msg="";rerenderKeep();
     sendReset(CLOUD_FORM.email).then(()=>{CLOUD_FORM.busy=false;CLOUD_FORM.msg="Check your email for a password reset link. Open it on this device.";rerenderKeep();})

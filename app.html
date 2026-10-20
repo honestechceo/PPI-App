@@ -609,6 +609,7 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .qs-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;text-align:center;padding:12px 6px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);min-height:104px}
 .qs-tile:active{transform:scale(.97)}.qs-ic{font-size:26px;line-height:1.1}.qs-tile strong{font-size:13.5px;line-height:1.2}.qs-tile small{font-size:11px;color:var(--muted);line-height:1.2}
 .qs-list .hist-row{grid-template-columns:auto auto minmax(0,1fr) auto}
+.qs-list a.hist-row{grid-template-columns:auto minmax(0,1fr) auto;text-decoration:none;color:var(--ink)}
 .qs-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:14px}
 body.quick-open{overflow:hidden}
 @keyframes qsU{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}@keyframes qsF{from{opacity:0}to{opacity:1}}
@@ -4009,11 +4010,25 @@ function shareMedia(){
 
 /* ================= service / repair job ================= */
 // ---- ☰ quick actions: one tap to the things done most ----
-let QUICK=null,QUICK_EST=false;
-const QUICK_ITEMS=[["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
+let QUICK=null,QUICK_EST=false,QUICK_Q="";
+// open jobs from today on, soonest first (for "On my way")
+function omwJobs(){return APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||TODAY)>=TODAY&&(j.info.date||TODAY)<=addDays(TODAY,7)).sort((a,b)=>((a.info.date||TODAY)+(a.info.time||"99")).localeCompare((b.info.date||TODAY)+(b.info.time||"99"))).slice(0,15);}
+function textHi(name){const first=String(name||"").trim().split(/\s+/)[0]||"there",me=String(APP.settings.owner||"").trim().split(/\s+/)[0];return `Hi ${first}, ${me?`it's ${me} from ${bizName()}. `:`this is ${bizName()}. `}`;}
+function quickTextList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q);
+  const cs=(APP.customers||[]).filter(c=>!c.hidden&&c.phone&&(!q||normName(c.name).includes(q))&&(!dq||dq.length<3||digits(c.phone).includes(dq))).sort((a,b)=>(b.last||"").localeCompare(a.last||"")).slice(0,30);
+  return cs.length?cs.map(c=>`<a class="hist-row qs-sms" href="${esc(smsHref(c.phone,textHi(c.name)))}"><span>💬</span><span class="hist-what"><strong>${esc(c.name)}</strong> · ${esc(c.phone)}</span><span class="hist-amt">${c.last?esc(fmtDate(c.last,{month:"short",day:"numeric"})):""}</span></a>`).join("")
+    :`<p class="empty">${QUICK_Q?"No customers with a phone number match.":"No customers with a phone number yet."}</p>`;}
+const QUICK_ITEMS=[["omw","🚗","On my way","Text your ETA"],["text","💬","Text a customer","Pick and send"],["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
   ["unpaid","💵","Unpaid invoices","Collect or mark paid"],["ppi","🔍","Book an inspection","Pre-purchase inspection"],["request","📥","Paste a request","From an email or text"],
   ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"]];
 function quickHTML(){if(!QUICK)return "";
+  const sub=(title,body)=>`<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="${title}"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>${title}</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>${body}</div>`;
+  if(QUICK==="omw"){const js=omwJobs();
+    return sub("On my way",`<p class="help" style="margin:0 0 8px">Pick the job you're heading to. The app works out your drive time and writes the text.</p>
+      <div class="qs-list">${js.length?js.map(j=>`<button type="button" class="hist-row" data-quickomw="${j.id}"><span>${j.info.date===TODAY||!j.info.date?"Today":esc(fmtDate(j.info.date,{weekday:"short",month:"short",day:"numeric"}))}${j.info.time?" "+esc(fmtTime(j.info.time)):""}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="hist-what">${esc(j.info.customer||"Customer")}${j.info.location?" · "+esc(j.info.location):""}</span><span class="hist-amt">${j.info.phone?"🚗":"<small>no phone</small>"}</span></button>`).join(""):`<p class="empty">No jobs booked for the next week.</p>`}</div>`);}
+  if(QUICK==="text"){
+    return sub("Text a customer",`<label class="search" style="margin:0 0 8px"><input id="qsQ" data-quickq="1" value="${esc(QUICK_Q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
+      <p class="help" style="margin:0 0 8px">Tap a customer to open Messages with a greeting already started.</p><div class="qs-list" id="qsList">${quickTextList()}</div>`);}
   if(QUICK==="receipt"){const js=APP.jobs.filter(j=>j.status==="done").sort((a,b)=>jDate(b).localeCompare(jDate(a))||(b.invoice.num||"").localeCompare(a.invoice.num||"")).slice(0,25);
     return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Send a receipt"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>Send a receipt</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
       <p class="help" style="margin:0 0 8px">Pick the job. Its invoice opens, ready to text, email or save as a PDF. Mark it paid first so it shows PAID.</p>
@@ -5113,7 +5128,10 @@ document.addEventListener("click",e=>{
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
   if(d.act==="quick"){QUICK="menu";render();return;}
   if(d.act==="quickclose"){QUICK=null;render();return;}
-  if(d.quick){if(d.quick==="receipt"){QUICK="receipt";render();return;}quickGo(d.quick);return;}
+  if(d.quick){if(["receipt","omw","text"].includes(d.quick)){QUICK=d.quick;QUICK_Q="";render();if(d.quick==="text"&&!/iPhone|iPad|Android/i.test(navigator.userAgent))setTimeout(()=>document.getElementById("qsQ")?.focus(),60);return;}quickGo(d.quick);return;}
+  if(d.quickomw){const j=APP.jobs.find(x=>x.id===d.quickomw);QUICK=null;if(!j){render();return;}
+    if(!j.info.phone){openJob(j.id);toast("Add the customer's phone number to text them");return;}
+    APP.view="jobs";APP.adding=false;APP.editing=null;APP.day="";APP.schedMode="list";APP.ctyF=null;render();startOMW(j.id).then(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}));setTimeout(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}),80);return;}
   if(d.quickrcpt){const j=APP.jobs.find(x=>x.id===d.quickrcpt);QUICK=null;if(!j){render();return;}if(isSvc(j)){SVC_TAB[j.id]="bill";openJob(j.id);}else openJob(j.id,STAGES.length-1);return;}
   if(d.act==="cancelAdd"){QUICK_EST=false;APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
@@ -5511,6 +5529,7 @@ function sugPick(val){
 document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b){if(!(SUG_HOLD&&SUG_HOLD.touch))SUG_HOLD=null;return;}
   if(e.pointerType==="touch")return;SUG_HOLD={val:b.dataset.sugpick,x:e.clientX,y:e.clientY};if(e.pointerType==="mouse")e.preventDefault();},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&QUICK){QUICK=null;render();}});
+document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a.qs-sms");if(a&&QUICK){setTimeout(()=>{QUICK=null;render();},300);}});
 // ---- swipe left/right to move between the top tabs (Home, Schedule, Customers, Expenses, Settings) ----
 const SWIPE_VIEWS=["dash","jobs","customers","expenses","settings"];let SW=null;
 function swipeTabs(){return [...document.querySelectorAll(".tabs .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}
@@ -5551,6 +5570,7 @@ document.addEventListener("input",e=>{
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
   if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];save();rerenderKeep();return;}
+  if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}
   if(d.bulkdate&&BULK){BULK.date=t.value;return;}

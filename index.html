@@ -601,6 +601,19 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.quick-btn{color:var(--ink)}.qs-foot{display:flex;gap:8px;justify-content:center;margin-top:12px}
+@media (max-width:480px){.help-btn[data-nav="help"]{display:none}}body.tech-mode .quick-btn{display:none}
+.qs-back{position:fixed;inset:0;border:0;padding:0;width:100%;background:rgba(10,15,25,.45);z-index:1200;animation:qsF .15s ease-out}
+.qs-panel{position:fixed;left:0;right:0;bottom:0;z-index:1201;background:var(--surface);border-radius:18px 18px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom));max-height:82vh;overflow:auto;box-shadow:0 -12px 40px -10px rgba(0,0,0,.4);max-width:640px;margin:0 auto;animation:qsU .2s ease-out}
+.qs-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}.qs-head strong{flex:1;font-size:17px}
+.qs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.qs-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;text-align:center;padding:12px 6px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);min-height:104px}
+.qs-tile:active{transform:scale(.97)}.qs-ic{font-size:26px;line-height:1.1}.qs-tile strong{font-size:13.5px;line-height:1.2}.qs-tile small{font-size:11px;color:var(--muted);line-height:1.2}
+.qs-list .hist-row{grid-template-columns:auto auto minmax(0,1fr) auto}
+.qs-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:14px}
+body.quick-open{overflow:hidden}
+@keyframes qsU{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}@keyframes qsF{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.qs-panel,.qs-back{animation:none}}
 .svc-tabs{margin:10px 0 4px}.svc-tabs button{font-weight:700}
 .svc-grid.svc-one{grid-template-areas:"a b";grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:899px){.svc-grid.svc-one{display:block}}
@@ -820,7 +833,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
+    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button><button type="button" class="help-btn quick-btn" data-act="quick" aria-label="Quick actions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -2992,7 +3005,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
-    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
+    $("#nextBtn").textContent=APP.adding?(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?"📝 Make estimate":"Save job"):"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
     return;
   }
   const svc=isSvc(S);
@@ -3289,7 +3302,7 @@ function jobCard(j){
 function renderJobForm(){
   const d=APP.draft, svc=d.type==="service", tr=Math.max(0,num(d.dist)-num(APP.settings.freeMiles))*num(APP.settings.perMile);
   const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="d-${id}" data-draft="${id}" value="${esc(d[id])}" ${extra}></label>`;
-  return `<form class="form" id="jobForm" autocomplete="off">
+  return `${QUICK_EST&&!APP.editing?`<div class="qs-banner">📝 <strong>New quote.</strong> Add the customer, the car and the work, then tap <strong>Make estimate</strong> to price it and text it.</div>`:""}<form class="form" id="jobForm" autocomplete="off">
     <p class="formh">${APP.editing?"Edit job":"Book a job"}</p>
     <div class="full seg" role="group" aria-label="Job type"><button type="button" data-jtype="ppi" aria-pressed="${!svc}">Pre-purchase inspection</button><button type="button" data-jtype="service" aria-pressed="${svc}">Service / repair</button></div>
     ${svc?`<label class="full">Work requested<textarea id="d-work" data-draft="work" rows="2" placeholder="e.g. Front brake pads and rotors, grinding noise">${esc(d.work)}</textarea></label>`:""}
@@ -3313,7 +3326,7 @@ function renderJobForm(){
     ${f("plate","License plate",'autocapitalize="characters"')}${f("unit","Fleet unit #")}
     ${(()=>{const c=d.custId&&(APP.customers||[]).find(x=>x.id===d.custId);return c&&c.fleet||d.po?f("po",`PO #${c&&c.poReq?" (required)":""}`,"","full"):"";})()}
     <label class="full">Notes<textarea id="d-notes" data-draft="notes" rows="2" placeholder="${svc?"Gate code, parking, parts to pick up":"Seller name, listing link, gate code"}">${esc(d.notes)}</textarea></label>
-    <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button>${svc&&!isTech()?`<button class="btn" type="button" data-act="saveest">📝 Save &amp; make estimate</button>`:""}<button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
+    <div class="formacts">${QUICK_EST&&svc&&!APP.editing?`<button class="btn primary" type="button" data-act="saveest">📝 Make estimate</button><button class="btn" type="submit">Just save the job</button>`:`<button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button>${svc&&!isTech()?`<button class="btn" type="button" data-act="saveest">📝 Save &amp; make estimate</button>`:""}`}<button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
   </form>`;
 }
 /* agreed price: starts the invoice at the price agreed with the customer */
@@ -3996,6 +4009,29 @@ function shareMedia(){
 }
 
 /* ================= service / repair job ================= */
+// ---- ☰ quick actions: one tap to the things done most ----
+let QUICK=null,QUICK_EST=false;
+const QUICK_ITEMS=[["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
+  ["unpaid","💵","Unpaid invoices","Collect or mark paid"],["ppi","🔍","Book an inspection","Pre-purchase inspection"],["request","📥","Paste a request","From an email or text"],
+  ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"]];
+function quickHTML(){if(!QUICK)return "";
+  if(QUICK==="receipt"){const js=APP.jobs.filter(j=>j.status==="done").sort((a,b)=>jDate(b).localeCompare(jDate(a))||(b.invoice.num||"").localeCompare(a.invoice.num||"")).slice(0,25);
+    return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Send a receipt"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>Send a receipt</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
+      <p class="help" style="margin:0 0 8px">Pick the job. Its invoice opens, ready to text, email or save as a PDF. Mark it paid first so it shows PAID.</p>
+      <div class="qs-list">${js.length?js.map(j=>`<button type="button" class="hist-row" data-quickrcpt="${j.id}"><span>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))}</span><span class="tag ${j.invoice.paid?"":"tag-bad"}">${j.invoice.paid?"Paid":"Unpaid"}</span><span class="hist-what">${esc(j.info.customer||"Customer")}${j.invoice.num?" · #"+esc(j.invoice.num):""}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`).join(""):`<p class="empty">No finished jobs yet.</p>`}</div></div>`;}
+  return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Quick actions"><div class="qs-head"><strong>Quick actions</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
+    <div class="qs-grid">${QUICK_ITEMS.map(([k,ic,l,sub])=>`<button type="button" class="qs-tile" data-quick="${k}"><span class="qs-ic">${ic}</span><strong>${l}</strong><small>${sub}</small></button>`).join("")}</div>
+    <div class="qs-foot"><button class="mini" type="button" data-quick="help">❓ Help &amp; how-to</button><button class="mini" type="button" data-quick="settings">⚙️ Settings</button></div></div>`;}
+function quickGo(k){QUICK=null;if(!["sched","ppi","quote"].includes(k)){APP.adding=false;APP.editing=null;QUICK_EST=false;}
+  if(k==="sched"||k==="ppi"||k==="quote"){APP.view="jobs";startAdd(null);APP.draft.type=k==="ppi"?"ppi":"service";QUICK_EST=k==="quote";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("d-customer")?.focus(),60);return;}
+  if(k==="unpaid"){APP.view="dash";render();setTimeout(()=>{const u=document.getElementById("dashUnpaid");if(u)u.scrollIntoView({block:"start"});else toast("No unpaid invoices");},60);return;}
+  if(k==="request"){APP.view="requests";REQ_PASTE={raw:""};REQ_EDIT=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("reqRaw")?.focus(),60);return;}
+  if(k==="customer"){APP.view="customers";CUST_OPEN=null;CUST_EDIT=null;CUST_NEW={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:"",from:"manual"};render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("ce-name")?.focus(),60);return;}
+  if(k==="expense"){APP.view="expenses";EXP_DRAFT=newExpDraft();EXP_DEL=false;EXP_RET=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-desc")?.focus(),60);return;}
+  if(k==="look"){LOOK.jobId="";openLookup(null);return;}
+  if(k==="help"||k==="settings"){APP.view=k;render();window.scrollTo(0,0);return;}
+  render();}
+
 // service jobs open on two tabs: the work (Job) and the billing (Estimate / Invoice)
 let SVC_TAB={};
 const svcTab=j=>isTech()?"job":SVC_TAB[j.id]||(j.status==="done"?"bill":"job");
@@ -4634,6 +4670,7 @@ function render(){applyTheme();
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   if(APP.view==="job"&&S)html=jobCtlHTML()+html;
   $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
+  {let q=document.getElementById("quickSheet");if(!q){q=document.createElement("div");q.id="quickSheet";document.body.appendChild(q);}q.innerHTML=quickHTML();document.body.classList.toggle("quick-open",!!QUICK);}
   navTrack();
   renderChrome();
 }
@@ -4646,7 +4683,7 @@ function startAdd(job){
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(opt){
-  const d=APP.draft;let savedId=null;
+  const d=APP.draft;let savedId=null;if(d&&d.customer&&d.customer.trim())QUICK_EST=false;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
   const {type,custId,techId:pickedTech,...info}=d;TECH_OTHER={};
   const _ej=APP.editing?APP.jobs.find(x=>x.id===APP.editing):null;const _prevTech=_ej?_ej.techId||"":"";const _prevKey=_ej?[_ej.info.date,_ej.info.time,_ej.info.location].join("|"):"";
@@ -5075,7 +5112,11 @@ document.addEventListener("click",e=>{
   if(d.askdel){APP.confirmDel=d.askdel;render();return;}
   if(d.del){deleteJobMedia(APP.jobs.find(x=>x.id===d.del));APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
-  if(d.act==="cancelAdd"){APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
+  if(d.act==="quick"){QUICK="menu";render();return;}
+  if(d.act==="quickclose"){QUICK=null;render();return;}
+  if(d.quick){if(d.quick==="receipt"){QUICK="receipt";render();return;}quickGo(d.quick);return;}
+  if(d.quickrcpt){const j=APP.jobs.find(x=>x.id===d.quickrcpt);QUICK=null;if(!j){render();return;}if(isSvc(j)){SVC_TAB[j.id]="bill";openJob(j.id);}else openJob(j.id,STAGES.length-1);return;}
+  if(d.act==="cancelAdd"){QUICK_EST=false;APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.ckadd){const lbl=addCustomItem(d.ckadd,d.pfx);if(lbl){OPEN_CK.add(d.ckadd);if(d.pfx==="sk")OPEN_ADD=null;render();toast(`Added "${lbl}"`);}return;}
   if(d.ckhide){const st=APP.settings;const h=new Set(st.hidden||[]);h.has(d.ckhide)?h.delete(d.ckhide):h.add(d.ckhide);st.hidden=[...h];rebuildChecklist(st);save();render();return;}
@@ -5451,7 +5492,7 @@ document.addEventListener("click",e=>{
 });
 $("#prevBtn").addEventListener("click",()=>{if(APP.view==="job"&&!isSvc(S))go(S.step-1);});
 $("#nextBtn").addEventListener("click",()=>{
-  if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
+  if(APP.view==="jobs"){ if(APP.adding)saveDraft(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?{est:true}:undefined); else startAdd(); return; }
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
   if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";const fj=S,me=(fj.info.tech||"Your technician").split(/\s+/)[0];const go=()=>notifySend({to:"managers",title:`${me} finished a job`,body:jobLine(fj),url:"./?job="+encodeURIComponent(fj.id),tag:"done-"+fj.id});setTimeout(()=>syncNow().then(go,go),0);}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
@@ -5470,6 +5511,7 @@ function sugPick(val){
 }
 document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b){if(!(SUG_HOLD&&SUG_HOLD.touch))SUG_HOLD=null;return;}
   if(e.pointerType==="touch")return;SUG_HOLD={val:b.dataset.sugpick,x:e.clientX,y:e.clientY};if(e.pointerType==="mouse")e.preventDefault();},true);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&QUICK){QUICK=null;render();}});
 // ---- swipe left/right to move between the top tabs (Home, Schedule, Customers, Expenses, Settings) ----
 const SWIPE_VIEWS=["dash","jobs","customers","expenses","settings"];let SW=null;
 function swipeTabs(){return [...document.querySelectorAll(".tabs .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}

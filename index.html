@@ -608,7 +608,17 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .qs-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}.qs-head strong{flex:1;font-size:17px}
 .qs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .qs-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;text-align:center;padding:12px 6px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);min-height:104px}
-.qs-tile:active{transform:scale(.97)}.qs-ic{font-size:26px;line-height:1.1}.qs-tile strong{font-size:13.5px;line-height:1.2}.qs-tile small{font-size:11px;color:var(--muted);line-height:1.2}
+.qs-tile:active{transform:scale(.97)}
+.qs-ic{position:relative;display:grid;place-items:center;width:54px;height:54px;border-radius:15px;margin-bottom:5px;overflow:hidden;
+  background:radial-gradient(circle at 50% 38%,color-mix(in srgb,var(--qs) 70%,#fff) 0%,var(--qs) 45%,color-mix(in srgb,var(--qs) 55%,#000) 100%);
+  border:2px solid color-mix(in srgb,var(--qs) 55%,#fff);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--qs) 60%,#000),0 0 12px -2px color-mix(in srgb,var(--qs) 75%,transparent),inset 0 -6px 10px -4px color-mix(in srgb,var(--qs) 40%,#000),inset 0 2px 3px -1px rgba(255,255,255,.55)}
+.qs-ic::after{content:"";position:absolute;left:-30%;top:-60%;width:120%;height:95%;background:linear-gradient(160deg,rgba(255,255,255,.45),rgba(255,255,255,.08) 60%,transparent 61%);transform:rotate(-28deg);pointer-events:none}
+.qs-ic svg{position:relative;width:30px;height:30px;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+.qs-colors{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 0 12px}
+.qs-sw{width:34px;height:34px;border-radius:10px;border:2px solid var(--line);background:var(--sw);color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;padding:0;position:relative;cursor:pointer}
+.qs-sw.on{outline:3px solid var(--ink);outline-offset:2px}.qs-custom input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.qs-foot{flex-wrap:wrap}.qs-tile strong{font-size:13.5px;line-height:1.2}.qs-tile small{font-size:11px;color:var(--muted);line-height:1.2}
 .qs-list .hist-row{grid-template-columns:auto auto minmax(0,1fr) auto}
 .qs-list a.hist-row{grid-template-columns:auto minmax(0,1fr) auto;text-decoration:none;color:var(--ink)}
 .qs-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:14px}
@@ -4011,6 +4021,24 @@ function shareMedia(){
 
 /* ================= service / repair job ================= */
 // ---- ☰ quick actions: one tap to the things done most ----
+// white glyphs for the quick-action buttons (24×24, solid)
+const QI={
+ omw:`<path d="M6.2 9.6 8 5.8C8.4 5 9.2 4.5 10.1 4.5h3.8c.9 0 1.7.5 2.1 1.3l1.8 3.8h.7c.4-.6.9-.8 1.4-.8h.6c.6 0 .9.6.6 1.1l-.6.9c.9.7 1.4 1.7 1.4 2.8v4.1c0 .5-.4.9-.9.9h-.6v1.4c0 .6-.5 1-1 1h-1.3c-.6 0-1-.4-1-1v-1.4H6.9v1.4c0 .6-.5 1-1 1H4.6c-.6 0-1-.4-1-1v-1.4H3c-.5 0-.9-.4-.9-.9v-4.1c0-1.1.5-2.1 1.4-2.8l-.6-.9c-.3-.5 0-1.1.6-1.1h.6c.5 0 1 .2 1.4.8ZM8.1 9.4h7.8l-1.3-2.7c-.2-.4-.5-.6-.9-.6h-3.4c-.4 0-.7.2-.9.6Zm-2.8 3c-.5 0-.7.6-.4 1 .6.6 1.6 1.1 2.6 1.2.5 0 .7-.5.5-.9l-.3-.5c-.2-.3-.5-.5-.8-.6Zm13.4 0-1.6.2c-.3.1-.6.3-.8.6l-.3.5c-.2.4 0 .9.5.9 1-.1 2-.6 2.6-1.2.3-.4.1-1-.4-1ZM9.3 15c-.4 0-.6.5-.3.8l.2.2h5.6l.2-.2c.3-.3.1-.8-.3-.8Z"/>`,
+ text:`<path d="M4.5 4h15c1.4 0 2.5 1.1 2.5 2.5v9c0 1.4-1.1 2.5-2.5 2.5H10l-4.6 3.6c-.7.5-1.6 0-1.6-.8V18h.7C3.1 18 2 16.9 2 15.5v-9C2 5.1 3.1 4 4.5 4Zm3 6.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/>`,
+ sched:`<path d="M7.5 2.5c.6 0 1 .4 1 1V5h7V3.5a1 1 0 1 1 2 0V5h1c1.7 0 3 1.3 3 3v10.5c0 1.7-1.3 3-3 3h-13c-1.7 0-3-1.3-3-3V8c0-1.7 1.3-3 3-3h1V3.5c0-.6.4-1 1-1ZM4.5 10v8.5c0 .6.4 1 1 1h13c.6 0 1-.4 1-1V10Zm2.5 2h3v3H7Zm4.5 0h3v3h-3Z"/>`,
+ quote:`<path d="M6 2h8.2c.5 0 1 .2 1.4.6l3.8 3.8c.4.4.6.9.6 1.4v4.4l-2 2V8.5h-3.5c-.8 0-1.5-.7-1.5-1.5V4H6v16h6.2l-.3 2H6c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2Zm2 9h6.5v1.8H8Zm0 3.5h4.5v1.8H8Zm12.6-1.6 1.5 1.5c.4.4.4 1 0 1.4l-5.6 5.6-2.6.7c-.4.1-.7-.2-.6-.6l.7-2.6 5.6-5.6c.3-.4 1-.4 1.4-.4Z"/>`,
+ receipt:`<path d="M5 2.5c0-.5.6-.8 1-.5l1.5 1.1L9 2c.3-.2.7-.2 1 0l1.5 1.1L13 2c.3-.2.7-.2 1 0l1.5 1.1L17 2c.4-.3 1-.1 1 .5v19c0 .6-.6.8-1 .5l-1.5-1.1L14 22c-.3.2-.7.2-1 0l-1.5-1.1L10 22c-.3.2-.7.2-1 0l-1.5-1.1L6 22c-.4.3-1 0-1-.5ZM8 7v1.8h7V7Zm0 4v1.8h7V11Zm0 4v1.8h4.5V15Z"/>`,
+ unpaid:`<path d="M12 1.8c5.6 0 10.2 4.6 10.2 10.2S17.6 22.2 12 22.2 1.8 17.6 1.8 12 6.4 1.8 12 1.8Zm-.9 3.4v1.4c-1.9.3-3.2 1.6-3.2 3.3 0 2 1.6 2.8 3.6 3.3 1.5.4 2 .7 2 1.4 0 .6-.6 1.1-1.6 1.1-1.1 0-1.8-.5-2-1.4l-2.1.4c.3 1.6 1.5 2.6 3.3 2.9v1.3h1.9v-1.3c2-.3 3.3-1.6 3.3-3.3 0-2-1.5-2.8-3.6-3.3-1.4-.4-2-.6-2-1.3 0-.6.5-1 1.4-1 .9 0 1.5.4 1.7 1.2l2-.5c-.3-1.4-1.4-2.4-3-2.7V5.2Z"/>`,
+ ppi:`<path d="M8 2h8c.6 0 1 .4 1 1v1h1.5c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2h-13c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2H7V3c0-.6.4-1 1-1Zm1 2v2h6V4Zm7.4 6.3-5.6 5.6-3.2-3.2-1.4 1.4 4.6 4.6 7-7Z"/>`,
+ request:`<path d="M12 2c.6 0 1 .4 1 1v7.6l2.3-2.3 1.4 1.4L12 14.4 7.3 9.7l1.4-1.4 2.3 2.3V3c0-.6.4-1 1-1ZM3.8 14.5h4.6c.5 0 .9.3 1 .8l.3 1.2h4.6l.3-1.2c.1-.5.5-.8 1-.8h4.6c.5 0 .9.4.8.9l-.9 5c-.2 1-1 1.6-2 1.6H5.9c-1 0-1.8-.7-2-1.6l-.9-5c-.1-.5.3-.9.8-.9Z"/>`,
+ customer:`<path d="M12 2.5a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6ZM12 13.6c4.6 0 8.3 2.6 8.3 5.9v1c0 .6-.4 1-1 1H4.7c-.6 0-1-.4-1-1v-1c0-3.3 3.7-5.9 8.3-5.9Z"/>`,
+ expense:`<path d="M5 3.5C5 2.7 5.7 2 6.5 2h7c.8 0 1.5.7 1.5 1.5V12h.5c1.4 0 2.5 1.1 2.5 2.5v3c0 .3.2.5.5.5s.5-.2.5-.5V9.4l-2.2-2.2 1.4-1.4 2.6 2.6c.2.2.2.4.2.7v8.4c0 1.4-1.1 2.5-2.5 2.5S17 18.9 17 17.5v-3c0-.3-.2-.5-.5-.5H15v6.5h.5c.6 0 1 .4 1 1v.5h-13V21.5c0-.6.4-1 1-1H5ZM7 4.5V9h6V4.5Z"/>`,
+ look:`<path d="M10.5 2.5a8 8 0 0 1 6.4 12.8l4.4 4.4c.4.4.4 1.1 0 1.5l-.1.1c-.4.4-1.1.4-1.5 0l-4.4-4.4A8 8 0 1 1 10.5 2.5Zm0 2.6a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8Z"/>`};
+const QS_COLORS=[["","App color"],["#1fae2c","Green"],["#1d6fe0","Blue"],["#e2620f","Orange"],["#d42a2a","Red"],["#7a3fd1","Purple"],["#0b9aa8","Teal"],["#2b2f36","Black"],["#c99a06","Gold"]];
+let QS_PICK=false;
+const qsColor=()=>(APP.settings.qsColor||"").trim()||getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1d6fe0";
+const qsIcon=k=>`<span class="qs-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="#fff">${QI[k]||""}</svg></span>`;
+
 let QUICK=null,QUICK_EST=false,QUICK_Q="";
 // open jobs from today on, soonest first (for "On my way")
 function omwJobs(){return APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||TODAY)>=TODAY&&(j.info.date||TODAY)<=addDays(TODAY,7)).sort((a,b)=>((a.info.date||TODAY)+(a.info.time||"99")).localeCompare((b.info.date||TODAY)+(b.info.time||"99"))).slice(0,15);}
@@ -4035,8 +4063,9 @@ function quickHTML(){if(!QUICK)return "";
       <p class="help" style="margin:0 0 8px">Pick the job. Its invoice opens, ready to text, email or save as a PDF. Mark it paid first so it shows PAID.</p>
       <div class="qs-list">${js.length?js.map(j=>`<button type="button" class="hist-row" data-quickrcpt="${j.id}"><span>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))}</span><span class="tag ${j.invoice.paid?"":"tag-bad"}">${j.invoice.paid?"Paid":"Unpaid"}</span><span class="hist-what">${esc(j.info.customer||"Customer")}${j.invoice.num?" · #"+esc(j.invoice.num):""}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`).join(""):`<p class="empty">No finished jobs yet.</p>`}</div></div>`;}
   return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Quick actions"><div class="qs-head"><strong>Quick actions</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
-    <div class="qs-grid">${QUICK_ITEMS.map(([k,ic,l,sub])=>`<button type="button" class="qs-tile" data-quick="${k}"><span class="qs-ic">${ic}</span><strong>${l}</strong><small>${sub}</small></button>`).join("")}</div>
-    <div class="qs-foot"><button class="mini" type="button" data-quick="help">❓ Help &amp; how-to</button><button class="mini" type="button" data-quick="settings">⚙️ Settings</button></div></div>`;}
+    ${QS_PICK?`<div class="qs-colors" role="group" aria-label="Icon color">${QS_COLORS.map(([c,l])=>`<button type="button" class="qs-sw${(APP.settings.qsColor||"")===c?" on":""}" data-qscolor="${c||"app"}" aria-label="${l}" title="${l}" style="--sw:${c||"var(--accent)"}">${c?"":"A"}</button>`).join("")}<label class="qs-sw qs-custom" title="Pick any color" style="--sw:${esc(qsColor())}">＋<input type="color" data-qscustom="1" value="${esc(/^#[0-9a-f]{6}$/i.test(qsColor())?qsColor():"#1fae2c")}"></label></div>`:""}
+    <div class="qs-grid" style="--qs:${esc(qsColor())}">${QUICK_ITEMS.map(([k,ic,l,sub])=>`<button type="button" class="qs-tile" data-quick="${k}">${qsIcon(k)}<strong>${l}</strong><small>${sub}</small></button>`).join("")}</div>
+    <div class="qs-foot"><button class="mini" type="button" data-act="qspick" aria-pressed="${QS_PICK}">🎨 Icon color</button><button class="mini" type="button" data-quick="help">❓ Help &amp; how-to</button><button class="mini" type="button" data-quick="settings">⚙️ Settings</button></div></div>`;}
 function quickGo(k){QUICK=null;if(!["sched","ppi","quote"].includes(k)){APP.adding=false;APP.editing=null;QUICK_EST=false;}
   if(k==="sched"||k==="ppi"||k==="quote"){APP.view="jobs";startAdd(null);APP.draft.type=k==="ppi"?"ppi":"service";QUICK_EST=k==="quote";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("d-customer")?.focus(),60);return;}
   if(k==="unpaid"){APP.view="dash";render();setTimeout(()=>{const u=document.getElementById("dashUnpaid");if(u)u.scrollIntoView({block:"start"});else toast("No unpaid invoices");},60);return;}
@@ -5128,6 +5157,8 @@ document.addEventListener("click",e=>{
   if(d.del){deleteJobMedia(APP.jobs.find(x=>x.id===d.del));APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
   if(d.act==="quick"){QUICK="menu";render();return;}
+  if(d.act==="qspick"){QS_PICK=!QS_PICK;render();return;}
+  if(d.qscolor){APP.settings.qsColor=d.qscolor==="app"?"":d.qscolor;save();render();return;}
   if(d.act==="quickclose"){QUICK=null;render();return;}
   if(d.quick){if(["receipt","omw","text"].includes(d.quick)){QUICK=d.quick;QUICK_Q="";render();if(d.quick==="text"&&!/iPhone|iPad|Android/i.test(navigator.userAgent))setTimeout(()=>document.getElementById("qsQ")?.focus(),60);return;}quickGo(d.quick);return;}
   if(d.quickomw){const j=APP.jobs.find(x=>x.id===d.quickomw);QUICK=null;if(!j){render();return;}
@@ -5571,6 +5602,7 @@ document.addEventListener("input",e=>{
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
   if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];save();rerenderKeep();return;}
+  if(d.qscustom){APP.settings.qsColor=t.value;const g=document.querySelector(".qs-grid");if(g)g.style.setProperty("--qs",t.value);clearTimeout(QI._t);QI._t=setTimeout(()=>{save();render();},500);return;}
   if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}

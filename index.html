@@ -601,6 +601,30 @@ a.btn{color:inherit;text-decoration:none;text-align:center}
 .bulk-how{display:flex;align-items:center;gap:8px;margin:0 0 8px;flex-wrap:wrap}.bulk-how select,.bulk-how input{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
 .bulk-row{display:grid!important;grid-template-columns:auto auto auto 1fr auto;cursor:pointer}.bulk-row input{width:20px;height:20px;margin:0}.bulk-row.on{background:var(--accent-soft,#e8eefb)}
 .bulk-go{margin-top:10px}
+.quick-btn{color:var(--ink)}.qs-foot{display:flex;gap:8px;justify-content:center;margin-top:12px}
+@media (max-width:480px){.help-btn[data-nav="help"]{display:none}}body.tech-mode .quick-btn{display:none}
+.qs-back{position:fixed;inset:0;border:0;padding:0;width:100%;background:rgba(10,15,25,.45);z-index:1200;animation:qsF .15s ease-out}
+.qs-panel{position:fixed;left:0;right:0;bottom:0;z-index:1201;background:var(--surface);border-radius:18px 18px 0 0;padding:14px 16px calc(18px + env(safe-area-inset-bottom));max-height:82vh;overflow:auto;box-shadow:0 -12px 40px -10px rgba(0,0,0,.4);max-width:640px;margin:0 auto;animation:qsU .2s ease-out}
+.qs-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}.qs-head strong{flex:1;font-size:17px}
+.qs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.qs-tile{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:3px;text-align:center;padding:12px 6px;border:1px solid var(--line);border-radius:14px;background:var(--bg);color:var(--ink);min-height:104px}
+.qs-tile:active{transform:scale(.97)}
+.qs-ic{position:relative;display:grid;place-items:center;width:54px;height:54px;border-radius:15px;margin-bottom:5px;overflow:hidden;
+  background:radial-gradient(circle at 50% 38%,color-mix(in srgb,var(--qs) 70%,#fff) 0%,var(--qs) 45%,color-mix(in srgb,var(--qs) 55%,#000) 100%);
+  border:2px solid color-mix(in srgb,var(--qs) 55%,#fff);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--qs) 60%,#000),0 0 12px -2px color-mix(in srgb,var(--qs) 75%,transparent),inset 0 -6px 10px -4px color-mix(in srgb,var(--qs) 40%,#000),inset 0 2px 3px -1px rgba(255,255,255,.55)}
+.qs-ic::after{content:"";position:absolute;left:-30%;top:-60%;width:120%;height:95%;background:linear-gradient(160deg,rgba(255,255,255,.45),rgba(255,255,255,.08) 60%,transparent 61%);transform:rotate(-28deg);pointer-events:none}
+.qs-ic svg{position:relative;width:30px;height:30px;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35))}
+.qs-colors{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:0 0 12px}
+.qs-sw{width:34px;height:34px;border-radius:10px;border:2px solid var(--line);background:var(--sw);color:#fff;font-weight:800;font-size:13px;display:grid;place-items:center;padding:0;position:relative;cursor:pointer}
+.qs-sw.on{outline:3px solid var(--ink);outline-offset:2px}.qs-custom input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.qs-foot{flex-wrap:wrap}.qs-tile strong{font-size:13.5px;line-height:1.2}.qs-tile small{font-size:11px;color:var(--muted);line-height:1.2}
+.qs-list .hist-row{grid-template-columns:auto auto minmax(0,1fr) auto}
+.qs-list a.hist-row{grid-template-columns:auto minmax(0,1fr) auto;text-decoration:none;color:var(--ink)}
+.qs-banner{background:var(--accent-soft);border:1px solid var(--accent);border-radius:12px;padding:10px 12px;margin:0 0 12px;font-size:14px}
+body.quick-open{overflow:hidden}
+@keyframes qsU{from{transform:translateY(40px);opacity:.3}to{transform:none;opacity:1}}@keyframes qsF{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.qs-panel,.qs-back{animation:none}}
 .svc-tabs{margin:10px 0 4px}.svc-tabs button{font-weight:700}
 .svc-grid.svc-one{grid-template-areas:"a b";grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 @media (max-width:899px){.svc-grid.svc-one{display:block}}
@@ -820,7 +844,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 </style>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button></div>
+    <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button><button type="button" class="help-btn quick-btn" data-act="quick" aria-label="Quick actions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
     <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
@@ -2992,7 +3016,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
-    $("#nextBtn").textContent=APP.adding?"Save job":"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
+    $("#nextBtn").textContent=APP.adding?(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?"📝 Make estimate":"Save job"):"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
     return;
   }
   const svc=isSvc(S);
@@ -3289,7 +3313,7 @@ function jobCard(j){
 function renderJobForm(){
   const d=APP.draft, svc=d.type==="service", tr=Math.max(0,num(d.dist)-num(APP.settings.freeMiles))*num(APP.settings.perMile);
   const f=(id,label,extra="",cls="")=>`<label class="${cls}">${label}<input id="d-${id}" data-draft="${id}" value="${esc(d[id])}" ${extra}></label>`;
-  return `<form class="form" id="jobForm" autocomplete="off">
+  return `${QUICK_EST&&!APP.editing?`<div class="qs-banner">📝 <strong>New quote.</strong> Add the customer, the car and the work, then tap <strong>Make estimate</strong> to price it and text it.</div>`:""}<form class="form" id="jobForm" autocomplete="off">
     <p class="formh">${APP.editing?"Edit job":"Book a job"}</p>
     <div class="full seg" role="group" aria-label="Job type"><button type="button" data-jtype="ppi" aria-pressed="${!svc}">Pre-purchase inspection</button><button type="button" data-jtype="service" aria-pressed="${svc}">Service / repair</button></div>
     ${svc?`<label class="full">Work requested<textarea id="d-work" data-draft="work" rows="2" placeholder="e.g. Front brake pads and rotors, grinding noise">${esc(d.work)}</textarea></label>`:""}
@@ -3313,7 +3337,7 @@ function renderJobForm(){
     ${f("plate","License plate",'autocapitalize="characters"')}${f("unit","Fleet unit #")}
     ${(()=>{const c=d.custId&&(APP.customers||[]).find(x=>x.id===d.custId);return c&&c.fleet||d.po?f("po",`PO #${c&&c.poReq?" (required)":""}`,"","full"):"";})()}
     <label class="full">Notes<textarea id="d-notes" data-draft="notes" rows="2" placeholder="${svc?"Gate code, parking, parts to pick up":"Seller name, listing link, gate code"}">${esc(d.notes)}</textarea></label>
-    <div class="formacts"><button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button>${svc&&!isTech()?`<button class="btn" type="button" data-act="saveest">📝 Save &amp; make estimate</button>`:""}<button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
+    <div class="formacts">${QUICK_EST&&svc&&!APP.editing?`<button class="btn primary" type="button" data-act="saveest">📝 Make estimate</button><button class="btn" type="submit">Just save the job</button>`:`<button class="btn primary" type="submit">${APP.editing?"Save changes":"Save job"}</button>${svc&&!isTech()?`<button class="btn" type="button" data-act="saveest">📝 Save &amp; make estimate</button>`:""}`}<button class="btn" type="button" data-act="cancelAdd">Cancel</button></div>
   </form>`;
 }
 /* agreed price: starts the invoice at the price agreed with the customer */
@@ -3996,6 +4020,62 @@ function shareMedia(){
 }
 
 /* ================= service / repair job ================= */
+// ---- ☰ quick actions: one tap to the things done most ----
+// white glyphs for the quick-action buttons (24×24, solid)
+const QI={
+ omw:`<path d="M6.2 9.6 8 5.8C8.4 5 9.2 4.5 10.1 4.5h3.8c.9 0 1.7.5 2.1 1.3l1.8 3.8h.7c.4-.6.9-.8 1.4-.8h.6c.6 0 .9.6.6 1.1l-.6.9c.9.7 1.4 1.7 1.4 2.8v4.1c0 .5-.4.9-.9.9h-.6v1.4c0 .6-.5 1-1 1h-1.3c-.6 0-1-.4-1-1v-1.4H6.9v1.4c0 .6-.5 1-1 1H4.6c-.6 0-1-.4-1-1v-1.4H3c-.5 0-.9-.4-.9-.9v-4.1c0-1.1.5-2.1 1.4-2.8l-.6-.9c-.3-.5 0-1.1.6-1.1h.6c.5 0 1 .2 1.4.8ZM8.1 9.4h7.8l-1.3-2.7c-.2-.4-.5-.6-.9-.6h-3.4c-.4 0-.7.2-.9.6Zm-2.8 3c-.5 0-.7.6-.4 1 .6.6 1.6 1.1 2.6 1.2.5 0 .7-.5.5-.9l-.3-.5c-.2-.3-.5-.5-.8-.6Zm13.4 0-1.6.2c-.3.1-.6.3-.8.6l-.3.5c-.2.4 0 .9.5.9 1-.1 2-.6 2.6-1.2.3-.4.1-1-.4-1ZM9.3 15c-.4 0-.6.5-.3.8l.2.2h5.6l.2-.2c.3-.3.1-.8-.3-.8Z"/>`,
+ text:`<path d="M4.5 4h15c1.4 0 2.5 1.1 2.5 2.5v9c0 1.4-1.1 2.5-2.5 2.5H10l-4.6 3.6c-.7.5-1.6 0-1.6-.8V18h.7C3.1 18 2 16.9 2 15.5v-9C2 5.1 3.1 4 4.5 4Zm3 6.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/>`,
+ sched:`<path d="M7.5 2.5c.6 0 1 .4 1 1V5h7V3.5a1 1 0 1 1 2 0V5h1c1.7 0 3 1.3 3 3v10.5c0 1.7-1.3 3-3 3h-13c-1.7 0-3-1.3-3-3V8c0-1.7 1.3-3 3-3h1V3.5c0-.6.4-1 1-1ZM4.5 10v8.5c0 .6.4 1 1 1h13c.6 0 1-.4 1-1V10Zm2.5 2h3v3H7Zm4.5 0h3v3h-3Z"/>`,
+ quote:`<path d="M6 2h8.2c.5 0 1 .2 1.4.6l3.8 3.8c.4.4.6.9.6 1.4v4.4l-2 2V8.5h-3.5c-.8 0-1.5-.7-1.5-1.5V4H6v16h6.2l-.3 2H6c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2Zm2 9h6.5v1.8H8Zm0 3.5h4.5v1.8H8Zm12.6-1.6 1.5 1.5c.4.4.4 1 0 1.4l-5.6 5.6-2.6.7c-.4.1-.7-.2-.6-.6l.7-2.6 5.6-5.6c.3-.4 1-.4 1.4-.4Z"/>`,
+ receipt:`<path d="M5 2.5c0-.5.6-.8 1-.5l1.5 1.1L9 2c.3-.2.7-.2 1 0l1.5 1.1L13 2c.3-.2.7-.2 1 0l1.5 1.1L17 2c.4-.3 1-.1 1 .5v19c0 .6-.6.8-1 .5l-1.5-1.1L14 22c-.3.2-.7.2-1 0l-1.5-1.1L10 22c-.3.2-.7.2-1 0l-1.5-1.1L6 22c-.4.3-1 0-1-.5ZM8 7v1.8h7V7Zm0 4v1.8h7V11Zm0 4v1.8h4.5V15Z"/>`,
+ unpaid:`<path d="M12 1.8c5.6 0 10.2 4.6 10.2 10.2S17.6 22.2 12 22.2 1.8 17.6 1.8 12 6.4 1.8 12 1.8Zm-.9 3.4v1.4c-1.9.3-3.2 1.6-3.2 3.3 0 2 1.6 2.8 3.6 3.3 1.5.4 2 .7 2 1.4 0 .6-.6 1.1-1.6 1.1-1.1 0-1.8-.5-2-1.4l-2.1.4c.3 1.6 1.5 2.6 3.3 2.9v1.3h1.9v-1.3c2-.3 3.3-1.6 3.3-3.3 0-2-1.5-2.8-3.6-3.3-1.4-.4-2-.6-2-1.3 0-.6.5-1 1.4-1 .9 0 1.5.4 1.7 1.2l2-.5c-.3-1.4-1.4-2.4-3-2.7V5.2Z"/>`,
+ ppi:`<path d="M8 2h8c.6 0 1 .4 1 1v1h1.5c1.1 0 2 .9 2 2v14c0 1.1-.9 2-2 2h-13c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2H7V3c0-.6.4-1 1-1Zm1 2v2h6V4Zm7.4 6.3-5.6 5.6-3.2-3.2-1.4 1.4 4.6 4.6 7-7Z"/>`,
+ request:`<path d="M12 2c.6 0 1 .4 1 1v7.6l2.3-2.3 1.4 1.4L12 14.4 7.3 9.7l1.4-1.4 2.3 2.3V3c0-.6.4-1 1-1ZM3.8 14.5h4.6c.5 0 .9.3 1 .8l.3 1.2h4.6l.3-1.2c.1-.5.5-.8 1-.8h4.6c.5 0 .9.4.8.9l-.9 5c-.2 1-1 1.6-2 1.6H5.9c-1 0-1.8-.7-2-1.6l-.9-5c-.1-.5.3-.9.8-.9Z"/>`,
+ customer:`<path d="M12 2.5a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6ZM12 13.6c4.6 0 8.3 2.6 8.3 5.9v1c0 .6-.4 1-1 1H4.7c-.6 0-1-.4-1-1v-1c0-3.3 3.7-5.9 8.3-5.9Z"/>`,
+ expense:`<path d="M5 3.5C5 2.7 5.7 2 6.5 2h7c.8 0 1.5.7 1.5 1.5V12h.5c1.4 0 2.5 1.1 2.5 2.5v3c0 .3.2.5.5.5s.5-.2.5-.5V9.4l-2.2-2.2 1.4-1.4 2.6 2.6c.2.2.2.4.2.7v8.4c0 1.4-1.1 2.5-2.5 2.5S17 18.9 17 17.5v-3c0-.3-.2-.5-.5-.5H15v6.5h.5c.6 0 1 .4 1 1v.5h-13V21.5c0-.6.4-1 1-1H5ZM7 4.5V9h6V4.5Z"/>`,
+ look:`<path d="M10.5 2.5a8 8 0 0 1 6.4 12.8l4.4 4.4c.4.4.4 1.1 0 1.5l-.1.1c-.4.4-1.1.4-1.5 0l-4.4-4.4A8 8 0 1 1 10.5 2.5Zm0 2.6a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8Z"/>`};
+const QS_COLORS=[["","App color"],["#1fae2c","Green"],["#1d6fe0","Blue"],["#e2620f","Orange"],["#d42a2a","Red"],["#7a3fd1","Purple"],["#0b9aa8","Teal"],["#2b2f36","Black"],["#c99a06","Gold"]];
+let QS_PICK=false;
+const qsColor=()=>(APP.settings.qsColor||"").trim()||getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1d6fe0";
+const qsIcon=k=>`<span class="qs-ic"><svg viewBox="0 0 24 24" aria-hidden="true" fill="#fff">${QI[k]||""}</svg></span>`;
+
+let QUICK=null,QUICK_EST=false,QUICK_Q="";
+// open jobs from today on, soonest first (for "On my way")
+function omwJobs(){return APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||TODAY)>=TODAY&&(j.info.date||TODAY)<=addDays(TODAY,7)).sort((a,b)=>((a.info.date||TODAY)+(a.info.time||"99")).localeCompare((b.info.date||TODAY)+(b.info.time||"99"))).slice(0,15);}
+function textHi(name){const first=String(name||"").trim().split(/\s+/)[0]||"there",me=String(APP.settings.owner||"").trim().split(/\s+/)[0];return `Hi ${first}, ${me?`it's ${me} from ${bizName()}. `:`this is ${bizName()}. `}`;}
+function quickTextList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q);
+  const cs=(APP.customers||[]).filter(c=>!c.hidden&&c.phone&&(!q||normName(c.name).includes(q))&&(!dq||dq.length<3||digits(c.phone).includes(dq))).sort((a,b)=>(b.last||"").localeCompare(a.last||"")).slice(0,30);
+  return cs.length?cs.map(c=>`<a class="hist-row qs-sms" href="${esc(smsHref(c.phone,textHi(c.name)))}"><span>💬</span><span class="hist-what"><strong>${esc(c.name)}</strong> · ${esc(c.phone)}</span><span class="hist-amt">${c.last?esc(fmtDate(c.last,{month:"short",day:"numeric"})):""}</span></a>`).join("")
+    :`<p class="empty">${QUICK_Q?"No customers with a phone number match.":"No customers with a phone number yet."}</p>`;}
+const QUICK_ITEMS=[["omw","🚗","On my way","Text your ETA"],["text","💬","Text a customer","Pick and send"],["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
+  ["unpaid","💵","Unpaid invoices","Collect or mark paid"],["ppi","🔍","Book an inspection","Pre-purchase inspection"],["request","📥","Paste a request","From an email or text"],
+  ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"]];
+function quickHTML(){if(!QUICK)return "";
+  const sub=(title,body)=>`<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="${title}"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>${title}</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>${body}</div>`;
+  if(QUICK==="omw"){const js=omwJobs();
+    return sub("On my way",`<p class="help" style="margin:0 0 8px">Pick the job you're heading to. The app works out your drive time and writes the text.</p>
+      <div class="qs-list">${js.length?js.map(j=>`<button type="button" class="hist-row" data-quickomw="${j.id}"><span>${j.info.date===TODAY||!j.info.date?"Today":esc(fmtDate(j.info.date,{weekday:"short",month:"short",day:"numeric"}))}${j.info.time?" "+esc(fmtTime(j.info.time)):""}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="hist-what">${esc(j.info.customer||"Customer")}${j.info.location?" · "+esc(j.info.location):""}</span><span class="hist-amt">${j.info.phone?"🚗":"<small>no phone</small>"}</span></button>`).join(""):`<p class="empty">No jobs booked for the next week.</p>`}</div>`);}
+  if(QUICK==="text"){
+    return sub("Text a customer",`<label class="search" style="margin:0 0 8px"><input id="qsQ" data-quickq="1" value="${esc(QUICK_Q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
+      <p class="help" style="margin:0 0 8px">Tap a customer to open Messages with a greeting already started.</p><div class="qs-list" id="qsList">${quickTextList()}</div>`);}
+  if(QUICK==="receipt"){const js=APP.jobs.filter(j=>j.status==="done").sort((a,b)=>jDate(b).localeCompare(jDate(a))||(b.invoice.num||"").localeCompare(a.invoice.num||"")).slice(0,25);
+    return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Send a receipt"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>Send a receipt</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
+      <p class="help" style="margin:0 0 8px">Pick the job. Its invoice opens, ready to text, email or save as a PDF. Mark it paid first so it shows PAID.</p>
+      <div class="qs-list">${js.length?js.map(j=>`<button type="button" class="hist-row" data-quickrcpt="${j.id}"><span>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))}</span><span class="tag ${j.invoice.paid?"":"tag-bad"}">${j.invoice.paid?"Paid":"Unpaid"}</span><span class="hist-what">${esc(j.info.customer||"Customer")}${j.invoice.num?" · #"+esc(j.invoice.num):""}</span><span class="hist-amt">${money(jobTotal(j))}</span></button>`).join(""):`<p class="empty">No finished jobs yet.</p>`}</div></div>`;}
+  return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Quick actions"><div class="qs-head"><strong>Quick actions</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
+    ${QS_PICK?`<div class="qs-colors" role="group" aria-label="Icon color">${QS_COLORS.map(([c,l])=>`<button type="button" class="qs-sw${(APP.settings.qsColor||"")===c?" on":""}" data-qscolor="${c||"app"}" aria-label="${l}" title="${l}" style="--sw:${c||"var(--accent)"}">${c?"":"A"}</button>`).join("")}<label class="qs-sw qs-custom" title="Pick any color" style="--sw:${esc(qsColor())}">＋<input type="color" data-qscustom="1" value="${esc(/^#[0-9a-f]{6}$/i.test(qsColor())?qsColor():"#1fae2c")}"></label></div>`:""}
+    <div class="qs-grid" style="--qs:${esc(qsColor())}">${QUICK_ITEMS.map(([k,ic,l,sub])=>`<button type="button" class="qs-tile" data-quick="${k}">${qsIcon(k)}<strong>${l}</strong><small>${sub}</small></button>`).join("")}</div>
+    <div class="qs-foot"><button class="mini" type="button" data-act="qspick" aria-pressed="${QS_PICK}">🎨 Icon color</button><button class="mini" type="button" data-quick="help">❓ Help &amp; how-to</button><button class="mini" type="button" data-quick="settings">⚙️ Settings</button></div></div>`;}
+function quickGo(k){QUICK=null;if(!["sched","ppi","quote"].includes(k)){APP.adding=false;APP.editing=null;QUICK_EST=false;}
+  if(k==="sched"||k==="ppi"||k==="quote"){APP.view="jobs";startAdd(null);APP.draft.type=k==="ppi"?"ppi":"service";QUICK_EST=k==="quote";render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("d-customer")?.focus(),60);return;}
+  if(k==="unpaid"){APP.view="dash";render();setTimeout(()=>{const u=document.getElementById("dashUnpaid");if(u)u.scrollIntoView({block:"start"});else toast("No unpaid invoices");},60);return;}
+  if(k==="request"){APP.view="requests";REQ_PASTE={raw:""};REQ_EDIT=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("reqRaw")?.focus(),60);return;}
+  if(k==="customer"){APP.view="customers";CUST_OPEN=null;CUST_EDIT=null;CUST_NEW={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:"",from:"manual"};render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("ce-name")?.focus(),60);return;}
+  if(k==="expense"){APP.view="expenses";EXP_DRAFT=newExpDraft();EXP_DEL=false;EXP_RET=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-desc")?.focus(),60);return;}
+  if(k==="look"){LOOK.jobId="";openLookup(null);return;}
+  if(k==="help"||k==="settings"){APP.view=k;render();window.scrollTo(0,0);return;}
+  render();}
+
 // service jobs open on two tabs: the work (Job) and the billing (Estimate / Invoice)
 let SVC_TAB={};
 const svcTab=j=>isTech()?"job":SVC_TAB[j.id]||(j.status==="done"?"bill":"job");
@@ -4634,6 +4714,7 @@ function render(){applyTheme();
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   if(APP.view==="job"&&S)html=jobCtlHTML()+html;
   $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
+  {let q=document.getElementById("quickSheet");if(!q){q=document.createElement("div");q.id="quickSheet";document.body.appendChild(q);}q.innerHTML=quickHTML();document.body.classList.toggle("quick-open",!!QUICK);}
   navTrack();
   renderChrome();
 }
@@ -4646,7 +4727,7 @@ function startAdd(job){
   render();window.scrollTo(0,0);setTimeout(()=>{const el=document.getElementById("d-customer");el&&el.focus()},50);
 }
 function saveDraft(opt){
-  const d=APP.draft;let savedId=null;
+  const d=APP.draft;let savedId=null;if(d&&d.customer&&d.customer.trim())QUICK_EST=false;
   if(!d.customer.trim()){toast("Add the customer's name");document.getElementById("d-customer")?.focus();return;}
   const {type,custId,techId:pickedTech,...info}=d;TECH_OTHER={};
   const _ej=APP.editing?APP.jobs.find(x=>x.id===APP.editing):null;const _prevTech=_ej?_ej.techId||"":"";const _prevKey=_ej?[_ej.info.date,_ej.info.time,_ej.info.location].join("|"):"";
@@ -5075,7 +5156,16 @@ document.addEventListener("click",e=>{
   if(d.askdel){APP.confirmDel=d.askdel;render();return;}
   if(d.del){deleteJobMedia(APP.jobs.find(x=>x.id===d.del));APP.jobs=APP.jobs.filter(x=>x.id!==d.del);if(APP.active===d.del)APP.active=null;APP.confirmDel=null;save();render();toast("Job deleted");return;}
   if(d.act==="nodel"){APP.confirmDel=null;render();return;}
-  if(d.act==="cancelAdd"){APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
+  if(d.act==="quick"){QUICK="menu";render();return;}
+  if(d.act==="qspick"){QS_PICK=!QS_PICK;render();return;}
+  if(d.qscolor){APP.settings.qsColor=d.qscolor==="app"?"":d.qscolor;save();render();return;}
+  if(d.act==="quickclose"){QUICK=null;render();return;}
+  if(d.quick){if(["receipt","omw","text"].includes(d.quick)){QUICK=d.quick;QUICK_Q="";render();if(d.quick==="text"&&!/iPhone|iPad|Android/i.test(navigator.userAgent))setTimeout(()=>document.getElementById("qsQ")?.focus(),60);return;}quickGo(d.quick);return;}
+  if(d.quickomw){const j=APP.jobs.find(x=>x.id===d.quickomw);QUICK=null;if(!j){render();return;}
+    if(!j.info.phone){openJob(j.id);toast("Add the customer's phone number to text them");return;}
+    APP.view="jobs";APP.adding=false;APP.editing=null;APP.day="";APP.schedMode="list";APP.ctyF=null;render();startOMW(j.id).then(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}));setTimeout(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}),80);return;}
+  if(d.quickrcpt){const j=APP.jobs.find(x=>x.id===d.quickrcpt);QUICK=null;if(!j){render();return;}if(isSvc(j)){SVC_TAB[j.id]="bill";openJob(j.id);}else openJob(j.id,STAGES.length-1);return;}
+  if(d.act==="cancelAdd"){QUICK_EST=false;APP.fuFrom=null;APP.reqFrom=null;APP.adding=false;APP.editing=null;render();return;}
   if(d.act==="fresh"){APP=blankApp();rebuildChecklist(APP.settings);save();render();window.scrollTo(0,0);toast("Add your business info to get started");return;}
   if(d.ckadd){const lbl=addCustomItem(d.ckadd,d.pfx);if(lbl){OPEN_CK.add(d.ckadd);if(d.pfx==="sk")OPEN_ADD=null;render();toast(`Added "${lbl}"`);}return;}
   if(d.ckhide){const st=APP.settings;const h=new Set(st.hidden||[]);h.has(d.ckhide)?h.delete(d.ckhide):h.add(d.ckhide);st.hidden=[...h];rebuildChecklist(st);save();render();return;}
@@ -5451,7 +5541,7 @@ document.addEventListener("click",e=>{
 });
 $("#prevBtn").addEventListener("click",()=>{if(APP.view==="job"&&!isSvc(S))go(S.step-1);});
 $("#nextBtn").addEventListener("click",()=>{
-  if(APP.view==="jobs"){ if(APP.adding)saveDraft(); else startAdd(); return; }
+  if(APP.view==="jobs"){ if(APP.adding)saveDraft(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?{est:true}:undefined); else startAdd(); return; }
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
   if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";const fj=S,me=(fj.info.tech||"Your technician").split(/\s+/)[0];const go=()=>notifySend({to:"managers",title:`${me} finished a job`,body:jobLine(fj),url:"./?job="+encodeURIComponent(fj.id),tag:"done-"+fj.id});setTimeout(()=>syncNow().then(go,go),0);}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}
@@ -5470,6 +5560,8 @@ function sugPick(val){
 }
 document.addEventListener("pointerdown",e=>{const b=e.target.closest&&e.target.closest(".sug-row");if(!b){if(!(SUG_HOLD&&SUG_HOLD.touch))SUG_HOLD=null;return;}
   if(e.pointerType==="touch")return;SUG_HOLD={val:b.dataset.sugpick,x:e.clientX,y:e.clientY};if(e.pointerType==="mouse")e.preventDefault();},true);
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&QUICK){QUICK=null;render();}});
+document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a.qs-sms");if(a&&QUICK){setTimeout(()=>{QUICK=null;render();},300);}});
 // ---- swipe left/right to move between the top tabs (Home, Schedule, Customers, Expenses, Settings) ----
 const SWIPE_VIEWS=["dash","jobs","customers","expenses","settings"];let SW=null;
 function swipeTabs(){return [...document.querySelectorAll(".tabs .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}
@@ -5510,6 +5602,8 @@ document.addEventListener("input",e=>{
   if(d.cloud){CLOUD_FORM[d.cloud]=t.value;return;}
   if(d.giftf){GIFTS.form[d.giftf]=t.value;GIFTS.msg="";return;}
   if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];save();rerenderKeep();return;}
+  if(d.qscustom){APP.settings.qsColor=t.value;const g=document.querySelector(".qs-grid");if(g)g.style.setProperty("--qs",t.value);clearTimeout(QI._t);QI._t=setTimeout(()=>{save();render();},500);return;}
+  if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}
   if(d.bulkdate&&BULK){BULK.date=t.value;return;}

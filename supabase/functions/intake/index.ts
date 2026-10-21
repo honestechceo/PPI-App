@@ -146,6 +146,17 @@ async function fromResend(req: Request) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method === "GET") {
+    // "Save to phone": hand the phone a contact card (.vcf) so Contacts offers Create New Contact. Nothing is stored.
+    const v = new URL(req.url).searchParams.get("vcard") || "";
+    if (!v || v.length > 4000) return out({ error: "bad request" }, 400);
+    try {
+      const bin = atob(v.replace(/-/g, "+").replace(/_/g, "/"));
+      const txt = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+      if (!/^BEGIN:VCARD/.test(txt) || !/END:VCARD\s*$/.test(txt)) return out({ error: "bad request" }, 400);
+      return new Response(txt, { headers: { ...CORS, "Content-Type": "text/vcard; charset=utf-8", "Content-Disposition": 'inline; filename="contact.vcf"' } });
+    } catch (_) { return out({ error: "bad request" }, 400); }
+  }
   if (req.method !== "POST") return out({ error: "POST only" }, 405);
   try {
     const url = new URL(req.url);

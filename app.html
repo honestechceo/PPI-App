@@ -475,6 +475,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
 .av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .req-alert{border-color:var(--accent);background:var(--accent-soft)}
+.req-top-alert{width:100%;margin:0 0 12px;text-align:left}.req-names{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.35}
 /* ---------- wide screens: iPhone Duo unfolded (7.6"), iPad, landscape ---------- */
 @media (min-width:860px){
   .top-inner,main,.foot-inner{max-width:1180px}
@@ -2275,6 +2276,9 @@ function renderDash(){
   return `${sampleBanner()}
   <div class="stage-head dash-head"><div><div class="eyebrow">${esc(fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"}))}</div><h2>Dashboard</h2></div>
     <button class="btn primary" type="button" data-act="dashbook">+ Book a job</button></div>
+  ${(()=>{const nr=APP.requests.filter(r=>r.status==="new"&&reqLive(r)).sort((a,b)=>(b.at||0)-(a.at||0));if(!nr.length)return "";
+    return `<button type="button" class="dash-card dash-link req-alert req-top-alert" data-nav="requests"><span><strong>📥 ${nr.length} new request${nr.length===1?"":"s"}</strong> waiting for review
+      <span class="req-names">${nr.slice(0,3).map(r=>esc([r.customer||"No name",r.work||[r.year,r.make,r.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ").slice(0,60))).join("<br>")}${nr.length>3?`<br>+ ${nr.length-3} more`:""}</span></span><span>›</span></button>`;})()}
   <div class="seg dash-seg" role="group" aria-label="Period">${[["week","Week"],["month","Month"],["year","Year"]].map(([k,l])=>`<button type="button" data-dashp="${k}" aria-pressed="${P===k}">${l}</button>`).join("")}</div>
   <div class="tiles">
     <div class="tile"><span class="tl">Billed · ${esc(label.toLowerCase())}</span><strong>${money(billed)}</strong><span class="ts">${money(collected)} collected</span></div>
@@ -2286,7 +2290,7 @@ function renderDash(){
   </div>
   ${trialBannerHTML()}
   <div class="dash-grid">
-  ${APP.requests.some(r=>r.status==="new"&&reqLive(r))?`<button type="button" class="dash-card dash-link req-alert" data-nav="requests"><span><strong>📥 ${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new request${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length===1?"":"s"}</strong> waiting for review</span><span>›</span></button>`:`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
+  ${APP.requests.some(r=>r.status==="new"&&reqLive(r))?"":`<button type="button" class="dash-card dash-link" data-nav="requests"><span>📥 Got a quote or appointment request by email? <strong>Paste it in</strong></span><span>›</span></button>`}
   <div class="dash-card">
     <div class="dc-h"><h3>Billed by month</h3><span class="ts" id="barCap">${esc(fmtDate(mVals[5].m+"-01",{month:"long"}))}: ${money(mVals[5].v)} · ${mVals[5].n} job${mVals[5].n===1?"":"s"}</span></div>
     ${barChart(mVals)}

@@ -17,8 +17,13 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
+      - name: Check CLI and token
+        run: |
+          supabase --version 2>&1 | sed 's/^/::notice::cli /'
+          out=$(supabase projects list 2>&1) || { echo "$out" | tail -5 | sed 's/^/::error::/'; exit 1; }
       - name: Deploy billing
-        run: supabase functions deploy billing --project-ref "$PROJECT" --no-verify-jwt --use-api
+        run: |
+          out=$(supabase functions deploy billing --project-ref "$PROJECT" --no-verify-jwt --use-api 2>&1) || { echo "$out" | tail -8 | sed 's/^/::error::/'; exit 1; }
       - name: Deploy stripe-webhook
         run: supabase functions deploy stripe-webhook --project-ref "$PROJECT" --no-verify-jwt --use-api
       - name: Deploy notify

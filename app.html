@@ -1926,7 +1926,7 @@ function reqForm(rq){
     ${f("location","Address","","full")}
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
     <label class="full">What they need<textarea data-req="work" rows="2">${esc(rq.work||"")}</textarea></label>
-    ${f("date","Day they asked for",'type="date"')}${f("time","Time",'type="time"')}
+    ${f("date","Appointment date (the day they want)",'type="date"')}${f("time","Appointment time",'type="time"')}
     ${f("agreed","Agreed price ($)",'inputmode="decimal" placeholder="If you agreed on one"')}<label class="check"><input type="checkbox" data-reqc="agreedTravel" ${rq.agreedTravel!==false?"checked":""}> Travel included</label>
     <div class="full">${availHTML(rq)}</div>
     <label class="full">Notes / full message<textarea data-req="notes" rows="3">${esc(rq.notes||"")}</textarea></label>
@@ -3316,8 +3316,8 @@ function renderJobForm(){
     <p class="formh">${APP.editing?"Edit job":"Book a job"}</p>
     <div class="full seg" role="group" aria-label="Job type"><button type="button" data-jtype="ppi" aria-pressed="${!svc}">Pre-purchase inspection</button><button type="button" data-jtype="service" aria-pressed="${svc}">Service / repair</button></div>
     ${svc?`<label class="full">Work requested<textarea id="d-work" data-draft="work" rows="2" placeholder="e.g. Front brake pads and rotors, grinding noise">${esc(d.work)}</textarea></label>`:""}
-    ${f("date","Date",'type="date" required')}
-    ${f("time","Time",'type="time"')}
+    ${f("date","Appointment date",'type="date" required')}
+    ${f("time","Appointment time",'type="time"')}
     <div class="sug-wrap">${f("customer","Customer name",'required autocomplete="off"')}<div class="sug" id="sug-draft"></div></div>
     ${f("phone","Customer phone",'inputmode="tel"')}
     ${f("location",svc?"Service address":"Inspection address","","full")}
@@ -3349,9 +3349,12 @@ function applyAgreed(j){
 }
 function agreedLine(j){const i=j.info,a=num(i.agreed);if(!a)return "";const t=totals(j),inc=i.agreedTravel!==false;
   return `Agreed price: ${money(a)}${inc?" (travel included)":t.travel.fee?` + ${money(t.travel.fee)} travel`:""}${t.taxOn&&t.tax?` + ${money(t.tax)} tax`:""}.`;}
+// what the customer is told about labor when the appointment is booked
+function laborConfirmLine(j){const ls=(j.invoice&&j.invoice.lines)||[],lab=ls.filter(x=>x.k==="labor"||x.k==="flat").reduce((a,x)=>a+lineAmt(x),0),rate=num(rates(j).laborRate);
+  if(lab>0)return `Labor: ${money(lab)}. `;return rate?`Labor: ${money(rate)} per hour. `:"";}
 function confirmText(j){
   const i=j.info, st=APP.settings, t=totals(j);
-  if(isSvc(j))return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your service appointment is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.${i.work?"\n\nWork: "+i.work:""}\n\n${num(i.agreed)?agreedLine(j)+" Anything extra will only be done with your OK.":`${t.travel.fee?`Travel fee: ${money(t.travel.fee)}. `:""}Parts and labor will be on your invoice when the job is done.`}\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
+  if(isSvc(j))return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your service appointment is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.${i.work?"\n\nWork: "+i.work:""}\n\n${num(i.agreed)?agreedLine(j)+" Anything extra will only be done with your OK.":`${laborConfirmLine(j)}${t.travel.fee?`Travel fee: ${money(t.travel.fee)}. `:""}Parts and labor will be billed at the completion of service.`}\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
   return `Hi ${i.customer?i.customer.split(" ")[0]:"there"}, your pre-purchase inspection is booked for ${fmtDate(i.date,{weekday:"long",month:"long",day:"numeric"})}${i.time?" at "+fmtTime(i.time):""}${i.location?" at "+i.location:""}${vehOf(i)?" for the "+vehOf(i):""}.\n\n${num(i.agreed)?agreedLine(j):`Price: ${money(t.total)} (${money(t.fee)} inspection${t.travel.fee?` + ${money(t.travel.fee)} travel`:""}).`} Please have the seller keep the engine cold before I arrive so I can check the cold start.\n\n${st.owner?st.owner+", ":""}${bizName()}${st.phone?"\n"+st.phone:""}`;
 }
 
@@ -3666,8 +3669,8 @@ function renderIntake(){
   <div class="form">
     <div class="sug-wrap">${f("customer","Customer / buyer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
     ${f("phone","Phone",'inputmode="tel"')}
-    ${f("date","Date",'type="date"')}
-    ${f("time","Time",'type="time"')}
+    ${f("date","Appointment date",'type="date"')}
+    ${f("time","Appointment time",'type="time"')}
     <div class="full addr-row">${f("location","Inspection address")}${dirLink(i.location,"dirLink")}</div>
     ${f("county","County",'placeholder="Fills in from the address" autocomplete="off"')}
     ${techFieldHTML("info",i.tech)}
@@ -4095,7 +4098,7 @@ function renderService(){
     <p class="formh">Customer &amp; vehicle</p>
     <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
     ${f("phone","Phone",'inputmode="tel"')}
-    ${f("date","Date",'type="date"')}
+    ${f("date","Appointment date",'type="date"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
     ${f("county","County",'placeholder="Fills in from the address" autocomplete="off"')}
     ${techFieldHTML("info",i.tech)}

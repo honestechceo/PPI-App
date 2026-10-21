@@ -3112,7 +3112,7 @@ function renderJobs(){
   <textarea class="copybox" id="jobCopy" hidden readonly></textarea>`;
 }
 /* ---- "On my way" text with ETA ---- */
-const OMW_DEFAULT="Hi {first}, this is {tech} from {business}. I'm on my way and should arrive around {eta} (about {minutes} min). See you soon!";
+const OMW_DEFAULT="Hi {first}, this is your technician from {business}. I'm on my way and should arrive around {eta} (about {minutes} min). See you soon!";
 let OMW=null; // {id, state:"loading"|"ready", mins, src, text, edited}
 function omwText(j,mins){
   const i=j.info,st=APP.settings,first=(i.customer||"").trim().split(/\s+/)[0]||"there";

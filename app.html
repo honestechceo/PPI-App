@@ -2644,8 +2644,13 @@ function vcardOf(c){const e=x=>String(x||"").replace(/\\/g,"\\\\").replace(/\n/g
   const parts=String(c.name||"").trim().split(/\s+/),last=c.fleet?"":parts.length>1?parts.pop():"",first=c.fleet?"":parts.join(" ");
   return ["BEGIN:VCARD","VERSION:3.0",`N:${e(last)};${e(first||c.name)};;;`,`FN:${e(c.name)}`,c.fleet?`ORG:${e(c.name)}`:"",c.fleet&&c.contact?`NOTE:${e("Contact: "+c.contact)}`:"",
     c.phone?`TEL;TYPE=CELL:${e(c.phone)}`:"",c.email?`EMAIL:${e(c.email)}`:"",c.location?`ADR;TYPE=HOME:;;${e(c.location)};;;;`:"","END:VCARD"].filter(Boolean).join("\r\n");}
-async function saveVcard(c){const name=(c.name||"customer").replace(/[^\w ]+/g,"").trim()||"customer",blob=new Blob([vcardOf(c)],{type:"text/vcard"});
-  try{const f=new File([blob],name+".vcf",{type:"text/vcard"});if(navigator.canShare&&navigator.canShare({files:[f]})&&/iPhone|iPad|Android/i.test(navigator.userAgent)){await navigator.share({files:[f],title:c.name});return;}}catch(e){if(e&&e.name==="AbortError")return;}
+async function saveVcard(c){const name=(c.name||"customer").replace(/[^\w ]+/g,"").trim()||"customer",txt=vcardOf(c);
+  // iPhone/iPad: opening the card itself shows Contacts' own "Create New Contact" / "Add to Contacts" screen (the share sheet only offers Files/Copy)
+  if(/iPhone|iPad|iPod/i.test(navigator.userAgent)||(/Mac/i.test(navigator.platform)&&navigator.maxTouchPoints>1)){
+    const u=URL.createObjectURL(new Blob([txt],{type:"text/x-vcard"}));openOutside(u);setTimeout(()=>URL.revokeObjectURL(u),120000);
+    toast("Tap “Create New Contact” (or Add to Contacts) on the next screen");return;}
+  const blob=new Blob([txt],{type:"text/vcard"});
+  try{const f=new File([blob],name+".vcf",{type:"text/vcard"});if(navigator.canShare&&navigator.canShare({files:[f]})&&/Android/i.test(navigator.userAgent)){await navigator.share({files:[f],title:c.name});return;}}catch(e){if(e&&e.name==="AbortError")return;}
   const u=URL.createObjectURL(blob),a=document.createElement("a");a.href=u;a.download=name+".vcf";document.body.appendChild(a);a.click();setTimeout(()=>{a.remove();URL.revokeObjectURL(u);},1500);}
 function renderCustomers(){
   const q=APP.custQ||"";

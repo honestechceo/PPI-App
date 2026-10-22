@@ -699,7 +699,8 @@ body.quick-open{overflow:hidden}
 .sig-show img{height:46px;background:#fff;border-radius:4px;border:1px solid var(--line)}
 .sig-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:14px}
 .sig-box{background:var(--surface);border-radius:14px;padding:16px;width:100%;max-width:560px;display:flex;flex-direction:column;gap:10px}
-#sigCv{width:100%;height:190px;background:#fff;border:2px dashed var(--line);border-radius:10px;touch-action:none}
+html.sig-open,html.sig-open body{overflow:hidden;overscroll-behavior:none}
+#sigCv{width:100%;height:190px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;background:#fff;border:2px dashed var(--line);border-radius:10px;touch-action:none}
 .sig-hint{margin-top:-6px;text-align:center}
 .sig-box input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;min-height:44px;font:inherit;color:var(--ink)}
 .sig-box .acts{display:flex;flex-wrap:wrap;gap:8px}
@@ -2221,6 +2222,10 @@ function sigModalHTML(){
   </div></div>`;
 }
 let SIG_DRAWN=false;
+// the signature box lives outside the page, so a background refresh (sync, timers) can't wipe what the customer drew
+function sigOpen(){sigClose(true);const w=document.createElement("div");w.id="sigWrap";w.innerHTML=sigModalHTML();document.body.appendChild(w);
+  document.documentElement.classList.add("sig-open");requestAnimationFrame(()=>requestAnimationFrame(initSigPad));}
+function sigClose(keep){const w=document.getElementById("sigWrap");if(w)w.remove();document.documentElement.classList.remove("sig-open");if(!keep)SIGPAD=null;}
 function initSigPad(){
   const cv=document.getElementById("sigCv");if(!cv)return;SIG_DRAWN=false;
   const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;
@@ -2229,6 +2234,7 @@ function initSigPad(){
   cv.onpointerdown=e=>{e.preventDefault();cv.setPointerCapture(e.pointerId);last=pt(e);g.beginPath();g.arc(last[0],last[1],1.1,0,7);g.fillStyle="#111";g.fill();SIG_DRAWN=true;};
   cv.onpointermove=e=>{if(!last)return;e.preventDefault();const p=pt(e);g.beginPath();g.moveTo(last[0],last[1]);g.lineTo(p[0],p[1]);g.stroke();last=p;SIG_DRAWN=true;};
   cv.onpointerup=cv.onpointercancel=()=>{last=null;};
+  cv.addEventListener("touchstart",e=>e.preventDefault(),{passive:false});cv.addEventListener("touchmove",e=>e.preventDefault(),{passive:false});
 }
 
 /* ================= review requests ================= */
@@ -4863,7 +4869,7 @@ function render(){applyTheme();
   else{const s=STAGES[S.step];
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   if(APP.view==="job"&&S)html=jobCtlHTML()+html;
-  $("#main").innerHTML=html+(SIGPAD&&APP.view==="job"?sigModalHTML():"");
+  $("#main").innerHTML=html;if(SIGPAD&&APP.view!=="job")sigClose();
   {let q=document.getElementById("quickSheet");if(!q){q=document.createElement("div");q.id="quickSheet";document.body.appendChild(q);}q.innerHTML=quickHTML();document.body.classList.toggle("quick-open",!!QUICK);}
   navTrack();
   renderChrome();
@@ -5400,13 +5406,15 @@ document.addEventListener("click",e=>{
   if(d.act==="planrefresh"){TECHS.extra=null;fetchPlan().then(()=>{rerenderKeep();toast(access().kind==="paid"?"Your plan is active. Thank you!":"Plan checked");});return;}
   if(d.act==="syncnow"){syncNow(true);return;}
   if(d.act==="signout"){cloudSignOut();rerenderKeep();toast("Signed out. Your data stays on this device.");return;}
-  if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};render();setTimeout(initSigPad,30);return;}
-  if(d.act==="sigcancel"){SIGPAD=null;rerenderKeep();return;}
+  if(d.sigopen){SIGPAD={kind:d.sigopen,jobId:S.id};sigOpen();return;}
+  if(d.act==="sigcancel"){sigClose();return;}
   if(d.act==="sigclr"){initSigPad();return;}
   if(d.act==="sigsave"){if(!SIG_DRAWN){toast("Sign in the box first");return;}const cv=document.getElementById("sigCv");const j=APP.jobs.find(x=>x.id===SIGPAD.jobId);
     const c=drawTo(cv,cv.width,cv.height,600);const data=c.toDataURL("image/jpeg",0.7);j.sig=j.sig||{};j.sig[SIGPAD.kind]={data,name:(document.getElementById("sigName")?.value||"").trim(),at:Date.now()};
     if(SIGPAD.kind==="est"){ensureEst();Object.assign(j.est,{status:"approved",approvedDate:TODAY,total:jobTotal(j)});}
-    const k=SIGPAD.kind;SIGPAD=null;save();rerenderKeep();toast(k==="est"?"Signed and approved":"Signature saved");return;}
+    const k=SIGPAD.kind;sigClose();save();
+    if(k==="est"&&j.pending){EST_BOOK={id:j.id,pick:slotsOf(j).length?0:"other",d:"",t:""};rerenderKeep();setTimeout(()=>document.querySelector(".est-book")?.scrollIntoView({block:"center",behavior:"smooth"}),80);toast("Signed. Now pick the appointment time");return;}
+    rerenderKeep();toast(k==="est"?"Signed and approved":"Signature saved");return;}
   if(d.sigclear){if(S.sig){delete S.sig[d.sigclear];save();rerenderKeep();}return;}
   if(d.reviewcopy){const j=APP.jobs.find(x=>x.id===d.reviewcopy);if(j){copyText(reviewText(j));j.reviewAt=Date.now();save();}return;}
   if(d.routeplan!==undefined){planRoute(d.routeplan||TODAY,true);return;}

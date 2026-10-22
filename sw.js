@@ -1,7 +1,7 @@
 // Offline support for the Honestech Mobile Mechanic App.
 // The app page is fetched fresh when online (so updates arrive) and served from cache when offline.
 // The PDF library and fonts are cached the first time they load.
-const VERSION = "ppi-v76";
+const VERSION = "ppi-v77";
 const SHELL = ["./", "index.html", "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -20,6 +20,9 @@ self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
+
+  // short document links (/d/?CODE) are their own page: never cache them as the app
+  if (url.origin === location.origin && url.pathname.startsWith("/d/")) return;
 
   // App page: network first, cache fallback
   if (req.mode === "navigate" || (url.origin === location.origin && url.pathname.endsWith("/index.html"))) {

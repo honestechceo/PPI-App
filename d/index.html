@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Opening your document…</title>
+<meta name="robots" content="noindex">
+<style>body{margin:0;font:16px/1.5 system-ui,-apple-system,sans-serif;background:#0f141a;color:#e9edf2;display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:24px;box-sizing:border-box}a{color:#5aa9ff}</style>
+</head><body>
+<div><p id="m">Opening your document…</p><p><a id="a" href="#">Tap here if it doesn't open</a></p></div>
+<script>
+(function(){var c=(location.search.slice(1)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,"");
+  var u="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake?d="+encodeURIComponent(c);
+  document.getElementById("a").href=u;
+  if(c.length<6){document.getElementById("m").textContent="This link is incomplete. Ask the shop to send it again.";return;}
+  location.replace(u);})();
+</script>
+</body></html>

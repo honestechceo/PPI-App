@@ -4859,7 +4859,12 @@ async function sendPdf(kind){
   try{const blob=buildInvoicePdf(j,kind==="estimate");save();
     const num=(kind==="estimate"?j.est.num:j.invoice.num)||"doc",id=`pdf-${String(num).replace(/[^A-Za-z0-9-]+/g,"")}-${Math.random().toString(36).slice(2,10)}.pdf`;
     await cloudPut(id,blob,"application/pdf");
-    const h=await cloudHdr();const r=await fetch(`${SUPA_URL}/storage/v1/object/sign/media/${cloudPath(id)}`,{method:"POST",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:60*60*24*365})});
+    const h=await cloudHdr();
+    // a short, tidy link (honestechmobileapp.com/d/?CODE); falls back to the long private link if that isn't available
+    try{const lr=await fetch(`${SUPA_URL}/functions/v1/intake?act=link`,{method:"POST",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({path:`${AUTH.shop_id}/${id}`})});
+      const ld=await lr.json().catch(()=>({}));
+      if(lr.ok&&ld.code){SENDPDF={kind,jobId:j.id,key:pdfKey(j,kind),url:"https://honestechmobileapp.com/d/?"+ld.code};toast(j.info.phone?"PDF ready. Tap Text the PDF":"PDF ready. Copy the link to send it");rerenderKeep();return;}}catch(e){}
+    const r=await fetch(`${SUPA_URL}/storage/v1/object/sign/media/${cloudPath(id)}`,{method:"POST",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:60*60*24*365})});
     const d=await r.json().catch(()=>({}));if(!r.ok||!(d.signedURL||d.signedUrl))throw {msg:d.message||d.error||"Couldn't make the link"};
     const path=d.signedURL||d.signedUrl;
     SENDPDF={kind,jobId:j.id,key:pdfKey(j,kind),url:/^https?:/.test(path)?path:`${SUPA_URL}/storage/v1${path.startsWith("/")?"":"/"}${path}`};

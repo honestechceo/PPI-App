@@ -10,7 +10,7 @@ import webpush from "npm:web-push@3.6.7";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "POST, OPTIONS" };
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 const out = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const clip = (s: unknown, n: number) => String(s ?? "").slice(0, n);
 const EMPTY = /^\s*(not provided|n\/?a|none( reported| given)?|unknown|no(t)? (given|available)|-+|\.+)?\s*$/i;
@@ -146,6 +146,42 @@ async function fromResend(req: Request) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  if (req.method === "GET" && new URL(req.url).searchParams.get("d")) {
+    // short PDF link (honestechmobileapp.com/d/?CODE): look up which PDF it points to and send the phone there
+    const code = (new URL(req.url).searchParams.get("d") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+    const gone = () => new Response("This link has expired. Ask the shop to send it again.", { status: 404, headers: { ...CORS, "Content-Type": "text/plain; charset=utf-8" } });
+    if (code.length < 6) return gone();
+    const { data: f } = await db.storage.from("media").download(`_links/${code}.json`);
+    if (!f) return gone();
+    let m: { path?: string; exp?: number } = {};
+    try { m = JSON.parse(await f.text()); } catch (_) { return gone(); }
+    if (!m.path || (m.exp && Date.now() > m.exp)) return gone();
+    const { data: sg } = await db.storage.from("media").createSignedUrl(m.path, 60 * 60);
+    if (!sg?.signedUrl) return gone();
+    return new Response(null, { status: 302, headers: { ...CORS, Location: sg.signedUrl, "Cache-Control": "no-store" } });
+  }
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "link") {
+    // the app asks for a short link to a PDF it just uploaded to its own shop folder
+    try {
+      const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+      const { data: ud } = await db.auth.getUser(token);
+      const me = ud?.user;
+      if (!me) return out({ error: "Please sign in again" }, 401);
+      const body = await req.json().catch(() => ({}));
+      const path = String(body.path || "");
+      const shop = path.split("/")[0];
+      if (!shop || !/^[^/]+\/[A-Za-z0-9._-]+\.pdf$/.test(path)) return out({ error: "Bad file" }, 400);
+      const { data: mem } = await db.from("shop_members").select("user_id").eq("shop_id", shop).eq("user_id", me.id).maybeSingle();
+      if (!mem) return out({ error: "Not your shop" }, 403);
+      const ABC = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const rnd = crypto.getRandomValues(new Uint8Array(8));
+      const code = Array.from(rnd, (b) => ABC[b % ABC.length]).join("");
+      const rec = JSON.stringify({ path, exp: Date.now() + 366 * 864e5, by: me.id });
+      const { error } = await db.storage.from("media").upload(`_links/${code}.json`, new Blob([rec], { type: "application/json" }), { upsert: false, contentType: "application/json" });
+      if (error) return out({ error: error.message }, 500);
+      return out({ code });
+    } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
+  }
   if (req.method === "GET") {
     // "Save to phone": hand the phone a contact card (.vcf) so Contacts offers Create New Contact. Nothing is stored.
     const v = new URL(req.url).searchParams.get("vcard") || "";

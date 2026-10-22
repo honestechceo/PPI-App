@@ -4295,7 +4295,7 @@ function renderService(){
       ${payBoxHTML(t.total)}
       ${reviewBtnHTML(S)}
     </div>
-    <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
+    <div class="copyrow">${sendPdfHTML("invoice")}<button class="btn dl-only" type="button" data-act="pdfInvoice">💾 Save invoice PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>`}
     ${sigBlockHTML(mode==="est"?"est":"inv")}
     ${(st.warranty||"").trim()?`<p class="fineprint"><strong>Warranty:</strong> ${esc(st.warranty.trim())}</p>`:""}
@@ -4448,7 +4448,7 @@ function estPanelHTML(t){
   return `${booked}${slots}<div class="rep-sec"><h4>Estimate status</h4>
       <div class="chips" role="group" aria-label="Estimate status">${EST_ST.map(([k,l])=>`<button type="button" data-eststat="${k}" aria-pressed="${e.status===k}">${l}</button>`).join("")}</div>
       <p class="help" style="margin:6px 0 0">${e.num?`Valid until ${esc(fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"}))}. `:""}${e.status==="approved"&&e.approvedDate?`Approved ${esc(fmtDate(e.approvedDate,{month:"short",day:"numeric"}))}. `:""}Change how long estimates are good for in Settings → Invoices.</p></div>
-    ${hasLines?`<div class="copyrow">${can?`<a class="btn primary" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, here's your estimate${vehOf(i)?" for the "+vehOf(i):""}.\n\n`+estimateText()))}" data-estsent="1">💬 Text estimate</a>`:""}<button class="btn${can?"":" primary"} dl-only" type="button" data-act="pdfEstimate">Save estimate PDF</button><button class="btn" type="button" data-act="copyEstimate">Copy estimate text</button></div>
+    ${hasLines?`<div class="copyrow">${can?`<a class="btn primary" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, here's your estimate${vehOf(i)?" for the "+vehOf(i):""}.\n\n`+estimateText()))}" data-estsent="1">💬 Text estimate</a>`:""}</div><div class="copyrow">${sendPdfHTML("estimate")}<button class="btn dl-only" type="button" data-act="pdfEstimate">💾 Save estimate PDF</button><button class="btn" type="button" data-act="copyEstimate">Copy estimate text</button></div>
     ${S.pending?(EST_BOOK&&EST_BOOK.id===S.id?estBookHTML(S):`<div class="copyrow"><button class="btn est-go" type="button" data-estbook="${S.id}">✓ Customer approved: book the appointment</button><button class="btn del" type="button" data-estdecline="${S.id}">Declined</button></div>`)
       :`<div class="copyrow"><button class="btn est-go" type="button" data-act="estapprove">✓ Customer approved: turn into invoice</button></div>`}`
     :`<p class="help">Add labor and parts above, or pick a job from your service menu, to build the estimate.</p>`}
@@ -4492,7 +4492,7 @@ function renderInvoice(){
       <div class="chips" role="group" aria-label="Mark paid">${PAYMETHODS.map(m=>`<button type="button" data-paid="${m}" aria-pressed="${inv.paid&&inv.paidVia===m}">${inv.paid&&inv.paidVia===m?"Paid · ":""}${m}</button>`).join("")}${inv.paid&&!PAYMETHODS.includes(inv.paidVia)?`<button type="button" aria-pressed="true" disabled>Paid · ${esc(inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"method not recorded")}</button>`:""}${inv.paid?`<button type="button" data-paid="">Mark unpaid</button>`:""}</div>${invDelHTML(S)}
       ${payBoxHTML(t.total)}
     </div>
-    <div class="copyrow"><button class="btn primary dl-only" type="button" data-act="pdfInvoice">Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
+    <div class="copyrow">${sendPdfHTML("invoice")}<button class="btn dl-only" type="button" data-act="pdfInvoice">💾 Save invoice PDF</button><button class="btn dl-only" type="button" data-act="pdfReport">Report PDF</button><button class="btn" type="button" data-act="copyInvoice">Copy invoice text</button></div>
     <p class="help dl-note" style="margin:8px 0 0">PDF saving isn't available in this view of the Claude app. Copy the invoice text instead, or update the Claude app.</p>
     <textarea class="copybox" id="invbox" hidden readonly></textarea>
     ${sigBlockHTML("inv")}
@@ -4784,6 +4784,32 @@ function buildInvoicePdf(job,est){
   return doc.output("blob");
   }finally{S=prev;}
 }
+/* ---- send a PDF by text: upload it to the shop's private storage and text the customer a private link ---- */
+let SENDPDF=null; // {kind,jobId,key,url,busy,err}
+const pdfKey=(j,kind)=>[kind,kind==="estimate"?(j.est&&j.est.num):j.invoice.num,jobTotal(j).toFixed(2),(j.invoice.lines||[]).length,j.invoice.paid?1:0].join("|");
+function sendPdfHTML(kind){const j=S,i=j.info,first=(i.customer||"").trim().split(/\s+/)[0]||"there",label=kind==="estimate"?"estimate":"invoice";
+  const sp=SENDPDF&&SENDPDF.jobId===j.id&&SENDPDF.kind===kind?SENDPDF:null;
+  if(sp&&sp.busy)return `<button class="btn primary" type="button" disabled>⏳ Making the ${label} PDF…</button>`;
+  if(sp&&sp.url&&sp.key===pdfKey(j,kind)){const num=kind==="estimate"?(j.est&&j.est.num)||"":j.invoice.num||"";
+    const msg=`Hi ${first}, here's your ${label}${num?" "+num:""} from ${bizName()}${kind==="invoice"&&!j.invoice.paid?` for ${money(jobTotal(j))}`:""}:\n${sp.url}`;
+    return `${i.phone&&CAN_CAL?`<a class="btn primary" href="${esc(smsHref(i.phone,msg))}" ${kind==="estimate"?'data-estsent="1"':`data-invsent="${j.id}"`}>💬 Text the PDF to ${esc(first)}</a>`:""}<button class="btn" type="button" data-pdflink="${esc(sp.url)}">Copy PDF link</button>`;}
+  return `<button class="btn primary" type="button" data-sendpdf="${kind}">📄 Send ${label} PDF</button>${sp&&sp.err?`<span class="help vin-warn">${esc(sp.err)}</span>`:""}`;}
+async function sendPdf(kind){
+  if(!window.jspdf){toast("The PDF tool didn't load. Check your connection and try again.");return;}
+  if(!APP.settings.biz.trim()){toast("Add your business name in Settings first. It goes at the top of the PDF.");return;}
+  const j=S;if(kind==="estimate")ensureEst();else ensureInvoice();
+  if(!AUTH||!AUTH.shop_id){toast("Sign in to text a PDF link. Opening the share sheet instead");return savePdf(kind);}
+  SENDPDF={kind,jobId:j.id,busy:true};rerenderKeep();
+  try{const blob=buildInvoicePdf(j,kind==="estimate");save();
+    const num=(kind==="estimate"?j.est.num:j.invoice.num)||"doc",id=`pdf-${String(num).replace(/[^A-Za-z0-9-]+/g,"")}-${Math.random().toString(36).slice(2,10)}.pdf`;
+    await cloudPut(id,blob,"application/pdf");
+    const h=await cloudHdr();const r=await fetch(`${SUPA_URL}/storage/v1/object/sign/media/${cloudPath(id)}`,{method:"POST",headers:{...h,"Content-Type":"application/json"},body:JSON.stringify({expiresIn:60*60*24*365})});
+    const d=await r.json().catch(()=>({}));if(!r.ok||!(d.signedURL||d.signedUrl))throw {msg:d.message||d.error||"Couldn't make the link"};
+    const path=d.signedURL||d.signedUrl;
+    SENDPDF={kind,jobId:j.id,key:pdfKey(j,kind),url:/^https?:/.test(path)?path:`${SUPA_URL}/storage/v1${path.startsWith("/")?"":"/"}${path}`};
+    toast(j.info.phone?"PDF ready. Tap Text the PDF":"PDF ready. Copy the link to send it");}
+  catch(e){console.error(e);SENDPDF={kind,jobId:j.id,err:(e&&e.msg&&String(e.msg).slice(0,140))||"Couldn't upload the PDF. Check your connection."};}
+  rerenderKeep();}
 async function savePdf(kind){
   if(!window.jspdf){toast("The PDF tool didn't load. Check your connection and try again.");return;}
   const dl=await getSaver();
@@ -5255,6 +5281,8 @@ document.addEventListener("click",e=>{
   if(sh){const j=APP.jobs.find(x=>x.id===sh.dataset.sheetsent);if(j){j.sheetAt=Date.now();save();setTimeout(rerenderKeep,800);}return;}
   const rd=e.target.closest&&e.target.closest("a[data-reqdecl]");
   if(rd){const r=APP.requests.find(x=>x.id===rd.dataset.reqdecl);if(r){r.status="declined";save();setTimeout(()=>{REQ_NO=null;rerenderKeep();},800);}return;}
+  const isn=e.target.closest&&e.target.closest("a[data-invsent]");
+  if(isn){const j=APP.jobs.find(x=>x.id===isn.dataset.invsent);if(j){j.invoice.sentAt=Date.now();save();}return;}
   const es=e.target.closest&&e.target.closest("a[data-estsent]");
   if(es&&S&&S.est){S.est.sentAt=Date.now();save();if(S.est.status==="draft"){S.est.status="sent";save();setTimeout(rerenderKeep,800);}return;}
   const sent=e.target.closest&&e.target.closest("a[data-omwsent]");
@@ -5371,6 +5399,8 @@ document.addEventListener("click",e=>{
   if(d.verdict){S.verdict=d.verdict;save();render();return;}
   if(d.act==="pdfReport"){savePdf("report");return;}
   if(d.act==="pdfInvoice"){savePdf("invoice");return;}
+  if(d.sendpdf){sendPdf(d.sendpdf);return;}
+  if(d.pdflink){copyText(d.pdflink);return;}
   if(d.act==="copyReport"){copyText(reportText(),"copybox");return;}
   if(d.act==="copyInvoice"){copyText(invoiceText(),"invbox");return;}
   if(d.act==="copyBoth"){copyText(reportText()+"\n\n————————————\n\n"+invoiceText(),"invbox");return;}

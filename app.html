@@ -475,7 +475,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
 .av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .req-alert{border-color:var(--accent);background:var(--accent-soft)}
-.slots{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.slot-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 10px;font-size:14px;font-weight:600;background:var(--card,#fff)}
+.slots{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.slot-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 10px;font-size:14px;font-weight:600;background:var(--surface);color:var(--ink)}
 .slot-x{border:0;background:transparent;font-size:13px;width:26px;height:26px;border-radius:50%;cursor:pointer;color:var(--muted)}
 .slot-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.slot-add input{flex:1 1 130px;min-width:0}
 .est-book{border:2px solid var(--accent);border-radius:12px;padding:10px 12px;margin:8px 0}.est-book .check{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:15px;width:100%}.est-book .formh{font-size:16px}.est-book .slot-add{margin:4px 0 6px}
@@ -1517,8 +1517,13 @@ function parseCSV(text){text=String(text||"").replace(/^﻿/,"");const rows=[];l
     if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
     else if(c==='"')q=true;else if(c===","){row.push(f);f="";}else if(c==="\n"||c==="\r"){if(c==="\r"&&text[i+1]==="\n")i++;row.push(f);f="";if(row.some(x=>x!==""))rows.push(row);row=[];}else f+=c;}
   row.push(f);if(row.some(x=>x!==""))rows.push(row);
-  if(!rows.length)return [];const head=rows[0].map(h=>h.trim());
-  return rows.slice(1).map(r=>{const o={};head.forEach((h,k)=>{o[h]=(r[k]||"").trim();});return o;});}
+  return rowsToObjects(rows);}
+// many apps put a title, company name or date range above the real column headings: find the heading row
+const HEAD_RE=/^(invoice|invoicenumber|invoiceno|invoiceid|no|num|number|customer|customername|client|clientname|name|displayname|fullname|firstname|email|emailaddress|phone|phonenumber|mobile|date|invoicedate|total|amount|status|balance|balancedue|openbalance|amountdue|transactiontype|company|companyname)$/;
+function rowsToObjects(rows){rows=(rows||[]).map(r=>(r||[]).map(x=>String(x==null?"":x).trim()));if(!rows.length)return [];
+  let hi=0;for(let i=0;i<Math.min(rows.length,15);i++){const r=rows[i],hits=r.filter(c=>HEAD_RE.test(zKey(c))).length;if(hits>=2&&r.filter(Boolean).length>=2){hi=i;break;}}
+  const head=rows[hi].map((h,k)=>h||("col"+k));
+  return rows.slice(hi+1).filter(r=>r.some(Boolean)&&!/^total\b/i.test(r[0]||"")).map(r=>{const o={};head.forEach((h,k)=>{o[h]=(r[k]||"").trim();});return o;});}
 const zKey=h=>String(h||"").toLowerCase().replace(/^cf\./,"").replace(/[^a-z0-9]/g,"");
 function zGet(o,...names){const keys=Object.keys(o);for(const n of names){const want=zKey(n);const k=keys.find(x=>zKey(x)===want);if(k&&o[k]!=="")return o[k];}return "";}
 function zFind(o,re){const k=Object.keys(o).find(x=>re.test(zKey(x)));return k?o[k]:"";}
@@ -1526,27 +1531,54 @@ const zNum=v=>{const n=parseFloat(String(v||"").replace(/[^0-9.\-]/g,""));return
 function zDate(v){v=String(v||"").trim();if(!v)return "";let m=v.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[0];
   m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);if(m){const y=m[3].length===2?"20"+m[3]:m[3];return `${y}-${m[1].padStart(2,"0")}-${m[2].padStart(2,"0")}`;}
   const d=new Date(v);return isNaN(d)?"":`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+const K_NUM=["Invoice Number","Invoice #","Invoice No","Invoice No.","Invoice ID","Invoice","No.","Num","Number","Doc Number","Document Number","Ref Number"];
+const K_CUST=["Customer Name","Customer","Client Name","Client","Bill To","Billed To","Customer Full Name","Display Name","Full Name","Name"];
+const K_DATE=["Invoice Date","Date","Date Issued","Issue Date","Issued","Invoice Created","Created Date","Created","Created At","Sent Date","Transaction Date"];
+const K_TOTAL=["Total","Invoice Total","Total Amount","Grand Total","Amount","Invoice Amount","Requested Amount"];
+const K_BAL=["Balance","Balance Due","Open Balance","Amount Due","Outstanding","Outstanding Amount","Remaining Balance","Due Amount","Unpaid Amount"];
+const K_PAIDAMT=["Amount Paid","Paid Amount","Total Paid","Paid"];
+const K_STATUS=["Invoice Status","Status","Payment Status","State"];
+const K_METHOD=["Payment Method","Payment Type","Paid By","Paid Via","Method","Mode","Tender Type"];
+const K_PHONE=["MobilePhone","Mobile Phone","Mobile","Phone","Phone Number","Phone Numbers","Cell","Cell Phone","Mobile Number","Primary Phone","Customer Phone","Client Phone","Billing Phone","Work Phone"];
+const K_EMAIL=["EmailID","Email","Email Address","E-mail","Primary Email","Customer Email","Client Email"];
+const K_DESC=["Description","Items","Item","Memo","Message","Service","Services","Product/Service","Line Items","Item Description","Work"];
+function genAddr(o){const a=zGet(o,"Address","Billing Address","Street Address","Street Address 1","Street Address Line 1","Address Line 1","Address 1","Street","Customer Address","Client Address"),
+    a2=zGet(o,"Street Address 2","Address Line 2","Address 2"),c=zGet(o,"City","Town"),st=zGet(o,"State","Province","Region"),z=zGet(o,"Zip","Zip Code","Postal Code","Postcode","ZIP/Postal Code");
+  return [[a,a2].filter(Boolean).join(" "),c,[st,z].filter(Boolean).join(" ")].filter(Boolean).join(", ");}
+// which app a file came from (for labels only)
+function zSrc(rows){const h=rows.length?Object.keys(rows[0]).map(zKey):[];
+  if(h.some(x=>/^(invoicestatus|displayname|customersubtype|contactsubtype|itemname|emailid)$/.test(x)))return ["zoho","Zoho"];
+  if(h.includes("transactiontype")||h.includes("openbalance")||h.includes("productservice"))return ["quickbooks","QuickBooks"];
+  if(h.includes("requestedamount")||h.some(x=>/square/.test(x)))return ["square","Square"];
+  if(h.includes("dateissued")||h.includes("clientname")&&h.includes("outstanding"))return ["freshbooks","FreshBooks"];
+  return ["other","your old app"];}
 function zAddr(o,pre){const a=zGet(o,pre+" Address",pre+" Street",pre+" Address Line1"),a2=zGet(o,pre+" Street2",pre+" Address Line2"),c=zGet(o,pre+" City"),st=zGet(o,pre+" State"),z=zGet(o,pre+" Code",pre+" Zip",pre+" Zip Code",pre+" Postal Code");
   return [[a,a2].filter(Boolean).join(" "),c,[st,z].filter(Boolean).join(" ")].filter(Boolean).join(", ");}
-function zKind(rows){const h=rows.length?Object.keys(rows[0]).map(zKey):[];
-  if(h.includes("mode")&&(h.includes("paymentnumber")||h.includes("customerpaymentid")||h.includes("paymentmode")))return "payments";
-  if(h.includes("invoicenumber"))return "invoices";if(h.includes("displayname")||h.includes("contactname")||h.includes("customername")&&h.some(x=>/email|phone/.test(x)))return "contacts";return "";}
+function zKind(rows){const h=rows.length?Object.keys(rows[0]).map(zKey):[],has=list=>list.some(n=>h.includes(zKey(n)));
+  if((h.includes("mode")||h.includes("paymentmethod")||h.includes("paymenttype"))&&(h.includes("paymentnumber")||h.includes("customerpaymentid")||h.includes("paymentmode")||h.includes("paymentid")||h.includes("amountreceived"))&&!has(K_BAL))return "payments";
+  if(has(K_NUM)&&(has(K_TOTAL)||has(K_BAL)))return "invoices";
+  if(has(["Display Name","Contact Name","Customer Name","Customer","Client","Client Name","Name","Full Name","First Name","Company","Company Name"])&&(has(K_PHONE)||has(K_EMAIL)))return "contacts";
+  return "";}
 // Zoho "Customer Payments" export: one row per payment (or per invoice it was applied to) with the payment Mode
 const zMode=m=>{const s=String(m||"").trim(),k=s.toLowerCase().replace(/[^a-z]/g,"");if(!k)return "";
   if(/credit|debit|card|stripe|square/.test(k))return "Card";if(/cheque|check/.test(k))return "Check";if(/cashapp/.test(k))return "Cash App";
   if(k==="cash")return "Cash";if(/zelle/.test(k))return "Zelle";if(/venmo/.test(k))return "Venmo";if(/paypal/.test(k))return "PayPal";
   if(/banktransfer|bankremittance|ach|wire/.test(k))return "Bank transfer";return s.slice(0,30);};
-function zPayments(rows){return rows.map(o=>({num:zGet(o,"Invoice Number"),customer:zGet(o,"Customer Name"),via:zMode(zGet(o,"Mode","Payment Mode")),date:zDate(zGet(o,"Date","Payment Date"))})).filter(x=>x.num&&x.via);}
-function zContacts(rows){return rows.map(o=>{const first=zGet(o,"First Name"),last=zGet(o,"Last Name"),company=zGet(o,"Company Name"),disp=zGet(o,"Display Name","Contact Name","Customer Name")||company||[first,last].filter(Boolean).join(" ");
+function zPayments(rows){return rows.map(o=>({num:zGet(o,...K_NUM),customer:zGet(o,...K_CUST),via:zMode(zGet(o,"Mode","Payment Mode",...K_METHOD)),date:zDate(zGet(o,"Payment Date","Date"))})).filter(x=>x.num&&x.via);}
+function zContacts(rows){return rows.map(o=>{const first=zGet(o,"First Name","Given Name"),last=zGet(o,"Last Name","Surname","Family Name"),company=zGet(o,"Company Name","Company","Business Name"),disp=zGet(o,"Display Name","Contact Name","Customer Name","Customer","Client Name","Client","Full Name","Name")||[first,last].filter(Boolean).join(" ")||company;
     const sub=zGet(o,"Customer Sub Type","Contact Sub Type").toLowerCase(),type=zGet(o,"Contact Type").toLowerCase();
-    return {name:disp,first,last,company,email:zGet(o,"EmailID","Email","Email Address"),phone:zGet(o,"MobilePhone","Mobile Phone","Mobile","Phone","Billing Phone","Work Phone"),
-      location:zAddr(o,"Billing")||zAddr(o,"Shipping"),notes:zGet(o,"Notes","Remarks"),business:sub==="business"||(!!company&&company!==disp&&!first)||false,
+    return {name:disp,first,last,company,email:(zGet(o,...K_EMAIL).match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[""])[0],phone:zGet(o,...K_PHONE).split(/[;\n]|\s{2,}/)[0].replace(/^(mobile|phone|cell|home|work)\s*:\s*/i,"").trim(),
+      location:zAddr(o,"Billing")||zAddr(o,"Shipping")||genAddr(o),notes:zGet(o,"Notes","Remarks"),business:sub==="business"||(!!company&&company===disp&&!first)||false,
       status:zGet(o,"Status").toLowerCase(),vendor:/vendor/.test(type)};}).filter(c=>c.name&&!c.vendor);}
 function zInvoices(rows){const by=new Map();
-  rows.forEach(o=>{const num=zGet(o,"Invoice Number");if(!num)return;const k=num+"|"+zGet(o,"Customer Name");
-    let v=by.get(k);if(!v){v={num,customer:zGet(o,"Customer Name"),date:zDate(zGet(o,"Invoice Date","Date")),status:zGet(o,"Invoice Status","Status"),total:zNum(zGet(o,"Total","Invoice Total")),balance:zNum(zGet(o,"Balance","Balance Due")),hasBal:zGet(o,"Balance","Balance Due")!=="",
-      paidDate:zDate(zGet(o,"Last Payment Date","Payment Date")),notes:zGet(o,"Notes","Customer Notes"),po:zGet(o,"PurchaseOrder","Purchase Order","Reference#","Reference Number"),
-      phone:zGet(o,"Billing Phone","Phone","Mobile Phone"),email:zGet(o,"Email","EmailID","Customer Email"),location:zAddr(o,"Billing")||zAddr(o,"Shipping"),
+  rows.forEach(o=>{const tt=zGet(o,"Transaction Type","Type");if(tt&&!/invoice/i.test(tt))return;   // QuickBooks lists payments and estimates in the same export
+    const num=zGet(o,...K_NUM);if(!num)return;const k=num+"|"+zGet(o,...K_CUST);
+    let v=by.get(k);if(!v){const total=zNum(zGet(o,...K_TOTAL)),balS=zGet(o,...K_BAL),paidS=zGet(o,...K_PAIDAMT);
+      v={num,customer:zGet(o,...K_CUST),date:zDate(zGet(o,...K_DATE)),status:zGet(o,...K_STATUS),total,
+      balance:balS!==""?zNum(balS):paidS!==""&&!/^(yes|no|true|false)$/i.test(paidS)?Math.max(0,total-zNum(paidS)):0,hasBal:balS!==""||(paidS!==""&&!/^(yes|no|true|false)$/i.test(paidS)),
+      via:zMode(zGet(o,...K_METHOD)),desc:zGet(o,...K_DESC),
+      paidDate:zDate(zGet(o,"Last Payment Date","Payment Date","Paid Date","Date Paid","Paid On")),notes:zGet(o,"Notes","Customer Notes"),po:zGet(o,"PurchaseOrder","Purchase Order","Reference#","Reference Number","PO Number","P.O. Number"),
+      phone:zGet(o,"Billing Phone",...K_PHONE),email:(zGet(o,...K_EMAIL).match(/[\w.+-]+@[\w-]+\.[\w.-]+/)||[""])[0],location:zAddr(o,"Billing")||zAddr(o,"Shipping")||genAddr(o),
       adj:zNum(zGet(o,"Adjustment")),adjDesc:zGet(o,"Adjustment Description"),disc:zNum(zGet(o,"Entity Discount Amount","Discount Amount (Entity)","Invoice Discount Amount")),
       shipping:zNum(zGet(o,"Shipping Charge","Shipping Charges")),
       vin:(zFind(o,/vin$|^vin|vehicleidentification/)||"").toUpperCase(),year:zFind(o,/^(vehicle)?year$/),make:zFind(o,/^(vehicle)?make$/),model:zFind(o,/^(vehicle)?model$/),miles:zFind(o,/mileage|odometer|^miles$/),veh:zFind(o,/^vehicle$|vehicleinfo|ymm/),
@@ -1559,7 +1591,7 @@ function zInvoices(rows){const by=new Map();
   return [...by.values()];}
 // Zoho Invoice calls a paid invoice "Closed"; Zoho Books says "Paid". A zero balance also means paid.
 const zStat=(s,v)=>{s=String(s||"").toLowerCase().replace(/[^a-z]/g,"");
-  if(/void/.test(s))return "void";if(/draft/.test(s))return "draft";if(/writtenoff|writeoff/.test(s))return "void";
+  if(/void|cancel|refund/.test(s))return "void";if(/draft|scheduled/.test(s))return "draft";if(/writtenoff|writeoff/.test(s))return "void";if(/deposited/.test(s))return "paid";
   if(/partial/.test(s))return v&&v.hasBal&&v.balance<=0.005&&v.total>0?"paid":"partial";
   if(/^(paid|closed)$/.test(s)||(/paid/.test(s)&&!/unpaid/.test(s)))return "paid";
   if(v&&v.hasBal&&v.balance<=0.005&&v.total>0)return "paid";return "open";};
@@ -1603,12 +1635,15 @@ function importCardHTML(){
   const newCts=cts.filter(c=>!findCustomer({customer:c.name,phone:c.phone}));
   const pays=files.filter(f=>f.kind==="payments").flatMap(f=>f.items),payFix=payMatches(pays).length;
   const paid=keep.filter(v=>!dupe.includes(v)&&zStat(v.status,v)==="paid").length;
-  return `<div class="form" id="zohoImport"><p class="formh">📥 Import from Zoho</p>
-    <p class="help full" style="margin:0">Bring your customers and past invoices over from Zoho Invoice or Zoho Books.</p>
-    <ol class="help full imp-steps"><li>In Zoho, open <strong>Customers</strong> (Contacts) → <strong>⋯ More</strong> → <strong>Export</strong>. Pick <strong>CSV</strong>.</li><li>Open <strong>Invoices</strong> → <strong>⋯ More</strong> → <strong>Export Invoices</strong>, Status <strong>All</strong>, the whole date range, <strong>CSV</strong>.</li><li>Optional, for how each was paid: <strong>Payments Received</strong> → <strong>⋯ More</strong> → <strong>Export</strong>, CSV.</li><li>Pick the files below. You'll see what comes in before anything is added.</li></ol>
-    <div class="full formacts"><label class="btn${files.length?"":" primary"}" for="zohoFiles">${files.length?"Add another file":"Pick Zoho CSV files"}<input type="file" id="zohoFiles" accept=".csv,text/csv,text/plain" multiple data-zoho="1" hidden></label>${files.length?`<button class="btn" type="button" data-act="zohoclear">Start over</button>`:""}</div>
+  return `<div class="form" id="zohoImport"><p class="formh">📥 Import from another app</p>
+    <p class="help full" style="margin:0">Bring your customers and past invoices over from Zoho, QuickBooks, Square, Wave, FreshBooks, Invoice Simple, Joist, or any spreadsheet. CSV and Excel files both work.</p>
+    <ol class="help full imp-steps"><li>In your old app, find <strong>Export</strong> (often under <strong>⋯ More</strong>, a download icon, or Reports). Export your <strong>customers</strong> (or clients) and your <strong>invoices</strong>, all dates.</li><li>Pick the files below. The app reads the columns itself: name, phone, email, address, invoice number, date, total, balance and status.</li><li>You'll see what comes in before anything is added. Paid invoices come in as paid.</li></ol>
+    <details class="full intake-how"><summary>Step by step for Zoho</summary><ol class="help"><li><strong>Customers</strong> (Contacts) → <strong>⋯ More</strong> → <strong>Export</strong>, CSV.</li><li><strong>Invoices</strong> → <strong>⋯ More</strong> → <strong>Export Invoices</strong>, Status <strong>All</strong>, whole date range, CSV.</li><li>Optional, for how each was paid: <strong>Payments Received</strong> → <strong>⋯ More</strong> → <strong>Export</strong>, CSV.</li></ol></details>
+    <details class="full intake-how"><summary>Step by step for QuickBooks Online</summary><ol class="help"><li><strong>Sales</strong> (or Get paid &amp; pay) → <strong>Customers</strong> → the export icon above the list → <strong>Export to Excel</strong>.</li><li><strong>Sales</strong> → <strong>Invoices</strong> (or All sales, filtered to Invoices, Date: All) → export icon → <strong>Export to Excel</strong>.</li></ol></details>
+    <p class="help full" style="margin:0">Other apps: any export with those columns works. If a file isn't recognized, open it in Excel or Google Sheets, make sure the first row has headings like <em>Customer</em>, <em>Phone</em>, <em>Invoice #</em>, <em>Date</em>, <em>Total</em>, and save it as CSV.</p>
+    <div class="full formacts"><label class="btn${files.length?"":" primary"}" for="zohoFiles">${I.busy?"Reading…":files.length?"Add another file":"Pick CSV or Excel files"}<input type="file" id="zohoFiles" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" multiple data-zoho="1" hidden></label>${files.length?`<button class="btn" type="button" data-act="zohoclear">Start over</button>`:""}</div>
     ${files.length?`<div class="full imp-prev">
-      ${files.map(f=>`<div class="imp-file">📄 <strong>${esc(f.name)}</strong> · ${f.kind==="contacts"?`${f.items.length} customer${f.items.length===1?"":"s"}`:f.kind==="invoices"?`${f.items.length} invoice${f.items.length===1?"":"s"}`:f.kind==="payments"?`${f.items.length} payment${f.items.length===1?"":"s"}`:`<span class="vin-warn">Not a Zoho customers, invoices or payments export</span>`}</div>`).join("")}
+      ${files.map(f=>`<div class="imp-file">📄 <strong>${esc(f.name)}</strong> · ${f.kind==="contacts"?`${f.items.length} customer${f.items.length===1?"":"s"}`:f.kind==="invoices"?`${f.items.length} invoice${f.items.length===1?"":"s"}`:f.kind==="payments"?`${f.items.length} payment${f.items.length===1?"":"s"}`:`<span class="vin-warn">Couldn't find customer or invoice columns in this file</span>`}${f.kind&&f.label&&f.label!=="your old app"?` <span class="help">(${esc(f.label)})</span>`:""}</div>`).join("")}
       ${cts.length?`<p>👤 <strong>${newCts.length}</strong> new customer${newCts.length===1?"":"s"}${cts.length-newCts.length?` · ${cts.length-newCts.length} already in the app (their missing details get filled in)`:""}</p>`:""}
       ${invs.length?`<p>🧾 <strong>${keep.length-dupe.length}</strong> invoice${keep.length-dupe.length===1?"":"s"} to add · ${money(keep.filter(v=>!dupe.includes(v)).reduce((a,v)=>a+v.total,0))} total · ${paid} paid${invs.length-keep.length?` · ${invs.length-keep.length} void or draft skipped`:""}${dupe.length?` · ${dupe.length} already imported`:""}${willPay?` <strong>(${willPay} of those will be marked paid)</strong>`:""}</p>`:""}
       ${pays.length?`<p>💵 <strong>${payFix}</strong> invoice${payFix===1?"":"s"} will get how ${payFix===1?"it was":"they were"} paid (Cash, Zelle, Card…)${pays.length&&!payFix&&!invs.length?" · import the invoices first, then this file":""}</p>`:""}
@@ -1616,11 +1651,23 @@ function importCardHTML(){
     </div>`:""}
     ${I.err?`<p class="vin-warn full">${esc(I.err)}</p>`:""}
   </div>`;}
-async function zohoRead(fileList){IMP=IMP||{files:[]};IMP.err="";IMP.done="";
-  for(const f of fileList){if(/\.xlsx?$/i.test(f.name)){IMP.err=`${f.name} is an Excel file. In Zoho, choose CSV as the export format and pick that file instead.`;continue;}
-    try{const rows=parseCSV(await f.text());const kind=zKind(rows);IMP.files.push({name:f.name,kind,items:kind==="contacts"?zContacts(rows):kind==="invoices"?zInvoices(rows):kind==="payments"?zPayments(rows):[]});}
-    catch(e){IMP.err=`Couldn't read ${f.name}.`;}}
-  rerenderKeep();}
+// Excel files: load the free SheetJS reader only when someone picks one
+let XLSX_P=null;
+function loadXlsx(){if(window.XLSX)return Promise.resolve(window.XLSX);if(XLSX_P)return XLSX_P;
+  XLSX_P=new Promise((ok,no)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=()=>window.XLSX?ok(window.XLSX):no();sc.onerror=()=>{XLSX_P=null;no();};document.head.appendChild(sc);});return XLSX_P;}
+async function readTables(f){
+  if(/\.(xlsx|xls|xlsm|ods)$/i.test(f.name)){const X=await loadXlsx();const wb=X.read(await f.arrayBuffer(),{type:"array",cellDates:false});
+    return wb.SheetNames.map(n=>rowsToObjects(X.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:""})));}
+  return [parseCSV(await f.text())];}
+async function zohoRead(fileList){IMP=IMP||{files:[]};IMP.err="";IMP.done="";IMP.busy=true;rerenderKeep();
+  for(const f of fileList){
+    try{const tables=await readTables(f);let added=false;
+      for(const rows of tables){const kind=zKind(rows);if(!kind&&tables.length>1)continue;const [src,label]=zSrc(rows);
+        const items=kind==="contacts"?zContacts(rows):kind==="invoices"?zInvoices(rows):kind==="payments"?zPayments(rows):[];items.forEach(x=>{x.src=src;x.srcLabel=label;});
+        IMP.files.push({name:f.name,kind,items,label});added=true;}
+      if(!added)IMP.files.push({name:f.name,kind:"",items:[]});}
+    catch(e){console.error(e);IMP.err=/\.(xlsx|xls|xlsm|ods)$/i.test(f.name)?`Couldn't open ${f.name}. Check your connection (Excel files need it the first time), or save it as CSV and pick that instead.`:`Couldn't read ${f.name}.`;}}
+  IMP.busy=false;rerenderKeep();}
 // payments that match an invoice in the app whose method isn't known yet
 function payMatches(pays){const out=[];pays.forEach(x=>{const j=APP.jobs.find(j=>j.invoice&&j.invoice.num===x.num&&(!x.customer||normName(j.info.customer)===normName(x.customer)));
   if(j&&(!j.invoice.paidVia||j.invoice.paidVia==="Zoho"||!j.invoice.paid)&&!out.some(o=>o.j===j))out.push({j,x});});return out;}
@@ -1629,27 +1676,28 @@ function zohoImport(){
   const cs=APP.customers||(APP.customers=[]);let nc=0,uc=0,ni=0;
   for(const z of cts){const c=findCustomer({customer:z.name,phone:z.phone});
     if(c){let ch=false;["phone","email","location"].forEach(k=>{if(!c[k]&&z[k]){c[k]=z[k];ch=true;}});if(z.notes&&!(c.notes||"").includes(z.notes)){c.notes=[c.notes,z.notes].filter(Boolean).join("\n");ch=true;}if(ch)uc++;}
-    else{cs.push({id:"c"+uid(),name:z.name,phone:z.phone,email:z.email,location:z.location,dist:"",notes:z.notes,vehicles:[],last:"",fleet:z.business,contact:z.business?[z.first,z.last].filter(Boolean).join(" "):"",from:"zoho"});nc++;}}
+    else{cs.push({id:"c"+uid(),name:z.name,phone:z.phone,email:z.email,location:z.location,dist:"",notes:z.notes,vehicles:[],last:"",fleet:z.business,contact:z.business?[z.first,z.last].filter(Boolean).join(" "):"",from:z.src||"import"});nc++;}}
   let fixed=0;
   for(const v of invs){const st=zStat(v.status,v);if(st==="void"||st==="draft")continue;
     const had=APP.jobs.find(j=>j.invoice&&j.invoice.num===v.num&&normName(j.info.customer)===normName(v.customer));
-    if(had){if(st==="paid"&&!had.invoice.paid){had.invoice.paid=true;had.invoice.paidDate=v.paidDate||v.date||TODAY;had.invoice.paidVia=had.invoice.paidVia||"";fixed++;}continue;}
+    if(had){if(st==="paid"&&!had.invoice.paid){had.invoice.paid=true;had.invoice.paidDate=v.paidDate||v.date||TODAY;had.invoice.paidVia=had.invoice.paidVia||v.via||"";fixed++;}continue;}
     const zc=cts.find(c=>normName(c.name)===normName(v.customer))||{};
     let year=v.year,make=v.make,model=v.model;if(!make&&v.veh){const m=v.veh.match(/\b((?:19|20)\d\d)\s+([A-Za-z-]+)\s+(.+)/);if(m){year=m[1];make=m[2];model=m[3];}}
-    const j=newJob({customer:v.customer,phone:v.phone||zc.phone||"",location:v.location||zc.location||"",date:v.date||TODAY,work:(v.lines[0]&&v.lines[0].d)||"Service",
+    const j=newJob({customer:v.customer,phone:v.phone||zc.phone||"",email:v.email||zc.email||"",location:v.location||zc.location||"",date:v.date||TODAY,work:(v.lines[0]&&v.lines[0].d)||"Service",
       year:year||"",make:make||"",model:model||"",vin:/^[A-HJ-NPR-Z0-9]{17}$/.test(v.vin)?v.vin:"",miles:v.miles||"",po:v.po||"",
-      notes:[`Imported from Zoho invoice ${v.num}`,v.notes].filter(Boolean).join("\n")},"service");
-    j.status="done";j.imported="zoho";j.docMode="inv";
+      notes:[`Imported from ${v.srcLabel||"your old app"} invoice ${v.num}`,v.notes].filter(Boolean).join("\n")},"service");
+    j.status="done";j.imported=v.src||"import";j.docMode="inv";
+    if(!v.lines.length&&v.total)v.lines.push({d:(v.desc||"Service").split("\n")[0].slice(0,120),desc:"",q:1,p:v.total-(v.tax||0),disc:0});
     const L=v.lines.map(x=>({k:"flat",d:x.d+(x.desc?" – "+x.desc:""),q:String(x.q),p:String(r2(x.p))}));
     v.lines.forEach(x=>{if(x.disc)L.push({k:"fee",d:`Discount on ${x.d}`.slice(0,80),q:"1",p:String(-r2(x.disc))});});
     if(v.disc)L.push({k:"fee",d:"Discount",q:"1",p:String(-r2(v.disc))});
     if(v.shipping)L.push({k:"fee",d:"Shipping",q:"1",p:String(r2(v.shipping))});
     if(v.adj)L.push({k:"fee",d:v.adjDesc||"Adjustment",q:"1",p:String(r2(v.adj))});
-    if(v.tax)L.push({k:"fee",d:"Sales tax (from Zoho)",q:"1",p:String(r2(v.tax))});
+    if(v.tax)L.push({k:"fee",d:"Sales tax",q:"1",p:String(r2(v.tax))});
     j.invoice.lines=L;j.invoice.tax=false;j.invoice.travelOverride="0";j.invoice.num=v.num;j.invoice.date=v.date||TODAY;
-    const got=r2(L.reduce((a,x)=>a+lineAmt(x),0));if(v.total&&Math.abs(got-v.total)>=0.01)L.push({k:"fee",d:"Other (to match Zoho total)",q:"1",p:String(r2(v.total-got))});
-    if(st==="paid"){j.invoice.paid=true;j.invoice.paidDate=v.paidDate||v.date||TODAY;j.invoice.paidVia="";}
-    else if(st==="partial"&&v.balance){j.info.notes+=`\nPartly paid in Zoho: ${money(v.balance)} still owed.`;}
+    const got=r2(L.reduce((a,x)=>a+lineAmt(x),0));if(v.total&&Math.abs(got-v.total)>=0.01)L.push({k:"fee",d:"Other (to match the original total)",q:"1",p:String(r2(v.total-got))});
+    if(st==="paid"){j.invoice.paid=true;j.invoice.paidDate=v.paidDate||v.date||TODAY;j.invoice.paidVia=v.via||"";}
+    else if(st==="partial"&&v.balance){j.info.notes+=`\nPartly paid in ${v.srcLabel||"your old app"}: ${money(v.balance)} still owed.`;}
     APP.jobs.push(j);ni++;}
   let nv=0;const pays=files.filter(f=>f.kind==="payments").flatMap(f=>f.items);
   payMatches(pays).forEach(({j,x})=>{const all=pays.filter(y=>y.num===x.num),ways=[...new Set(all.map(y=>y.via))];
@@ -2176,6 +2224,7 @@ const HELP=[
  ["Requests","Turn an email request into a job",["Copy the request email.","Schedule → 📥 Requests → Paste request → Read it.","Check the details and your schedule for that day.","Tap Book it, Send a quote, or Can't do it."],"requests|"],
  ["Getting paid","Get a customer signature",["On an estimate, tap ✍️ Customer signs to approve. Signing also marks it approved.","On an invoice, tap ✍️ Get customer signature.","Hand them the phone, they sign with a finger, tap Save. It prints on the PDF."],""],
  ["Getting paid","Ask for a Google review",["Settings → Invoices → paste your Google review link.","After a job is marked paid, tap ⭐ Ask for a review (on the invoice or the job card).","It opens Messages with a friendly request and your link."],"settings|setInvoices"],
+ ["Getting started","Import customers and invoices from another app",["Settings → 📥 Import from another app.","In your old app (Zoho, QuickBooks, Square, Wave, FreshBooks, Invoice Simple, Joist…), export your customers and invoices as CSV or Excel.","Pick the files. The app shows what it found before adding anything.","Paid invoices come in as paid. Duplicates of jobs already in the app show on Home so you can delete them."],"settings|zohoImport"],
  ["Getting started","Add your PPI disclaimer and warranty",["Settings → Invoices.","Edit the PPI report disclaimer (prints on every PPI report).","Add your warranty wording (prints on service estimates and invoices)."],"settings|setInvoices"],
  ["Jobs","Plan the day's route",["On Schedule, tap 🗺 Plan today's route (or pick a day first).","The app puts the day's jobs in the shortest driving order from where you are.","Tap Open full route in Google Maps, or Directions for one stop."],"jobs|"],
  ["Money","Track expenses",["Expenses → + Add expense.","Pick Parts, Tools, Supplies, Fuel or Other. Add the amount, store and a receipt photo.","Link parts to a job to see that job's real profit."],"expenses|"],
@@ -2699,7 +2748,7 @@ function syncCustomers(){
     if(!c){c=findCustomer(i);if(!c){c={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:""};cs.push(c);}byId[c.id]=c;j.custId=c.id;}
     if(!c.last||(i.date||"")>=c.last){
       const lk=c.lock||{},put=(f,v)=>{if(v&&(!lk[f]||!c[f]))c[f]=v;};
-      put("name",i.customer.trim());put("phone",i.phone);put("location",i.location);put("dist",i.dist);c.last=i.date||c.last;
+      put("name",i.customer.trim());put("phone",i.phone);if(i.email&&!c.email)c.email=i.email;put("location",i.location);put("dist",i.dist);c.last=i.date||c.last;
     }
     if(i.make||i.model||i.vin){
       const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||"",unit:i.unit||"",plate:i.plate||""},k=vehKey(v);
@@ -3370,23 +3419,23 @@ function jcAct(k){const j=S;if(!j)return;const P=JCTL&&JCTL.id===j.id?JCTL:null;
   if(k==="reopen"){j.status="hold";j.hold={reason:"Reopened",note:j.stopped&&j.stopped.reason||"",at:Date.now(),by:jcWho()};j.stopped=null;jcLog(j,"reopen");save();rerenderKeep();toast("Reopened. Tap Resume to start the clock again.");return;}
 }
 
-// ---- deleting an invoice (the whole job) + finding Zoho copies of jobs already in the app ----
+// ---- deleting an invoice (the whole job) + finding imported copies of jobs already in the app ----
 let INVDEL=null,DUPDEL=null;
 function invDelHTML(j){if(isTech()||!j)return "";
   return INVDEL===j.id?`<div class="inv-del"><span class="help">Delete invoice ${esc(j.invoice.num||"")}${j.invoice.paid?" and its payment":""}? This removes the whole job from every phone.</span><button class="mini del" type="button" data-invdel="${j.id}">Yes, delete</button><button class="mini" type="button" data-act="invdelno">Keep</button></div>`
     :`<div class="inv-del"><button class="mini del" type="button" data-invdelask="${j.id}">🗑 Delete this invoice</button></div>`;}
 function dupPairs(){const done=APP.jobs.filter(j=>j.status==="done"),out=[];
-  done.filter(z=>z.imported==="zoho"&&!z.notDup).forEach(z=>{const zt=jobTotal(z),zd=new Date(jDate(z)+"T12:00:00");
-    const a=done.find(a=>a!==z&&a.imported!=="zoho"&&normName(a.info.customer)===normName(z.info.customer)&&Math.abs(jobTotal(a)-zt)<1&&Math.abs(new Date(jDate(a)+"T12:00:00")-zd)<=10*864e5);
+  done.filter(z=>z.imported&&!z.notDup).forEach(z=>{const zt=jobTotal(z),zd=new Date(jDate(z)+"T12:00:00");
+    const a=done.find(a=>a!==z&&!a.imported&&normName(a.info.customer)===normName(z.info.customer)&&Math.abs(jobTotal(a)-zt)<1&&Math.abs(new Date(jDate(a)+"T12:00:00")-zd)<=10*864e5);
     if(a)out.push({z,a});});return out;}
 function dupCardHTML(){if(isTech())return "";const P=dupPairs();if(!P.length)return "";
   const d=j=>esc(fmtDate(jDate(j),{month:"short",day:"numeric",year:"numeric"}));
   return `<div class="dash-card" id="dashDup"><div class="dc-h"><h3>Possible duplicates</h3><span class="ts">${P.length}</span></div>
-    <p class="help" style="margin:0 0 6px">These Zoho imports match a job already in the app: same customer, same total, within 10 days.</p>
+    <p class="help" style="margin:0 0 6px">These imported invoices match a job already in the app: same customer, same total, within 10 days.</p>
     ${P.map(({z,a})=>`<div class="dup-row"><div><strong>${esc(z.info.customer||"Customer")}</strong> · ${money(jobTotal(z))}</div>
-      <div class="help">Zoho ${esc(z.invoice.num||"")} · ${d(z)}${z.invoice.paid?" · paid":""}<br>App ${esc(a.invoice.num||"")} · ${d(a)}${a.invoice.paid?" · paid":""}</div>
-      <div class="acts">${DUPDEL===z.id?`<button class="mini del" type="button" data-invdel="${z.id}">Yes, delete Zoho copy</button><button class="mini" type="button" data-act="dupno">Keep</button>`
-        :`<button class="mini del" type="button" data-dupdel="${z.id}">Delete Zoho copy</button><button class="mini" type="button" data-open="${z.id}">Open</button><button class="mini" type="button" data-notdup="${z.id}">Not a duplicate</button>`}</div></div>`).join("")}</div>`;}
+      <div class="help">Imported ${esc(z.invoice.num||"")} · ${d(z)}${z.invoice.paid?" · paid":""}<br>App ${esc(a.invoice.num||"")} · ${d(a)}${a.invoice.paid?" · paid":""}</div>
+      <div class="acts">${DUPDEL===z.id?`<button class="mini del" type="button" data-invdel="${z.id}">Yes, delete imported copy</button><button class="mini" type="button" data-act="dupno">Keep</button>`
+        :`<button class="mini del" type="button" data-dupdel="${z.id}">Delete imported copy</button><button class="mini" type="button" data-open="${z.id}">Open</button><button class="mini" type="button" data-notdup="${z.id}">Not a duplicate</button>`}</div></div>`).join("")}</div>`;}
 
 
 // ---- Tools for the job: a starting list per repair (works with no signal), editable and saved per shop ----

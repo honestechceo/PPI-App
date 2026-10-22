@@ -476,6 +476,11 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
 .av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .req-alert{border-color:var(--accent);background:var(--accent-soft)}
+.wx-card .wx-now{display:flex;gap:12px;align-items:center}.wx-big{font-size:40px;line-height:1}.wx-t{font-size:30px;display:block;line-height:1.1}.wx-now .help{display:block;margin:2px 0 0}
+.wx-hours{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:4px}.wx-h{flex:0 0 auto;min-width:46px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:5px 4px;display:flex;flex-direction:column;gap:1px}.wx-h.now{border-color:var(--accent)}.wx-h small{font-size:11px;color:var(--muted)}.wx-h small.wet,.wx-day .wet{color:#2563eb;font-weight:700}
+.wx-warn{margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4)}.wx-warn p{margin:2px 0;font-size:13px}
+.wx-day{display:grid;grid-template-columns:1.1fr 1.6fr 1fr .9fr;gap:6px;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}.wx-day span:nth-child(3),.wx-day span:nth-child(4){text-align:right}
+.wx-chip{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;font-weight:600}.wx-chip.bad{border-color:#2563eb;color:#2563eb}
 .req-top-alert{width:100%;margin:0 0 12px;text-align:left}.req-names{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.35}
 /* ---------- wide screens: iPhone Duo unfolded (7.6"), iPad, landscape ---------- */
 @media (min-width:860px){
@@ -2254,6 +2259,73 @@ function breakdown(js){
   js.forEach(j=>{const t=totals(j);if(t.svc){b.Labor+=t.labor;b.Parts+=t.parts;b.Fees+=t.fees;}else{b.Inspections+=t.fee+t.extras;}b.Travel+=t.travel.fee;b.Tax+=t.tax;});
   return b;
 }
+/* ================= weather (Open-Meteo: free, no key) ================= */
+const WX_CODES={0:["☀️","Clear"],1:["🌤️","Mostly clear"],2:["⛅","Partly cloudy"],3:["☁️","Cloudy"],45:["🌫️","Fog"],48:["🌫️","Freezing fog"],
+  51:["🌦️","Light drizzle"],53:["🌦️","Drizzle"],55:["🌧️","Heavy drizzle"],56:["🌧️","Freezing drizzle"],57:["🌧️","Freezing drizzle"],
+  61:["🌦️","Light rain"],63:["🌧️","Rain"],65:["🌧️","Heavy rain"],66:["🌧️","Freezing rain"],67:["🌧️","Freezing rain"],
+  71:["🌨️","Light snow"],73:["🌨️","Snow"],75:["❄️","Heavy snow"],77:["🌨️","Snow grains"],80:["🌦️","Showers"],81:["🌧️","Showers"],82:["⛈️","Heavy showers"],
+  85:["🌨️","Snow showers"],86:["❄️","Heavy snow showers"],95:["⛈️","Thunderstorms"],96:["⛈️","Storms with hail"],99:["⛈️","Storms with hail"]};
+const wxC=c=>WX_CODES[c]||["🌡️","—"];
+let WX=(()=>{try{return JSON.parse(localStorage.getItem("ppi_wx")||"null")||{};}catch(e){return {};}})();WX.busy=false;
+function wxSave(){try{localStorage.setItem("ppi_wx",JSON.stringify({lat:WX.lat,lon:WX.lon,place:WX.place,key:WX.key,data:WX.data,at:WX.at,geo:WX.geo}));}catch(e){}}
+function wxRedraw(){if(APP.view==="dash"||APP.view==="jobs")rerenderKeep();}
+async function wxGeo(){return new Promise((ok,no)=>{if(!navigator.geolocation)return no({msg:"This phone can't share its location here."});
+  navigator.geolocation.getCurrentPosition(p=>ok({lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3)}),e=>no({msg:e&&e.code===1?"Location is off for this app. Type your town or ZIP in Settings → Weather instead.":"Couldn't get your location."}),{timeout:12000,maximumAge:30*60e3});});}
+async function wxPlace(q){const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=en&countryCode=US&format=json`).then(r=>r.json());
+  const g=r&&r.results&&r.results[0];if(!g)throw {msg:`Couldn't find "${q}". Try a town name or ZIP.`};
+  return {lat:+g.latitude.toFixed(3),lon:+g.longitude.toFixed(3),place:[g.name,g.admin1_code||g.admin1].filter(Boolean).join(", ")};}
+async function loadWx(force,useGeo){
+  if(WX.busy)return;const st=APP.settings,town=(st.wxPlace||"").trim(),key=town?"t:"+town.toLowerCase():"geo";
+  if(!force&&WX.key===key&&WX.data&&Date.now()-(WX.at||0)<30*60e3&&!useGeo)return;
+  if(key==="geo"&&!useGeo&&!WX.geo){WX.need=true;WX.err="";return;}
+  WX.busy=true;WX.err="";WX.need=false;wxRedraw();
+  try{let loc;
+    if(town){loc=WX.key===key&&WX.lat!=null&&!force?{lat:WX.lat,lon:WX.lon,place:WX.place}:await wxPlace(town);}
+    else{loc=await wxGeo();WX.geo=true;loc.place="Near you";}
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation`+
+      `&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset`+
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=3`;
+    const d=await fetch(u).then(r=>{if(!r.ok)throw {msg:"Weather service is busy. Try again in a minute."};return r.json();});
+    Object.assign(WX,loc,{key,data:d,at:Date.now()});wxSave();
+  }catch(e){WX.err=(e&&e.msg)||"Couldn't load the weather. Check your connection.";WX.errAt=Date.now();if(key==="geo"&&!WX.data)WX.need=true;}
+  WX.busy=false;wxRedraw();}
+// forecast for a given day + "HH:MM" (nearest hour), from the cached forecast
+function wxAt(day,time){const h=WX.data&&WX.data.hourly;if(!h||!day)return null;
+  const hr=time?String(time).slice(0,2):"12",i=h.time.indexOf(`${day}T${hr}:00`);if(i<0)return null;
+  return {t:Math.round(h.temperature_2m[i]),p:h.precipitation_probability[i]||0,c:h.weather_code[i],w:Math.round(h.wind_speed_10m[i]||0)};}
+function wxJobChip(j){if(APP.settings.wxOff||!isOpenJob(j))return "";const w=wxAt(j.info.date,j.info.time);if(!w)return "";
+  return `<span class="wx-chip${w.p>=50||w.t<=32||w.t>=90?" bad":""}" title="${esc(wxC(w.c)[1])}">${wxC(w.c)[0]} ${w.t}°${w.p>=20?` · ${w.p}%`:""}</span>`;}
+function wxWarn(d){const h=d.hourly,out=[];if(!h)return out;
+  const idx=h.time.map((t,i)=>[t,i]).filter(([t])=>t.slice(0,10)===TODAY&&+t.slice(11,13)>=7&&+t.slice(11,13)<=19).map(x=>x[1]);
+  const wet=idx.find(i=>h.precipitation_probability[i]>=50);if(wet!=null)out.push(`☔ Rain likely from about ${fmtTime(h.time[wet].slice(11,16))}. Bring a canopy or plan to work under cover.`);
+  const lo=Math.min(...idx.map(i=>h.temperature_2m[i])),hi=Math.max(...idx.map(i=>h.temperature_2m[i])),wind=Math.max(...idx.map(i=>h.wind_speed_10m[i]||0));
+  if(idx.some(i=>[71,73,75,77,85,86,56,57,66,67].includes(h.weather_code[i])))out.push("❄️ Snow or ice in the forecast. Allow extra drive time.");
+  else if(lo<=32)out.push(`🥶 Freezing (${Math.round(lo)}°). Dress warm; batteries and cold starts may act up.`);
+  if(hi>=90)out.push(`🥵 Hot (${Math.round(hi)}°). Bring water and take breaks in the shade.`);
+  if(idx.some(i=>h.weather_code[i]>=95))out.push("⛈️ Thunderstorms possible. Stop work if there's lightning.");
+  if(wind>=25)out.push(`💨 Windy (up to ${Math.round(wind)} mph). Hood up carefully; secure the canopy.`);
+  return out;}
+function weatherCardHTML(){const st=APP.settings;if(st.wxOff)return "";
+  const town=(st.wxPlace||"").trim(),key=town?"t:"+town.toLowerCase():"geo";
+  if(!WX.busy&&!(WX.errAt&&Date.now()-WX.errAt<90e3)&&(WX.key!==key||!WX.data||Date.now()-(WX.at||0)>30*60e3))setTimeout(()=>loadWx(),0);
+  const head=`<div class="dc-h"><h3>Weather${WX.data&&WX.key===key?` · ${esc(WX.place||"")}`:""}</h3>${WX.data&&WX.key===key?`<button class="mini" type="button" data-act="wxrefresh">${WX.busy?"…":"↻"}</button>`:""}</div>`;
+  if((WX.need||key==="geo"&&!WX.geo)&&!(WX.data&&WX.key===key))return `<div class="dash-card wx-card">${head}<p class="help" style="margin:0 0 8px">See today's forecast and rain at each job's time.</p>
+    ${WX.err?`<p class="help vin-warn" style="margin:0 0 8px">${esc(WX.err)}</p>`:""}<div class="acts"><button class="mini go" type="button" data-act="wxgeo">📍 Use my location</button><button class="mini" type="button" data-act="wxset">Type a town or ZIP</button></div></div>`;
+  if(!WX.data||WX.key!==key)return `<div class="dash-card wx-card">${head}<p class="help" style="margin:0">${WX.err?esc(WX.err):"Loading the forecast…"}</p>${WX.err?`<div class="acts"><button class="mini" type="button" data-act="wxrefresh">Try again</button></div>`:""}</div>`;
+  const d=WX.data,c=d.current||{},dl=d.daily||{},h=d.hourly||{},cur=wxC(c.weather_code);
+  const hrs=(h.time||[]).map((t,i)=>[t,i]).filter(([t])=>t.slice(0,10)===TODAY&&+t.slice(11,13)>=7&&+t.slice(11,13)<=19&&+t.slice(11,13)%2===1).map(([t,i])=>
+    `<div class="wx-h${t.slice(0,13)===TODAY+"T"+String(new Date().getHours()).padStart(2,"0")||t.slice(0,13)===TODAY+"T"+String(new Date().getHours()-1).padStart(2,"0")?" now":""}"><small>${esc(fmtTime(t.slice(11,16)).replace(":00",""))}</small><span>${wxC(h.weather_code[i])[0]}</span><strong>${Math.round(h.temperature_2m[i])}°</strong><small class="${h.precipitation_probability[i]>=50?"wet":""}">${h.precipitation_probability[i]>=10?h.precipitation_probability[i]+"%":"&nbsp;"}</small></div>`).join("");
+  const warns=wxWarn(d);
+  const day=k=>dl.time&&dl.time[k]?`<div class="wx-day"><span>${k===1?"Tomorrow":esc(fmtDate(dl.time[k],{weekday:"long"}))}</span><span>${wxC(dl.weather_code[k])[0]} ${esc(wxC(dl.weather_code[k])[1])}</span><span>${Math.round(dl.temperature_2m_max[k])}° / ${Math.round(dl.temperature_2m_min[k])}°</span><span class="${dl.precipitation_probability_max[k]>=50?"wet":""}">${dl.precipitation_probability_max[k]||0}% rain</span></div>`:"";
+  const todays=APP.jobs.filter(j=>isOpenJob(j)&&j.info.date===TODAY&&(!isTech()||true)).sort((a,b)=>(a.info.time||"99")<(b.info.time||"99")?-1:1);
+  return `<div class="dash-card wx-card">${head}
+    <div class="wx-now"><span class="wx-big">${cur[0]}</span><div><strong class="wx-t">${Math.round(c.temperature_2m)}°</strong><span class="help">${esc(cur[1])} · feels ${Math.round(c.apparent_temperature)}°</span>
+      <span class="help">High ${Math.round(dl.temperature_2m_max[0])}° · Low ${Math.round(dl.temperature_2m_min[0])}° · ${dl.precipitation_probability_max[0]||0}% rain · wind ${Math.round(c.wind_speed_10m||0)} mph</span></div></div>
+    ${hrs?`<div class="wx-hours">${hrs}</div>`:""}
+    ${warns.length?`<div class="wx-warn">${warns.map(w=>`<p>${esc(w)}</p>`).join("")}</div>`:""}
+    ${todays.length?`<div class="wx-jobs"><p class="ts" style="margin:10px 0 2px;font-weight:700">At today's jobs</p>${todays.map(j=>{const w=wxAt(TODAY,j.info.time);return `<button type="button" class="hist-row" data-open="${j.id}"><span>${esc(j.info.time?fmtTime(j.info.time):"No time")}</span><span class="hist-what">${esc(j.info.customer||"Customer")}</span><span class="hist-amt">${w?`${wxC(w.c)[0]} ${w.t}°${w.p>=20?` · ${w.p}%`:""}`:"—"}</span></button>`;}).join("")}</div>`:""}
+    ${day(1)}${day(2)}
+    <p class="ts" style="margin:6px 0 0">Forecast from Open-Meteo · updated ${esc(new Date(WX.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}))}</p></div>`;}
 function renderDash(){
   const P=APP.dashP||"month",start=periodStart(P),label={week:"This week",month:"This month",year:"This year"}[P];
   const done=APP.jobs.filter(j=>j.status==="done"),inP=done.filter(j=>jDate(j)>=start&&jDate(j)<=TODAY);
@@ -2273,13 +2345,14 @@ function renderDash(){
   const top=custs.filter(x=>x.billed>0).sort((a,b)=>b.billed-a.billed).slice(0,3);
   const custInP=new Set(inP.map(j=>j.custId).filter(Boolean)),newC=custs.filter(x=>custInP.has(x.c.id)&&x.first>=start).length,retC=custInP.size-newC;
   const hb=(k,v,max,cls="")=>`<div class="hb"><span class="hb-k">${esc(k)}</span><span class="hb-track"><i class="${cls}" style="width:${Math.max(2,v/max*100).toFixed(1)}%"></i></span><span class="hb-v">${money(v)}</span></div>`;
-  const jobRow=j=>`<button type="button" class="hist-row" data-open="${j.id}"><span>${esc(j.info.date===TODAY?"Today":fmtDate(j.info.date,{weekday:"short",month:"short",day:"numeric"}))}${j.info.time?" "+esc(fmtTime(j.info.time)):""}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="hist-what">${esc(j.info.customer||"")}${vehOf(j.info)?" · "+esc(vehOf(j.info)):""}</span><span class="hist-amt">›</span></button>`;
+  const jobRow=j=>`<button type="button" class="hist-row" data-open="${j.id}"><span>${esc(j.info.date===TODAY?"Today":fmtDate(j.info.date,{weekday:"short",month:"short",day:"numeric"}))}${j.info.time?" "+esc(fmtTime(j.info.time)):""}</span><span class="tag">${isSvc(j)?"Service":"PPI"}</span><span class="hist-what">${esc(j.info.customer||"")}${vehOf(j.info)?" · "+esc(vehOf(j.info)):""}</span><span class="hist-amt">${wxJobChip(j)} ›</span></button>`;
   return `${sampleBanner()}
   <div class="stage-head dash-head"><div><div class="eyebrow">${esc(fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"}))}</div><h2>Dashboard</h2></div>
     <button class="btn primary" type="button" data-act="dashbook">+ Book a job</button></div>
   ${(()=>{const nr=APP.requests.filter(r=>r.status==="new"&&reqLive(r)).sort((a,b)=>(b.at||0)-(a.at||0));if(!nr.length)return "";
     return `<button type="button" class="dash-card dash-link req-alert req-top-alert" data-nav="requests"><span><strong>📥 ${nr.length} new request${nr.length===1?"":"s"}</strong> waiting for review
       <span class="req-names">${nr.slice(0,3).map(r=>esc([r.customer||"No name",r.work||[r.year,r.make,r.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ").slice(0,60))).join("<br>")}${nr.length>3?`<br>+ ${nr.length-3} more`:""}</span></span><span>›</span></button>`;})()}
+  ${weatherCardHTML()}
   <div class="seg dash-seg" role="group" aria-label="Period">${[["week","Week"],["month","Month"],["year","Year"]].map(([k,l])=>`<button type="button" data-dashp="${k}" aria-pressed="${P===k}">${l}</button>`).join("")}</div>
   <div class="tiles">
     <div class="tile"><span class="tl">Billed · ${esc(label.toLowerCase())}</span><strong>${money(billed)}</strong><span class="ts">${money(collected)} collected</span></div>
@@ -3101,7 +3174,8 @@ function renderJobs(){
   const canceled=APP.jobs.filter(j=>j.status==="canceled"&&ctyOk(j)&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
-  return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true):""}
+  if(!APP.settings.wxOff&&!WX.busy&&!(WX.errAt&&Date.now()-WX.errAt<90e3)&&(!WX.data||Date.now()-(WX.at||0)>30*60e3))setTimeout(()=>loadWx(),0);
+  return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true)+weatherCardHTML():""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
   <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
@@ -3306,7 +3380,7 @@ function jobCard(j){
   const estChip=!isTech()&&svc&&j.est&&j.status!=="done"&&!j.invoice.num?`<span class="st st-est est-${j.est.status}">Estimate ${esc((EST_ST.find(x=>x[0]===j.est.status)||[0,""])[1].toLowerCase())}${(j.invoice.lines||[]).length?" "+money(jobTotal(j)):""}</span>`:"";
   return `<div class="job">
     <div class="when-col"><div class="t">${i.time?fmtTime(i.time).replace(/ (AM|PM)/,"<small style='font-size:12px'> $1</small>"):"—"}</div><div class="d">${esc(fmtDate(i.date))}</div></div>
-    <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip}</div>
+    <div class="who">${esc(i.customer||"No customer name")} <span class="tag">${svc?"Service":"PPI"}</span> ${status} ${estChip} ${wxJobChip(j)}</div>
     <div class="meta">${esc(vehOf(i)||"Vehicle not entered")}${svc&&i.work?` · ${esc(i.work)}`:""}${i.tech?` · ${hasTeam()&&techOf(j)?`<span class="tm-dot sm" style="background:${esc(techOf(j).color)}"></span>`:""}Tech: ${esc(i.tech)}`:""}${hasTeam()&&isOpenJob(j)&&j.dispatch&&j.dispatch!=="assigned"?` · <strong>${esc(DSP_LBL[j.dispatch])}</strong>`:""}</div>
     <div class="meta">${esc(i.location||"No address")}${i.county?` · <span class="cty-tag">${esc(i.county)}</span>`:""}${i.dist?` · ${esc(i.dist)} mi`:""}${i.phone?` · ${esc(i.phone)}`:""}${num(i.agreed)&&!isTech()?` · <strong>Agreed ${money(i.agreed)}</strong>`:""}</div>
     <div class="acts">
@@ -3510,6 +3584,8 @@ function renderSettings(){
   ${mpiSettingsHTML()}
   <div class="form" id="setReminders">
     <p class="formh">Reminders &amp; directions</p>
+    <label>Weather for<input id="s-wxPlace" data-set="wxPlace" value="${esc(s.wxPlace||"")}" placeholder="Your location (blank) or a town / ZIP" autocomplete="off"><span class="help">Blank uses this phone's location. Or type your town or ZIP, e.g. Freehold, NJ or 07728.</span></label>
+    <label class="check"><input type="checkbox" data-wxoff="1" ${s.wxOff?"":"checked"}> Show weather on Home and on jobs</label>
     <label class="full">"On my way" text<textarea id="s-omwTpl" data-set="omwTpl" rows="3" placeholder="${esc(OMW_DEFAULT)}">${esc(s.omwTpl||"")}</textarea><span class="help">Leave blank for the standard message. Fill-ins: {first} customer's first name, {tech}, {business}, {eta} arrival time, {minutes}, {vehicle}.</span></label>
     <label>Job alert in Calendar<select id="s-jobAlert" data-set="jobAlert">${[["30","30 minutes before"],["60","1 hour before"],["120","2 hours before"],["1440","1 day before"]].map(([v,l])=>`<option value="${v}" ${String(s.jobAlert||"60")===v?"selected":""}>${l}</option>`).join("")}</select></label>
     <label>Directions open in<select id="s-mapsApp" data-set="mapsApp">${MAPS.map(([v,l])=>`<option value="${v}" ${(s.mapsApp||"apple")===v?"selected":""}>${l}</option>`).join("")}</select></label>
@@ -5329,6 +5405,9 @@ document.addEventListener("click",e=>{
     v.signedAt=TODAY;delete v.at;APP.myTax=v;APP.myTaxDraft=null;save();rerenderKeep();toast("Saved and sent to the office");return;}
   if(d.act==="bulkstart"){BULK={sel:{},via:"",date:TODAY,confirm:false};rerenderKeep();return;}
   if(d.act==="bulkcancel"){BULK=null;rerenderKeep();return;}
+  if(d.act==="wxrefresh"){WX.errAt=0;loadWx(true,!(APP.settings.wxPlace||"").trim());return;}
+  if(d.act==="wxgeo"){WX.errAt=0;loadWx(true,true);return;}
+  if(d.act==="wxset"){APP.view="settings";render();setTimeout(()=>{const el=document.getElementById("s-wxPlace");if(el){el.scrollIntoView({block:"center"});el.focus();}},60);return;}
   if(d.act==="bulkall"&&BULK){const un=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid);const all=un.every(j=>BULK.sel[j.id]);BULK.sel={};if(!all)un.forEach(j=>{BULK.sel[j.id]=true;});BULK.confirm=false;rerenderKeep();return;}
   if(d.act==="bulkpay"&&BULK){const ids=Object.keys(BULK.sel).filter(k=>BULK.sel[k]);if(!ids.length)return;
     if(!BULK.confirm){BULK.confirm=true;rerenderKeep();return;}
@@ -5618,6 +5697,7 @@ document.addEventListener("input",e=>{
   if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];save();rerenderKeep();return;}
   if(d.qscustom){APP.settings.qsColor=t.value;const g=document.querySelector(".qs-grid");if(g)g.style.setProperty("--qs",t.value);clearTimeout(QI._t);QI._t=setTimeout(()=>{save();render();},500);return;}
   if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
+  if(d.wxoff){APP.settings.wxOff=!t.checked;save();return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}
   if(d.bulkdate&&BULK){BULK.date=t.value;return;}
@@ -5662,7 +5742,7 @@ document.addEventListener("input",e=>{
     if(d.draft==="dist"){const tr=Math.round(Math.max(0,num(t.value)-num(APP.settings.freeMiles))*num(APP.settings.perMile));const est=document.getElementById("d-est");
       if(est){if(APP.draft.type==="service")est.value=money(tr);else{est.value=money(num(APP.settings.fee)+tr);est.nextElementSibling.textContent=`${money(APP.settings.fee)} PPI${tr?` + ${money(tr)} travel`:""}`;}}}
     return;}
-  if(d.set){APP.settings[d.set]=t.value;save();if(/^(fee|freeMiles|perMile)$/.test(d.set)){const ex=document.getElementById("priceEx");if(ex)ex.textContent=priceExample();}return;}
+  if(d.set){APP.settings[d.set]=t.value;save();if(d.set==="wxPlace"){WX.key=null;WX.need=false;}if(/^(fee|freeMiles|perMile)$/.test(d.set)){const ex=document.getElementById("priceEx");if(ex)ex.textContent=priceExample();}return;}
   if(d.info){S.info[d.info]=d.info==="vin"?t.value.toUpperCase():t.value;
     if(d.info==="tech"&&S){linkTech(S);}
     if(d.info==="location"){const a=document.getElementById("dirLink");if(a){a.href=mapsHref(t.value);a.hidden=!t.value.trim();}}

@@ -2009,7 +2009,8 @@ function renderRequests(){
 }
 function quoteFromReq(r){
     const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,trim:r.trim||"",engine:r.engine||"",miles:r.miles||"",vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
-    if(r.date&&r.date>=TODAY){j.slots=[{d:r.date,t:r.time||""},...(r.more||[])];}else j.slots=[...(r.more||[])];makePending(j);
+    j.slots=[...(r.date&&r.date>=TODAY?[{d:r.date,t:r.time||""}]:[]),...(r.more||[])].filter(x=>x&&x.d).sort((a,b)=>(a.d+(a.t||"99"))<(b.d+(b.t||"99"))?-1:1);
+    if(j.slots[0]){j.info.date=j.slots[0].d;j.info.time=j.slots[0].t;}makePending(j);
     const c0=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c0)j.custId=c0.id;
     j.docMode="est";applyAgreed(j);APP.jobs.push(j);r.status="quoted";r.jobId=j.id;SVC_TAB[j.id]="bill";save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
     if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);}
@@ -3291,7 +3292,7 @@ const isOpenJob=j=>j.status!=="done"&&j.status!=="canceled";
 const isPend=j=>!!j.pending&&isOpenJob(j);
 const isBooked=j=>isOpenJob(j)&&!j.pending;
 const slotTxt=x=>fmtDate(x.d,{weekday:"short",month:"short",day:"numeric"})+(x.t?" at "+fmtTime(x.t):"");
-const slotsOf=j=>(Array.isArray(j.slots)?j.slots:j.info.date?[{d:j.info.date,t:j.info.time||""}]:[]).filter(x=>x&&x.d);
+const slotsOf=j=>(Array.isArray(j.slots)?j.slots:j.info.date?[{d:j.info.date,t:j.info.time||""}]:[]).filter(x=>x&&x.d).slice().sort((a,b)=>(a.d+(a.t||"99"))<(b.d+(b.t||"99"))?-1:1);
 let EST_BOOK=null,BOOKED_NOW=null;
 function makePending(j){j.pending=true;j.docMode="est";if(!j.slots)j.slots=j.info.date?[{d:j.info.date,t:j.info.time||""}]:[];return j;}
 function slotEditHTML(list,pre){return `<div class="slots">${list.length?list.map((x,k)=>`<span class="slot-chip">${k+1}) ${esc(slotTxt(x))}<button type="button" class="slot-x" data-slotdel="${pre}|${k}" aria-label="Remove this time">✕</button></span>`).join(""):`<p class="help" style="margin:0">No times yet.</p>`}</div>
@@ -4411,6 +4412,11 @@ const docMode=j=>j.docMode||(j.invoice.num||j.status==="done"?"inv":"est");
 function ensureEst(){const st=APP.settings;if(!S.est)S.est={num:"",date:TODAY,status:"draft"};
   if(!S.est.num){S.est.num=(st.estPrefix??"EST-")+(num(st.estNext)||1001);st.estNext=(num(st.estNext)||1001)+1;S.est.date=TODAY;save();}}
 const estValidUntil=e=>addDays(e.date||TODAY,num(APP.settings.estValid)||30);
+// the "pick a time" part of an estimate waiting on the customer
+function estReplyLines(j){const sl=slotsOf(j);
+  if(sl.length>1)return ["AVAILABLE TIMES",...sl.map((x,k)=>`${k+1}) ${slotTxt(x)}`),"",`Reply YES and the number of the time that works for you (for example: YES ${Math.min(2,sl.length)}), or tell us a better day and time.`];
+  if(sl.length===1)return [`Reply YES to approve and book ${slotTxt(sl[0])}, or tell us a better day and time.`];
+  return ["Reply YES to approve, along with a day and time that works for you."];}
 function estimateText(){
   ensureEst();const e=S.est,i=S.info,t=totals(S),st=APP.settings;
   const L=[`${bizName().toUpperCase()} — ESTIMATE ${e.num}`];
@@ -4433,10 +4439,7 @@ function estimateText(){
   L.push(...mpiText(S));
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
   if((st.warranty||"").trim())L.push("Warranty: "+st.warranty.trim());
-  if(S.pending&&sl.length>1){L.push("");L.push("AVAILABLE TIMES");sl.forEach((x,k)=>L.push(`${k+1}) ${slotTxt(x)}`));
-    L.push("");L.push(`Reply YES and the number of the time that works for you (for example: YES ${Math.min(2,sl.length)}), or tell us a better day and time.`);}
-  else if(S.pending&&sl.length===1){L.push("");L.push(`Reply YES to approve and book ${slotTxt(sl[0])}, or tell us a better day and time.`);}
-  else if(S.pending){L.push("");L.push("Reply YES to approve, along with a day and time that works for you.");}
+  if(S.pending){L.push("");L.push(...estReplyLines(S));}
   else if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
   return L.join("\n");
 }
@@ -4448,7 +4451,7 @@ function estPanelHTML(t){
   return `${booked}${slots}<div class="rep-sec"><h4>Estimate status</h4>
       <div class="chips" role="group" aria-label="Estimate status">${EST_ST.map(([k,l])=>`<button type="button" data-eststat="${k}" aria-pressed="${e.status===k}">${l}</button>`).join("")}</div>
       <p class="help" style="margin:6px 0 0">${e.num?`Valid until ${esc(fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"}))}. `:""}${e.status==="approved"&&e.approvedDate?`Approved ${esc(fmtDate(e.approvedDate,{month:"short",day:"numeric"}))}. `:""}Change how long estimates are good for in Settings → Invoices.</p></div>
-    ${hasLines?`<div class="copyrow">${can?`<a class="btn primary" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, here's your estimate${vehOf(i)?" for the "+vehOf(i):""}.\n\n`+estimateText()))}" data-estsent="1">💬 Text estimate</a>`:""}</div><div class="copyrow">${sendPdfHTML("estimate")}<button class="btn dl-only" type="button" data-act="pdfEstimate">💾 Save estimate PDF</button><button class="btn" type="button" data-act="copyEstimate">Copy estimate text</button></div>
+    ${hasLines?`<div class="copyrow">${sendPdfHTML("estimate")}${can?`<a class="btn" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, here's your estimate${vehOf(i)?" for the "+vehOf(i):""}.\n\n`+estimateText()))}" data-estsent="1">💬 Text as plain text</a>`:""}<button class="btn dl-only" type="button" data-act="pdfEstimate">💾 Save estimate PDF</button><button class="btn" type="button" data-act="copyEstimate">Copy estimate text</button></div>
     ${S.pending?(EST_BOOK&&EST_BOOK.id===S.id?estBookHTML(S):`<div class="copyrow"><button class="btn est-go" type="button" data-estbook="${S.id}">✓ Customer approved: book the appointment</button><button class="btn del" type="button" data-estdecline="${S.id}">Declined</button></div>`)
       :`<div class="copyrow"><button class="btn est-go" type="button" data-act="estapprove">✓ Customer approved: turn into invoice</button></div>`}`
     :`<p class="help">Add labor and parts above, or pick a job from your service menu, to build the estimate.</p>`}
@@ -4791,7 +4794,7 @@ function sendPdfHTML(kind){const j=S,i=j.info,first=(i.customer||"").trim().spli
   const sp=SENDPDF&&SENDPDF.jobId===j.id&&SENDPDF.kind===kind?SENDPDF:null;
   if(sp&&sp.busy)return `<button class="btn primary" type="button" disabled>⏳ Making the ${label} PDF…</button>`;
   if(sp&&sp.url&&sp.key===pdfKey(j,kind)){const num=kind==="estimate"?(j.est&&j.est.num)||"":j.invoice.num||"";
-    const msg=`Hi ${first}, here's your ${label}${num?" "+num:""} from ${bizName()}${kind==="invoice"&&!j.invoice.paid?` for ${money(jobTotal(j))}`:""}:\n${sp.url}`;
+    const msg=`Hi ${first}, here's your ${label}${num?" "+num:""} from ${bizName()}${kind==="invoice"&&!j.invoice.paid?` for ${money(jobTotal(j))}`:kind==="estimate"?` for ${money(jobTotal(j))}`:""}:\n${sp.url}`+(kind==="estimate"&&j.pending?"\n\n"+estReplyLines(j).join("\n"):kind==="estimate"&&!(j.est&&j.est.status==="approved")?"\n\nReply YES to approve this estimate.":"");
     return `${i.phone&&CAN_CAL?`<a class="btn primary" href="${esc(smsHref(i.phone,msg))}" ${kind==="estimate"?'data-estsent="1"':`data-invsent="${j.id}"`}>💬 Text the PDF to ${esc(first)}</a>`:""}<button class="btn" type="button" data-pdflink="${esc(sp.url)}">Copy PDF link</button>`;}
   return `<button class="btn primary" type="button" data-sendpdf="${kind}">📄 Send ${label} PDF</button>${sp&&sp.err?`<span class="help vin-warn">${esc(sp.err)}</span>`:""}`;}
 async function sendPdf(kind){
@@ -5562,7 +5565,7 @@ document.addEventListener("click",e=>{
   if(d.reqbook){const r=APP.requests.find(x=>x.id===d.reqbook);if(r){reqToDraft(r);render();window.scrollTo(0,0);}return;}
   if(d.slotadd){const pre=d.slotadd,dd=document.getElementById(pre+"SlotD")?.value,tt=document.getElementById(pre+"SlotT")?.value||"";
     if(!dd){toast("Pick a day first");document.getElementById(pre+"SlotD")?.focus();return;}
-    if(pre==="rq"&&REQ_EDIT){(REQ_EDIT.more=REQ_EDIT.more||[]).push({d:dd,t:tt});rerenderKeep();return;}
+    if(pre==="rq"&&REQ_EDIT){(REQ_EDIT.more=REQ_EDIT.more||[]).push({d:dd,t:tt});REQ_EDIT.more.sort((a,b)=>(a.d+(a.t||"99"))<(b.d+(b.t||"99"))?-1:1);rerenderKeep();return;}
     if(pre==="est"&&S){const l=slotsOf(S).slice();l.push({d:dd,t:tt});l.sort((a,b)=>(a.d+(a.t||"99"))<(b.d+(b.t||"99"))?-1:1);S.slots=l;S.info.date=l[0].d;S.info.time=l[0].t;save();rerenderKeep();return;}return;}
   if(d.slotdel){const [pre,k]=d.slotdel.split("|");
     if(pre==="rq"&&REQ_EDIT){(REQ_EDIT.more||[]).splice(+k,1);rerenderKeep();return;}

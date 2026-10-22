@@ -3132,7 +3132,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
   if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="lookup"||APP.view==="pay"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
-    $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
+    $("#prevBtn").style.visibility="hidden";$("#prevBtn").textContent="Back";$("#countLbl").textContent="";
     $("#nextBtn").textContent=APP.adding?(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?"📝 Make estimate":"Save job"):"+ Book a job";if(isTech()&&!APP.adding)foot.hidden=true;
     return;
   }
@@ -3140,8 +3140,10 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#steps").hidden=svc;document.querySelector("#jobChrome .bar").hidden=svc;
   if(svc){
     $("#vehLabel").textContent=["Service",S.info.customer,vehOf(S.info)].filter(Boolean).join(" · ");
-    $("#prevBtn").style.visibility="hidden";$("#countLbl").textContent="";
-    $("#nextBtn").textContent=S.status==="done"?"Back to schedule":"Finish job";
+    $("#countLbl").textContent="";const open=S.status!=="done"&&S.status!=="canceled";
+    // an estimate still waiting on the customer: just save and close, nothing to finish yet
+    $("#prevBtn").style.visibility=open&&!S.pending&&!isTech()?"visible":"hidden";$("#prevBtn").textContent="Save & close";
+    $("#nextBtn").textContent=!open?"Back to schedule":S.pending?"💾 Save & close":"Finish job";
     return;
   }
   const st=stats();
@@ -3157,7 +3159,7 @@ function renderChrome(){try{syncLabel();}catch(e){}
     return `<button class="${cls}" role="tab" aria-selected="${i===S.step}" data-go="${i}"><b>${n}</b>${esc(s.title)}</button>`;
   }).join("");
   const on=$("#steps .on"); if(on) on.scrollIntoView({block:"nearest",inline:"center"});
-  $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";
+  $("#prevBtn").style.visibility=S.step===0?"hidden":"visible";$("#prevBtn").textContent="Back";
   const id=STAGES[S.step].id;
   $("#nextBtn").textContent=id==="invoice"||(isTech()&&id==="report")?"Finish job":id==="report"?"Next: Invoice":id==="post"?"Review report":"Next: "+STAGES[S.step+1].title;
   $("#countLbl").textContent=`${st.done}/${st.total}`;
@@ -5725,9 +5727,12 @@ document.addEventListener("click",e=>{
   if(d.delitem!==undefined){S.invoice.items.splice(+d.delitem,1);save();render();return;}
   if(d.paid!==undefined){const inv=S.invoice;if(!d.paid||(inv.paid&&inv.paidVia===d.paid)){inv.paid=false;inv.paidVia="";inv.paidDate="";}else{inv.paid=true;inv.paidVia=d.paid;inv.paidDate=TODAY;}save();render();toast(inv.paid?`Marked paid by ${inv.paidVia}`:"Marked unpaid");return;}
 });
-$("#prevBtn").addEventListener("click",()=>{if(APP.view==="job"&&!isSvc(S))go(S.step-1);});
+function saveClose(){const pend=!!S.pending;APP.view="jobs";save();render();
+  if(pend)setTimeout(()=>document.getElementById("pendList")?.scrollIntoView({block:"start"}),60);else window.scrollTo(0,0);toast(pend?"Estimate saved":"Saved");}
+$("#prevBtn").addEventListener("click",()=>{if(APP.view==="job"&&!isSvc(S))go(S.step-1);else if(APP.view==="job"&&isSvc(S)&&S.status!=="done")saveClose();});
 $("#nextBtn").addEventListener("click",()=>{
   if(APP.view==="jobs"){ if(APP.adding)saveDraft(QUICK_EST&&!APP.editing&&APP.draft&&APP.draft.type==="service"?{est:true}:undefined); else startAdd(); return; }
+  if(isSvc(S)&&S.pending&&S.status!=="done"&&S.status!=="canceled"){saveClose();return;}
   if(isSvc(S)&&S.status!=="done"&&S.timer&&S.timer.run){S.timer.segs.push({s:S.timer.run,e:Date.now()});S.timer.run=0;}
   if(isSvc(S)&&S.status!=="done"&&!num(S.actualHrs)&&S.timer&&tmrHours(S)>0.02)S.actualHrs=String(Math.round(tmrHours(S)*10)/10);
   if(isTech()&&(isSvc(S)||STAGES[S.step].id==="report")){if(S.status!=="done"){S.status="done";S.doneBy=(AUTH&&AUTH.email)||"";S.dsp="";const fj=S,me=(fj.info.tech||"Your technician").split(/\s+/)[0];const go=()=>notifySend({to:"managers",title:`${me} finished a job`,body:jobLine(fj),url:"./?job="+encodeURIComponent(fj.id),tag:"done-"+fj.id});setTimeout(()=>syncNow().then(go,go),0);}APP.view="jobs";save();render();window.scrollTo(0,0);toast("Job finished. The office has it now.");return;}

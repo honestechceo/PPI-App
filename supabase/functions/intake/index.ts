@@ -154,7 +154,9 @@ Deno.serve(async (req) => {
       const bin = atob(v.replace(/-/g, "+").replace(/_/g, "/"));
       const txt = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
       if (!/^BEGIN:VCARD/.test(txt) || !/END:VCARD\s*$/.test(txt)) return out({ error: "bad request" }, 400);
-      return new Response(txt, { headers: { ...CORS, "Content-Type": "text/vcard; charset=utf-8", "Content-Disposition": 'inline; filename="contact.vcf"' } });
+      const sp = new URL(req.url).searchParams, dl = sp.get("dl") === "1";
+      const name = (txt.match(/\nFN:([^\r\n]*)/) || [])[1]?.replace(/[^\w ]+/g, "").trim() || "contact";
+      return new Response(txt, { headers: { ...CORS, "Content-Type": sp.get("t") === "v" ? "text/vcard; charset=utf-8" : "text/x-vcard; charset=utf-8", "Content-Disposition": `${dl ? "attachment" : "inline"}; filename="${name}.vcf"` } });
     } catch (_) { return out({ error: "bad request" }, 400); }
   }
   if (req.method !== "POST") return out({ error: "POST only" }, 405);

@@ -1888,12 +1888,21 @@ function parseRequest(raw){
   let veh=get(/(^vehicle$|^car$|year\W*make|ymm|truck|^vehicle (info|information|details))/);
   if(yr||mk||md){r.year=(yr.match(/(19|20)\d\d/)||[""])[0];r.make=mk;r.model=md;}
   else{const src=veh||text;const m=src.match(/\b((?:19[6-9]|20[0-3])\d)\s+([A-Za-z][A-Za-z-]+)\s+([A-Za-z0-9][\w-]*(?:\s+[A-Za-z0-9][\w-]*)?)/);
-    if(m){r.year=m[1];r.make=titleMake(m[2]);r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was|makes?|keeps?|won'?t|will|does|doesn'?t|sometimes|when|runs?|shakes?|squeaks?|leaks?)$/i,"");}}
+    if(m){r.year=m[1];r.make=titleMake(m[2]);r.vline=(src.split("\n").find(l=>l.includes(m[0]))||"");r.vpos=m[0];r.model=m[3].replace(/\s+(and|with|that|has|is|needs?|for|from|in|at|on|to|it|my|the|was|makes?|keeps?|won'?t|will|does|doesn'?t|sometimes|when|runs?|shakes?|squeaks?|leaks?)$/i,"");}}
+  // trim / engine / mileage: labeled fields, or the rest of the vehicle line ("2015 Jeep Grand Cherokee Limited · 3.6L V6 · 134,800 miles")
+  {const vl=r.vline||veh||"";delete r.vline;const vp=r.vpos||"";delete r.vpos;
+    r.trim=get(/^(trim|trim level)$/)||"";r.engine=get(/^(engine|engine size|motor)$/)||"";
+    let mi=get(/^(mileage|miles|odometer|current mileage)$/)||"";
+    const rest=vl&&vp?vl.slice(vl.indexOf(vp)+vp.length):"";
+    if(!r.engine){const e=(rest||vl).match(/\b\d\.\d\s*L\b(?:\s*(?:V|I|H)-?\d{1,2}|\s*\d-?cyl\w*|\s*(?:turbo|hybrid|diesel|ecoboost|hemi))*/i)||(rest||vl).match(/\b(?:V|I)-?(?:4|6|8|10|12)\b/);if(e)r.engine=e[0].trim();}
+    if(!mi){const m=(rest||vl||text).match(/\b(\d{1,3}(?:,\d{3})+|\d{2,6}|\d{1,3}(?:\.\d)?\s*k)\s*(?:miles|mi)\b/i);if(m)mi=m[1];}
+    if(mi){let n=String(mi).replace(/,/g,"").trim();if(/k$/i.test(n))n=String(Math.round(parseFloat(n)*1000));r.miles=(n.match(/\d+/)||[""])[0];}
+    if(!r.trim&&rest){const seg=rest.split(/\s*[·•|,;]\s*|\s+-\s+/)[0].trim();if(seg&&seg.split(/\s+/).length<=3&&!/\d/.test(seg)&&!/(miles|engine|needs|with|and)/i.test(seg))r.trim=seg;}}
   const vin=text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/);if(vin&&/\d/.test(vin[0])&&/[A-Z]/.test(vin[0]))r.vin=vin[0];
   r.work=get(/^(service|services|service needed|service requested|services needed|what do you need|request|issue|problem|concern|repair|repairs|work needed|type of service|reason|choose a service|select a service|service type)/,false)||"";
-  const msg=get(/^(message|comments?|details|description|describe|notes|additional info|additional information|additional notes|tell us more|your message|question)/,true);
+  const msg=get(/^(message|comments?|details|description|describe|notes|customer notes|customer comments?|customer message|notes from (the )?customer|special instructions|symptoms?|additional info|additional information|additional notes|tell us more|your message|question)/,true);
   if(!r.work&&msg)r.work=msg.split(/\n/)[0].slice(0,140);
-  if(msg&&msg!==r.work)r.notes=msg;
+  if(msg&&msg!==r.work)r.notes=msg.replace(/^["“'](.*)["”']$/s,"$1");
   {const co=get(/^(company|company name|business|business name)$/),src=get(/^(source|how did you hear about us|how did you find us|referral)$/);
     if(co){r.company=co;r.notes=[`Company: ${co}`,r.notes].filter(Boolean).join("\n");}
     if(src)r.notes=[r.notes,`Found you through: ${src}`].filter(Boolean).join("\n");}
@@ -1905,6 +1914,11 @@ function parseRequest(raw){
   if(!fields.length){if(!r.time)r.time=parseTimeLoose(text);
     if(r.type==="ppi")r.work="Pre-purchase inspection";
     else{const sent=text.replace(/\s+/g," ").split(/(?<=[.!?])\s+/).find(x=>/(brake|oil|engine|battery|noise|leak|light|check|start|diagnos|replace|repair|fix|service|belt|alternator|starter|squeal|grind)/i.test(x));if(sent)r.work=sent.trim().slice(0,140);}}
+  // a bare name on its own line near the top ("Nicole Brown")
+  if(!r.customer){const NOTNAME=/\b(service|services|request|requests|estimate|quote|appointment|inspection|repair|change|brake|brakes|oil|engine|leak|new|mobile|mechanic|honestech|customer|vehicle|phone|email|address|location|hello|hi|dear|thanks|thank|submission|form|lead|call|message|notes?|details)\b/i;
+    const top=lines.filter(Boolean).slice(0,4);
+    const nm=top.find((l,k)=>!LBL.test(l)&&/^[A-Z][A-Za-z'’.-]+(?:\s+[A-Z][A-Za-z'’.-]+){1,3}$/.test(l)&&!NOTNAME.test(l)&&!(r.make&&new RegExp("\\b"+r.make+"\\b","i").test(l))&&!/\d/.test(l));
+    if(nm)r.customer=nm.trim();}
   if(!r.customer){const m=text.match(/\bmy name is ([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/)||text.match(/(?:thanks|thank you|regards|best|sincerely|cheers)[,!.]?\s*(?:\n\s*)?[-–]?\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/i)||text.match(/\n\s*[-–]\s*([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)\s*$/);if(m)r.customer=m[1];}
   {const pv=get(/^(quote|quoted price|price|agreed price|agreed|quote amount|estimate|total)$/);const m=pv.match(/\$?\s*(\d[\d,]*(?:\.\d{1,2})?)/);if(m)r.agreed=m[1].replace(/,/g,"");}
   if(r.type==="ppi"&&!r.work)r.work="Pre-purchase inspection";
@@ -1936,7 +1950,7 @@ function reqForm(rq){
     <div class="full seg" role="group" aria-label="Request type"><button type="button" data-reqtype="ppi" aria-pressed="${rq.type==="ppi"}">Pre-purchase inspection</button><button type="button" data-reqtype="service" aria-pressed="${rq.type!=="ppi"}">Service / repair</button></div>
     ${f("customer","Name","","full")}${f("phone","Phone",'inputmode="tel"')}${f("email","Email",'inputmode="email" autocapitalize="off"')}
     ${f("location","Address","","full")}
-    ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
+    ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("trim","Trim")}${f("engine","Engine")}${f("miles","Mileage",'inputmode="numeric"')}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
     <label class="full">What they need<textarea data-req="work" rows="2">${esc(rq.work||"")}</textarea></label>
     ${f("date","Appointment date (the day they want)",'type="date"')}${f("time","Appointment time",'type="time"')}
     ${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?`<div class="full more-times"><div class="lbl" style="margin:0 0 4px">Other times you can offer <span class="help">(optional)</span></div>${slotEditHTML(rq.more||[],"rq")}</div>`:""}
@@ -1992,14 +2006,14 @@ function renderRequests(){
     <div class="acts"><button class="mini del" type="button" data-act="reqfiltclear">${REQ_FILT_CLR?"Tap again to delete all":"Delete all filtered"}</button></div></details>`:""}`;
 }
 function quoteFromReq(r){
-    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
+    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,trim:r.trim||"",engine:r.engine||"",miles:r.miles||"",vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
     if(r.date&&r.date>=TODAY){j.slots=[{d:r.date,t:r.time||""},...(r.more||[])];}else j.slots=[...(r.more||[])];makePending(j);
     const c0=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c0)j.custId=c0.id;
     j.docMode="est";applyAgreed(j);APP.jobs.push(j);r.status="quoted";r.jobId=j.id;SVC_TAB[j.id]="bill";save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
     if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);}
 function reqToDraft(r){
   startAdd(null);Object.assign(APP.draft,{type:r.type==="ppi"?"ppi":"service",work:r.type==="ppi"?"":r.work||"",customer:r.customer||"",phone:r.phone||"",location:r.location||"",
-    year:r.year||"",make:r.make||"",model:r.model||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,
+    year:r.year||"",make:r.make||"",model:r.model||"",trim:r.trim||"",engine:r.engine||"",miles:r.miles||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,
     notes:[r.type==="ppi"&&r.work&&r.work!=="Pre-purchase inspection"?r.work:"",r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")});
   const c=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c)APP.draft.custId=c.id;
   APP.reqFrom=r.id;APP.view="jobs";

@@ -486,6 +486,8 @@ display:flex;gap:12px;align-items:center}.wx-big{font-size:40px;line-height:1}.w
 .wx-warn{margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4)}.wx-warn p{margin:2px 0;font-size:13px}
 .wx-day{display:grid;grid-template-columns:1.1fr 1.6fr 1fr .9fr;gap:6px;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}.wx-day span:nth-child(3),.wx-day span:nth-child(4){text-align:right}
 .wx-chip{display:inline-block;font-size:12px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap;font-weight:600}.wx-chip.bad{border-color:#2563eb;color:#2563eb}
+.tools-head{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;background:none;border:0;padding:0;text-align:left;font:inherit;color:inherit;cursor:pointer;grid-column:1/-1}
+.tools-chev{font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap}.tools-min{padding-top:12px;padding-bottom:12px}
 .req-top-alert{width:100%;margin:0 0 12px;text-align:left}.req-names{display:block;font-size:13px;font-weight:400;color:var(--muted);margin-top:4px;line-height:1.35}
 /* ---------- wide screens: iPhone Duo unfolded (7.6"), iPad, landscape ---------- */
 @media (min-width:860px){
@@ -3415,8 +3417,10 @@ function toolItems(j){const T=j.tools||{},ks=toolKeys(j),seen=new Set(),out=[];
   const add=t=>{const n=t.toLowerCase();if(!seen.has(n)&&!(T.hide||[]).includes(t)){seen.add(n);out.push(t);}};
   ks.forEach(k=>toolListFor(k).forEach(add));if(ks.length&&!T.noBase)TOOL_BASE.forEach(add);(T.extra||[]).forEach(add);return out;}
 function toolsHTML(j){if(!isSvc(j))return "";const T=j.tools||{},ks=toolKeys(j),items=toolItems(j),open=TOOLS_OPEN===j.id,have=T.have||{};
-  const got=items.filter(t=>have[t]).length,veh=vehOf(j.info);
-  return `<div class="form tools-card" id="toolsCard"><p class="formh">🧰 Tools for this job${items.length?` <span class="tools-n">${got}/${items.length} packed</span>`:""}</p>
+  const got=items.filter(t=>have[t]).length,veh=vehOf(j.info),shown=!!T.open;
+  const head=`<button type="button" class="tools-head" data-act="toolmin" aria-expanded="${shown}"><span class="formh" style="margin:0">🧰 Tools for this job${items.length?` <span class="tools-n">${got}/${items.length} packed</span>`:""}</span><span class="tools-chev">${shown?"Hide ▴":"Show ▾"}</span></button>`;
+  if(!shown)return `<div class="form tools-card tools-min" id="toolsCard">${head}</div>`;
+  return `<div class="form tools-card" id="toolsCard">${head}
     ${ks.length?`<div class="tools-for">${ks.map(k=>{const x=TOOL_LIB.find(y=>y[0]===k);return `<span class="tools-tag">${esc(x?x[1]:k)}<button type="button" aria-label="Remove" data-toolunpick="${k}">×</button></span>`;}).join("")}</div>`
       :`<p class="help full" style="margin:0">${(j.info.work||"").trim()?"No match for the work requested yet. Pick the repair below or ask Google.":"Type the work requested above, or pick the repair below."}</p>`}
     <div class="acts tools-acts">
@@ -3430,6 +3434,7 @@ function toolsHTML(j){if(!isSvc(j))return "";const T=j.tools||{},ks=toolKeys(j),
     <div class="tools-add"><input id="toolNew" placeholder="Add a tool (e.g. 36 mm axle socket)" autocomplete="off"><button class="mini" type="button" data-act="tooladd">Add</button></div>
   </div>`;}
 let TOOLS_OPEN=null,TOOLS_SAVE=null;
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest('[data-act="toolmin"]');if(!b||!S)return;e.stopPropagation();S.tools=S.tools||{};S.tools.open=!S.tools.open;if(!S.tools.open)TOOLS_OPEN=null;save();rerenderKeep();},true);
 // what gets saved for one repair: its list minus what was removed, plus anything added on this job
 function toolSaveList(j,k){const T=j.tools||{};const L=toolListFor(k).filter(t=>!(T.hide||[]).includes(t));(T.extra||[]).forEach(t=>{if(!L.some(x=>x.toLowerCase()===t.toLowerCase()))L.push(t);});return L;}
 function jobCard(j){

@@ -1,0 +1,9 @@
+name: Probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          u="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake?vcard=QkVHSU46VkNBUkQNClZFUlNJT046My4wDQpOOkN1c3RvbWVyO1Rlc3Q7OzsNCkZOOlRlc3QgQ3VzdG9tZXINClRFTDtUWVBFPUNFTEw6NzMyNTU1MDEwMA0KRU5EOlZDQVJE"
+          curl -sS -i "$u" | head -30 | tr -d '\r' | sed 's/^/::notice::/'

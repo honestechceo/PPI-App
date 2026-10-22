@@ -476,7 +476,13 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .av-day small{font-size:10px;color:var(--muted)}.av-day strong{font-size:15px}.av-day span{font-size:10px;color:var(--good)}
 .av-day.busy span{color:var(--mon)}.av-day[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .req-alert{border-color:var(--accent);background:var(--accent-soft)}
-.wx-card .wx-now{display:flex;gap:12px;align-items:center}.wx-big{font-size:40px;line-height:1}.wx-t{font-size:30px;display:block;line-height:1.1}.wx-now .help{display:block;margin:2px 0 0}
+.slots{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}.slot-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 4px 4px 10px;font-size:14px;font-weight:600;background:var(--card,#fff)}
+.slot-x{border:0;background:transparent;font-size:13px;width:26px;height:26px;border-radius:50%;cursor:pointer;color:var(--muted)}
+.slot-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.slot-add input{flex:1 1 130px;min-width:0}
+.est-book{border:2px solid var(--accent);border-radius:12px;padding:10px 12px;margin:8px 0}.est-book .check{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:15px;width:100%}.est-book .formh{font-size:16px}.est-book .slot-add{margin:4px 0 6px}
+.est-booked{border:2px solid #2b8a3e;border-radius:12px;padding:10px 12px}
+.job.pend{display:block}.job.pend .who{margin-bottom:2px}
+display:flex;gap:12px;align-items:center}.wx-big{font-size:40px;line-height:1}.wx-t{font-size:30px;display:block;line-height:1.1}.wx-now .help{display:block;margin:2px 0 0}
 .wx-hours{display:flex;gap:6px;overflow-x:auto;margin:10px 0 4px;padding-bottom:4px}.wx-h{flex:0 0 auto;min-width:46px;text-align:center;border:1px solid var(--line);border-radius:10px;padding:5px 4px;display:flex;flex-direction:column;gap:1px}.wx-h.now{border-color:var(--accent)}.wx-h small{font-size:11px;color:var(--muted)}.wx-h small.wet,.wx-day .wet{color:#2563eb;font-weight:700}
 .wx-warn{margin:8px 0;padding:8px 10px;border-radius:10px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4)}.wx-warn p{margin:2px 0;font-size:13px}
 .wx-day{display:grid;grid-template-columns:1.1fr 1.6fr 1fr .9fr;gap:6px;font-size:13px;padding:6px 0;border-top:1px solid var(--line)}.wx-day span:nth-child(3),.wx-day span:nth-child(4){text-align:right}
@@ -1914,7 +1920,7 @@ function parseRequest(raw){
 function parseIncoming(){let n=0;(APP.requests||[]).forEach(r=>{if(r.auto&&!r.parsed&&!r.notice&&r.raw){const p=parseRequest(r.raw);
     Object.keys(p).forEach(k=>{if(p[k]&&!r[k])r[k]=p[k];});r.parsed=true;n++;}});return n;}
 const reqLive=r=>!r.filtered&&!r.notice;
-function dayLoad(d){return APP.jobs.filter(j=>j.info.date===d).sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));}
+function dayLoad(d){return APP.jobs.filter(j=>j.info.date===d&&!isPend(j)&&j.status!=="canceled").sort((a,b)=>(a.info.time||"99").localeCompare(b.info.time||"99"));}
 function availHTML(rq){
   const d=rq.date||TODAY,start=d<TODAY?TODAY:d,days=[...Array(7)].map((_,k)=>addDays(start,k-(start>TODAY?1:0))).filter(x=>x>=TODAY).slice(0,7);
   const js=rq.date?dayLoad(rq.date):[];
@@ -1923,7 +1929,7 @@ function availHTML(rq){
       :`<p class="av-free">✓ Nothing booked that day</p>`):`<p class="help" style="margin:0">No date in the request. Pick one below.</p>`}
     <div class="av-days">${days.map(x=>{const n=dayLoad(x).length,dt=new Date(x+"T12:00:00");return `<button type="button" class="av-day${n?" busy":""}" data-reqday="${x}" aria-pressed="${rq.date===x}"><small>${x===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><span>${n?n+" job"+(n===1?"":"s"):"open"}</span></button>`;}).join("")}</div></div>`;
 }
-const REQ_ST={new:"New",booked:"Booked",quoted:"Quote sent",declined:"Declined"};
+const REQ_ST={new:"New",booked:"Booked",quoted:"Estimate sent",declined:"Declined"};
 function reqForm(rq){
   const f=(k,l,extra="",cls="")=>`<label class="${cls}">${l}<input data-req="${k}" value="${esc(rq[k]||"")}" ${extra}></label>`;
   return `<div class="form req-form" id="reqForm">
@@ -1934,10 +1940,11 @@ function reqForm(rq){
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("vin","VIN",'class="mono" maxlength="17" autocapitalize="characters"')}
     <label class="full">What they need<textarea data-req="work" rows="2">${esc(rq.work||"")}</textarea></label>
     ${f("date","Appointment date (the day they want)",'type="date"')}${f("time","Appointment time",'type="time"')}
+    ${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?`<div class="full more-times"><div class="lbl" style="margin:0 0 4px">Other times you can offer <span class="help">(optional)</span></div>${slotEditHTML(rq.more||[],"rq")}</div>`:""}
     ${f("agreed","Agreed price ($)",'inputmode="decimal" placeholder="If you agreed on one"')}<label class="check"><input type="checkbox" data-reqc="agreedTravel" ${rq.agreedTravel!==false?"checked":""}> Travel included</label>
     <div class="full">${availHTML(rq)}</div>
     <label class="full">Notes / full message<textarea data-req="notes" rows="3">${esc(rq.notes||"")}</textarea></label>
-    <div class="formacts full"><button class="btn primary" type="button" data-act="reqsave">Save to inbox</button>${rq.status&&rq.status!=="new"?"":`<button class="btn" type="button" data-act="reqbook">Book it now</button>`}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
+    <div class="formacts full">${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?`<button class="btn primary" type="button" data-act="reqest">📝 Send estimate</button>`:""}<button class="btn${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?"":" primary"}" type="button" data-act="reqsave">Save to inbox</button>${rq.status&&rq.status!=="new"?"":`<button class="btn" type="button" data-act="reqbook">Book it now</button>`}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
   </div>`;
 }
 function declineText(rq,why){
@@ -1985,6 +1992,12 @@ function renderRequests(){
       <div class="acts"><button class="mini" type="button" data-reqok="${r.id}">Not spam</button><button class="mini del" type="button" data-reqdel="${r.id}">Delete</button></div></div>`).join("")}
     <div class="acts"><button class="mini del" type="button" data-act="reqfiltclear">${REQ_FILT_CLR?"Tap again to delete all":"Delete all filtered"}</button></div></details>`:""}`;
 }
+function quoteFromReq(r){
+    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
+    if(r.date&&r.date>=TODAY){j.slots=[{d:r.date,t:r.time||""},...(r.more||[])];}else j.slots=[...(r.more||[])];makePending(j);
+    const c0=(APP.customers||[]).find(c=>r.customer&&c.name.toLowerCase()===r.customer.trim().toLowerCase());if(c0)j.custId=c0.id;
+    j.docMode="est";applyAgreed(j);APP.jobs.push(j);r.status="quoted";r.jobId=j.id;SVC_TAB[j.id]="bill";save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
+    if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);}
 function reqToDraft(r){
   startAdd(null);Object.assign(APP.draft,{type:r.type==="ppi"?"ppi":"service",work:r.type==="ppi"?"":r.work||"",customer:r.customer||"",phone:r.phone||"",location:r.location||"",
     year:r.year||"",make:r.make||"",model:r.model||"",vin:r.vin||"",date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time||"",email:r.email||"",agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,
@@ -2219,7 +2232,7 @@ function reviewBtnHTML(j){
 /* ================= route planning ================= */
 let ROUTE=null; // {day,state,order:[{j,lat,lon,leg}],start,total,missing}
 async function planRoute(day,useHere){
-  const js=APP.jobs.filter(j=>j.info.date===day&&j.status!=="done");
+  const js=APP.jobs.filter(j=>j.info.date===day&&isBooked(j));
   ROUTE={day,state:"loading",n:js.length,done:0};rerenderKeep();
   let start=null,startName="";
   if(useHere){const h=await herePos();if(h){start=h;startName="Your location";}}
@@ -2293,7 +2306,7 @@ async function loadWx(force,useGeo){
 function wxAt(day,time){const h=WX.data&&WX.data.hourly;if(!h||!day)return null;
   const hr=time?String(time).slice(0,2):"12",i=h.time.indexOf(`${day}T${hr}:00`);if(i<0)return null;
   return {t:Math.round(h.temperature_2m[i]),p:h.precipitation_probability[i]||0,c:h.weather_code[i],w:Math.round(h.wind_speed_10m[i]||0)};}
-function wxJobChip(j){if(APP.settings.wxOff||!isOpenJob(j))return "";const w=wxAt(j.info.date,j.info.time);if(!w)return "";
+function wxJobChip(j){if(APP.settings.wxOff||!isBooked(j))return "";const w=wxAt(j.info.date,j.info.time);if(!w)return "";
   return `<span class="wx-chip${w.p>=50||w.t<=32||w.t>=90?" bad":""}" title="${esc(wxC(w.c)[1])}">${wxC(w.c)[0]} ${w.t}°${w.p>=20?` · ${w.p}%`:""}</span>`;}
 function wxWarn(d){const h=d.hourly,out=[];if(!h)return out;
   const idx=h.time.map((t,i)=>[t,i]).filter(([t])=>t.slice(0,10)===TODAY&&+t.slice(11,13)>=7&&+t.slice(11,13)<=19).map(x=>x[1]);
@@ -2317,7 +2330,7 @@ function weatherCardHTML(){const st=APP.settings;if(st.wxOff)return "";
     `<div class="wx-h${t.slice(0,13)===TODAY+"T"+String(new Date().getHours()).padStart(2,"0")||t.slice(0,13)===TODAY+"T"+String(new Date().getHours()-1).padStart(2,"0")?" now":""}"><small>${esc(fmtTime(t.slice(11,16)).replace(":00",""))}</small><span>${wxC(h.weather_code[i])[0]}</span><strong>${Math.round(h.temperature_2m[i])}°</strong><small class="${h.precipitation_probability[i]>=50?"wet":""}">${h.precipitation_probability[i]>=10?h.precipitation_probability[i]+"%":"&nbsp;"}</small></div>`).join("");
   const warns=wxWarn(d);
   const day=k=>dl.time&&dl.time[k]?`<div class="wx-day"><span>${k===1?"Tomorrow":esc(fmtDate(dl.time[k],{weekday:"long"}))}</span><span>${wxC(dl.weather_code[k])[0]} ${esc(wxC(dl.weather_code[k])[1])}</span><span>${Math.round(dl.temperature_2m_max[k])}° / ${Math.round(dl.temperature_2m_min[k])}°</span><span class="${dl.precipitation_probability_max[k]>=50?"wet":""}">${dl.precipitation_probability_max[k]||0}% rain</span></div>`:"";
-  const todays=APP.jobs.filter(j=>isOpenJob(j)&&j.info.date===TODAY&&(!isTech()||true)).sort((a,b)=>(a.info.time||"99")<(b.info.time||"99")?-1:1);
+  const todays=APP.jobs.filter(j=>isBooked(j)&&j.info.date===TODAY).sort((a,b)=>(a.info.time||"99")<(b.info.time||"99")?-1:1);
   return `<div class="dash-card wx-card">${head}
     <div class="wx-now"><span class="wx-big">${cur[0]}</span><div><strong class="wx-t">${Math.round(c.temperature_2m)}°</strong><span class="help">${esc(cur[1])} · feels ${Math.round(c.apparent_temperature)}°</span>
       <span class="help">High ${Math.round(dl.temperature_2m_max[0])}° · Low ${Math.round(dl.temperature_2m_min[0])}° · ${dl.precipitation_probability_max[0]||0}% rain · wind ${Math.round(c.wind_speed_10m||0)} mph</span></div></div>
@@ -2332,7 +2345,7 @@ function renderDash(){
   const billed=inP.reduce((a,j)=>a+jobTotal(j),0),collected=inP.filter(j=>j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   const unpaid=done.filter(j=>!j.invoice.paid).sort((a,b)=>jDate(a)<jDate(b)?-1:1),unpaidAmt=unpaid.reduce((a,j)=>a+jobTotal(j),0);
   const nP=inP.filter(j=>!isSvc(j)).length,nS=inP.length-nP,avg=inP.length?billed/inP.length:0;
-  const upcoming=APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||"")>=TODAY).sort((a,b)=>((a.info.date||"")+(a.info.time||"99"))<((b.info.date||"")+(b.info.time||"99"))?-1:1);
+  const upcoming=APP.jobs.filter(j=>isBooked(j)&&(j.info.date||"")>=TODAY).sort((a,b)=>((a.info.date||"")+(a.info.time||"99"))<((b.info.date||"")+(b.info.time||"99"))?-1:1);
   const today=upcoming.filter(j=>j.info.date===TODAY);
   const fuDue=APP.jobs.filter(j=>fuOpen(j)&&j.followup.date<=addDays(TODAY,14)).length;
   // months chart: last 6 months billed
@@ -2370,6 +2383,7 @@ function renderDash(){
     ${barChart(mVals)}
   </div>
   ${today.length||upcoming.length?`<div class="dash-card"><div class="dc-h"><h3>${today.length?"Today":"Coming up"}</h3><button class="mini" type="button" data-nav="jobs">Schedule</button></div>${(today.length?today:upcoming.slice(0,3)).map(jobRow).join("")}${today.length&&upcoming.length>today.length?`<p class="ts" style="margin:8px 0 0">${upcoming.length-today.length} more coming up</p>`:""}</div>`:`<div class="dash-card"><div class="dc-h"><h3>Coming up</h3></div><p class="empty">Nothing booked. Tap <strong>+ Book a job</strong>.</p></div>`}
+  ${(()=>{const n=APP.jobs.filter(isPend).length;return n?`<button type="button" class="dash-card dash-link" data-act="gopend"><span><strong>📝 ${n} estimate${n===1?"":"s"}</strong> waiting on the customer to approve</span><span>›</span></button>`:"";})()}
   ${dupCardHTML()}
   ${unpaid.length?`<div class="dash-card" id="dashUnpaid"><div class="dc-h"><h3>Unpaid invoices</h3><span class="ts">${money(unpaidAmt)}</span></div>
     ${BULK?`<div class="bulk-bar"><button class="mini" type="button" data-act="bulkall">${unpaid.every(j=>BULK.sel[j.id])?"Clear all":"Select all"}</button><span class="bulk-n">${Object.values(BULK.sel).filter(Boolean).length} selected · ${money(unpaid.filter(j=>BULK.sel[j.id]).reduce((a,j)=>a+jobTotal(j),0))}</span></div>
@@ -2619,7 +2633,7 @@ function countyCardHTML(start,label){
   const done=APP.jobs.filter(j=>j.status==="done"&&jDate(j)>=start&&jDate(j)<=TODAY);
   const all=new Set(APP.jobs.map(jobCounty));if(all.size<2&&!(all.size===1&&!all.has("")))return "";
   const by={};done.forEach(j=>{const k=jobCounty(j);(by[k]=by[k]||{n:0,b:0});by[k].n++;by[k].b+=jobTotal(j);});
-  const up={};APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||"")>=TODAY).forEach(j=>{const k=jobCounty(j);up[k]=(up[k]||0)+1;});
+  const up={};APP.jobs.filter(j=>isBooked(j)&&(j.info.date||"")>=TODAY).forEach(j=>{const k=jobCounty(j);up[k]=(up[k]||0)+1;});
   const keys=[...new Set([...Object.keys(by),...Object.keys(up)])].sort((a,b)=>(a===""?1:b===""?-1:((by[b]||{b:0}).b-(by[a]||{b:0}).b)));
   if(!keys.length)return "";const max=Math.max(1,...keys.map(k=>(by[k]||{b:0}).b));
   return `<div class="dash-card" id="dashCounty"><div class="dc-h"><h3>By county</h3><span class="ts">${esc(label)}</span></div>
@@ -3138,7 +3152,7 @@ function renderMonthCal(){
   const ym=APP.calMonth||TODAY.slice(0,7),[y,m]=ym.split("-").map(Number);
   const first=new Date(y,m-1,1,12),offset=first.getDay(),nDays=new Date(y,m,0).getDate();
   const sel=APP.calDay||TODAY;
-  const byDay={};APP.jobs.forEach(j=>{const d=j.info.date;if(!d)return;if(j.status==="canceled")return;(byDay[d]=byDay[d]||{b:0,d:0,f:0});j.status==="done"?byDay[d].d++:byDay[d].b++;});
+  const byDay={};APP.jobs.forEach(j=>{const d=j.info.date;if(!d)return;if(j.status==="canceled"||isPend(j))return;(byDay[d]=byDay[d]||{b:0,d:0,f:0});j.status==="done"?byDay[d].d++:byDay[d].b++;});
   APP.jobs.filter(fuOpen).forEach(j=>{const d=j.followup.date;(byDay[d]=byDay[d]||{b:0,d:0,f:0});byDay[d].f++;});
   let cells="";for(let k=0;k<offset;k++)cells+=`<span class="cal-blank"></span>`;
   for(let d=1;d<=nDays;d++){const iso=`${ym}-${String(d).padStart(2,"0")}`,c=byDay[iso],past=iso<TODAY;
@@ -3163,13 +3177,13 @@ function renderMonthCal(){
 }
 function renderJobs(){
   const days=[...Array(14)].map((_,k)=>addDays(TODAY,k));
-  const counts={};APP.jobs.forEach(j=>{if(j.status!=="canceled")counts[j.info.date]=(counts[j.info.date]||0)+1});
+  const counts={};APP.jobs.forEach(j=>{if(j.status!=="canceled"&&!isPend(j))counts[j.info.date]=(counts[j.info.date]||0)+1});
   const strip=`<div class="days" role="group" aria-label="Filter by day"><button type="button" class="day all" data-day="" aria-pressed="${!APP.day}"><strong style="font-size:16px">All</strong><small>upcoming</small></button>${days.map(d=>{
     const dt=new Date(d+"T12:00:00");
     return `<button type="button" class="day${counts[d]?" has":""}" data-day="${d}" aria-pressed="${APP.day===d}"><small>${d===TODAY?"Today":dt.toLocaleDateString(undefined,{weekday:"short"})}</small><strong>${dt.getDate()}</strong><i></i></button>`}).join("")}</div>`;
   const sortKey=j=>(j.info.date||"")+(j.info.time||"99");
   const ctyF=APP.ctyF==null?null:APP.ctyF,ctyOk=j=>ctyF===null||jobCounty(j)===ctyF;
-  let upcoming=APP.jobs.filter(j=>isOpenJob(j)&&ctyOk(j)&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
+  let upcoming=APP.jobs.filter(j=>isBooked(j)&&ctyOk(j)&&(!APP.day?true:j.info.date===APP.day)).sort((a,b)=>sortKey(a)<sortKey(b)?-1:1);
   const done=APP.jobs.filter(j=>j.status==="done"&&ctyOk(j)&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const canceled=APP.jobs.filter(j=>j.status==="canceled"&&ctyOk(j)&&(!APP.day||j.info.date===APP.day)).sort((a,b)=>sortKey(a)>sortKey(b)?-1:1);
   const groups={};upcoming.forEach(j=>{const k=j.info.date<TODAY?"Overdue":j.info.date===TODAY?"Today":j.info.date===addDays(TODAY,1)?"Tomorrow":fmtDate(j.info.date,{weekday:"long",month:"short",day:"numeric"});(groups[k]=groups[k]||[]).push(j)});
@@ -3178,11 +3192,12 @@ function renderJobs(){
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true)+weatherCardHTML():""}
   <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isOpenJob(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
+  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isBooked(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   ${countyChipsHTML(countyCounts(APP.jobs.filter(j=>isOpenJob(j)||jDate(j)>=addDays(TODAY,-90)),jobCounty),ctyF,"data-ctyf","Filter jobs by county")}
   ${routeHTML()}
+  ${pendListHTML()}
   <div class="seg sched-seg" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button></div>
   ${APP.schedMode==="month"?renderMonthCal():`${renderFollowups()}
   ${strip}
@@ -3250,6 +3265,29 @@ const cardsHTML=js=>APP.compact?`<div class="jobs-c">${js.map(jobRowCompact).joi
 
 /* ================= job status: start, hold, stop, cancel ================= */
 const isOpenJob=j=>j.status!=="done"&&j.status!=="canceled";
+// an estimate waiting on the customer: not on the schedule until they approve and it's booked
+const isPend=j=>!!j.pending&&isOpenJob(j);
+const isBooked=j=>isOpenJob(j)&&!j.pending;
+const slotTxt=x=>fmtDate(x.d,{weekday:"short",month:"short",day:"numeric"})+(x.t?" at "+fmtTime(x.t):"");
+const slotsOf=j=>(Array.isArray(j.slots)?j.slots:j.info.date?[{d:j.info.date,t:j.info.time||""}]:[]).filter(x=>x&&x.d);
+let EST_BOOK=null,BOOKED_NOW=null;
+function makePending(j){j.pending=true;j.docMode="est";if(!j.slots)j.slots=j.info.date?[{d:j.info.date,t:j.info.time||""}]:[];return j;}
+function slotEditHTML(list,pre){return `<div class="slots">${list.length?list.map((x,k)=>`<span class="slot-chip">${k+1}) ${esc(slotTxt(x))}<button type="button" class="slot-x" data-slotdel="${pre}|${k}" aria-label="Remove this time">✕</button></span>`).join(""):`<p class="help" style="margin:0">No times yet.</p>`}</div>
+  <div class="slot-add"><input type="date" id="${pre}SlotD" min="${TODAY}" aria-label="Day"><input type="time" id="${pre}SlotT" aria-label="Time"><button class="mini" type="button" data-slotadd="${pre}">＋ Add time</button></div>`;}
+function estBookHTML(j){if(!EST_BOOK||EST_BOOK.id!==j.id)return "";const sl=slotsOf(j);
+  return `<div class="est-book"><p class="formh" style="margin:0 0 6px">Which time did they pick?</p>
+    ${sl.map((x,k)=>`<label class="check full"><input type="radio" name="estpick" data-estpick="${k}" ${EST_BOOK.pick===k?"checked":""}> ${esc(slotTxt(x))}</label>`).join("")}
+    <label class="check full"><input type="radio" name="estpick" data-estpick="other" ${EST_BOOK.pick==="other"?"checked":""}> A different day or time</label>
+    ${EST_BOOK.pick==="other"?`<div class="slot-add"><input type="date" data-estbd="1" min="${TODAY}" value="${esc(EST_BOOK.d||"")}" aria-label="Day"><input type="time" data-estbt="1" value="${esc(EST_BOOK.t||"")}" aria-label="Time"></div>`:""}
+    <div class="acts"><button class="btn primary" type="button" data-estbookgo="${j.id}">📅 Book it</button><button class="btn" type="button" data-act="estbookno">Cancel</button></div></div>`;}
+function pendCardHTML(j){const e=j.est||{},i=j.info,days=e.sentAt?Math.floor((Date.now()-e.sentAt)/864e5):null,sl=slotsOf(j);
+  return `<div class="job pend"><div class="who">${esc(i.customer||"Customer")} <span class="st st-est est-${esc(e.status||"draft")}">${e.status==="sent"?`Sent${days!=null?days?` ${days}d ago`:" today":""}`:"Not sent yet"}</span>${(j.invoice.lines||[]).length?` <strong>${money(jobTotal(j))}</strong>`:""}</div>
+    <div class="meta">${esc(vehOf(i)||"")}${i.work?`${vehOf(i)?" · ":""}${esc(i.work)}`:""}</div>
+    ${sl.length?`<div class="meta">Offered: ${sl.map(x=>esc(slotTxt(x))).join(" · ")}</div>`:""}
+    ${estBookHTML(j)}
+    ${EST_BOOK&&EST_BOOK.id===j.id?"":`<div class="acts"><button class="mini go" type="button" data-estbook="${j.id}">✓ Approved: book it</button><button class="mini" type="button" data-open="${j.id}">Open estimate</button>${i.phone&&CAN_CAL&&(j.invoice.lines||[]).length?`<a class="mini" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, just checking in on the estimate I sent${vehOf(i)?" for the "+vehOf(i):""}. Let me know if you'd like to go ahead or have any questions.`))}">💬 Follow up</a>`:""}<button class="mini del" type="button" data-estdecline="${j.id}">Declined</button></div>`}</div>`;}
+function pendListHTML(){const ps=APP.jobs.filter(isPend).sort((a,b)=>((a.est&&a.est.sentAt)||0)-((b.est&&b.est.sentAt)||0));if(!ps.length||isTech())return "";
+  return `<div class="group-h" id="pendList">📝 Estimates waiting on the customer (${ps.length})</div><div class="jobs">${ps.map(pendCardHTML).join("")}</div>`;}
 const HOLD_R=["Waiting on parts","Waiting on customer OK","Customer not available","Weather","Other"];
 const STOP_R=["Customer declined the work","Needs a shop or lift","Parts not available","Other"];
 const CANCEL_R=["Customer canceled","No-show","Rescheduled","Other"];
@@ -4131,7 +4169,7 @@ const qsIcon=k=>`<span class="qs-ic"><svg viewBox="0 0 24 24" aria-hidden="true"
 
 let QUICK=null,QUICK_EST=false,QUICK_Q="";
 // open jobs from today on, soonest first (for "On my way")
-function omwJobs(){return APP.jobs.filter(j=>isOpenJob(j)&&(j.info.date||TODAY)>=TODAY&&(j.info.date||TODAY)<=addDays(TODAY,7)).sort((a,b)=>((a.info.date||TODAY)+(a.info.time||"99")).localeCompare((b.info.date||TODAY)+(b.info.time||"99"))).slice(0,15);}
+function omwJobs(){return APP.jobs.filter(j=>isBooked(j)&&(j.info.date||TODAY)>=TODAY&&(j.info.date||TODAY)<=addDays(TODAY,7)).sort((a,b)=>((a.info.date||TODAY)+(a.info.time||"99")).localeCompare((b.info.date||TODAY)+(b.info.time||"99"))).slice(0,15);}
 function textHi(name){const first=String(name||"").trim().split(/\s+/)[0]||"there",me=String(APP.settings.owner||"").trim().split(/\s+/)[0];return `Hi ${first}, ${me?`it's ${me} from ${bizName()}. `:`this is ${bizName()}. `}`;}
 function quickTextList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q);
   const cs=(APP.customers||[]).filter(c=>!c.hidden&&c.phone&&(!q||normName(c.name).includes(q))&&(!dq||dq.length<3||digits(c.phone).includes(dq))).sort((a,b)=>(b.last||"").localeCompare(a.last||"")).slice(0,30);
@@ -4358,7 +4396,8 @@ function estimateText(){
   L.push(`Date: ${fmtDate(e.date,{month:"short",day:"numeric",year:"numeric"})} · Valid until ${fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"})}`);
   L.push(`For: ${billToLines(S).join(", ")||"—"}`);fleetRows(S).forEach(([k,v])=>L.push(`${k}: ${v}`));
   if(vehOf(i))L.push(`Vehicle: ${vehOf(i)}${i.vin?" · VIN "+i.vin:""}`);
-  if(svcWhen(i))L.push(`Service date: ${svcWhen(i)}`);
+  const sl=S.pending?slotsOf(S):[];
+  if(!S.pending&&svcWhen(i))L.push(`Service date: ${svcWhen(i)}`);
   if(i.tech)L.push(`Technician: ${i.tech}`);
   if(i.work){L.push("");L.push("WORK REQUESTED");L.push(i.work);}
   L.push("");
@@ -4372,16 +4411,24 @@ function estimateText(){
   L.push(...mpiText(S));
   L.push("");L.push("Nothing beyond this estimate is done without your OK.");
   if((st.warranty||"").trim())L.push("Warranty: "+st.warranty.trim());
-  if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
+  if(S.pending&&sl.length>1){L.push("");L.push("AVAILABLE TIMES");sl.forEach((x,k)=>L.push(`${k+1}) ${slotTxt(x)}`));
+    L.push("");L.push(`Reply YES and the number of the time that works for you (for example: YES ${Math.min(2,sl.length)}), or tell us a better day and time.`);}
+  else if(S.pending&&sl.length===1){L.push("");L.push(`Reply YES to approve and book ${slotTxt(sl[0])}, or tell us a better day and time.`);}
+  else if(S.pending){L.push("");L.push("Reply YES to approve, along with a day and time that works for you.");}
+  else if(e.status!=="approved")L.push("Reply YES to approve this estimate.");
   return L.join("\n");
 }
 function estPanelHTML(t){
   const e=S.est||{status:"draft"},i=S.info,can=i.phone&&CAN_CAL,hasLines=(S.invoice.lines||[]).some(x=>x.d||num(x.p));
-  return `<div class="rep-sec"><h4>Estimate status</h4>
+  const booked=BOOKED_NOW===S.id&&!S.pending?`<div class="rep-sec est-booked"><h4>📅 Booked for ${esc(svcWhen(i)||fmtDate(i.date))}</h4><p class="help" style="margin:0 0 8px">It's on your schedule now. Let the customer know:</p>
+      <div class="copyrow">${can?`<a class="btn primary" href="${esc(smsHref(i.phone,confirmText(S)))}">💬 Text booking confirmation</a>`:""}<button class="btn" type="button" data-confirm="${S.id}">Copy confirmation</button></div></div>`:"";
+  const slots=S.pending?`<div class="rep-sec"><h4>Times to offer</h4><p class="help" style="margin:0 0 6px">These go in the estimate text so the customer can pick one. The job goes on your schedule once they approve.</p>${slotEditHTML(slotsOf(S),"est")}</div>`:"";
+  return `${booked}${slots}<div class="rep-sec"><h4>Estimate status</h4>
       <div class="chips" role="group" aria-label="Estimate status">${EST_ST.map(([k,l])=>`<button type="button" data-eststat="${k}" aria-pressed="${e.status===k}">${l}</button>`).join("")}</div>
       <p class="help" style="margin:6px 0 0">${e.num?`Valid until ${esc(fmtDate(estValidUntil(e),{month:"short",day:"numeric",year:"numeric"}))}. `:""}${e.status==="approved"&&e.approvedDate?`Approved ${esc(fmtDate(e.approvedDate,{month:"short",day:"numeric"}))}. `:""}Change how long estimates are good for in Settings → Invoices.</p></div>
     ${hasLines?`<div class="copyrow">${can?`<a class="btn primary" href="${esc(smsHref(i.phone,`Hi ${(i.customer||"").trim().split(/\s+/)[0]||"there"}, here's your estimate${vehOf(i)?" for the "+vehOf(i):""}.\n\n`+estimateText()))}" data-estsent="1">💬 Text estimate</a>`:""}<button class="btn${can?"":" primary"} dl-only" type="button" data-act="pdfEstimate">Save estimate PDF</button><button class="btn" type="button" data-act="copyEstimate">Copy estimate text</button></div>
-    <div class="copyrow"><button class="btn est-go" type="button" data-act="estapprove">✓ Customer approved: turn into invoice</button></div>`
+    ${S.pending?(EST_BOOK&&EST_BOOK.id===S.id?estBookHTML(S):`<div class="copyrow"><button class="btn est-go" type="button" data-estbook="${S.id}">✓ Customer approved: book the appointment</button><button class="btn del" type="button" data-estdecline="${S.id}">Declined</button></div>`)
+      :`<div class="copyrow"><button class="btn est-go" type="button" data-act="estapprove">✓ Customer approved: turn into invoice</button></div>`}`
     :`<p class="help">Add labor and parts above, or pick a job from your service menu, to build the estimate.</p>`}
     <textarea class="copybox" id="estbox" hidden readonly></textarea>`;
 }
@@ -4834,7 +4881,7 @@ function saveDraft(opt){
   APP.jobs.forEach(j=>{if(j.info.tech&&!j.techId)linkTech(j);});
   APP.fuFrom=null;APP.reqFrom=null;
   APP.adding=false;APP.editing=null;APP.draft=null;APP.day="";
-  if(opt&&opt.est&&savedId){const j=APP.jobs.find(x=>x.id===savedId);if(j&&isSvc(j)){openEstimate(j);setTimeout(()=>countyFill(4),800);return;}}
+  if(opt&&opt.est&&savedId){const j=APP.jobs.find(x=>x.id===savedId);if(j&&isSvc(j)){if(!_ej&&j.status==="sched")makePending(j);openEstimate(j);setTimeout(()=>countyFill(4),800);return;}}
   save();render();toast("Job saved");setTimeout(()=>countyFill(4),800);
 }
 // open a service job on its estimate, ready to add lines and text it
@@ -5187,7 +5234,7 @@ document.addEventListener("click",e=>{
   const rd=e.target.closest&&e.target.closest("a[data-reqdecl]");
   if(rd){const r=APP.requests.find(x=>x.id===rd.dataset.reqdecl);if(r){r.status="declined";save();setTimeout(()=>{REQ_NO=null;rerenderKeep();},800);}return;}
   const es=e.target.closest&&e.target.closest("a[data-estsent]");
-  if(es&&S&&S.est){if(S.est.status==="draft"){S.est.status="sent";save();setTimeout(rerenderKeep,800);}return;}
+  if(es&&S&&S.est){S.est.sentAt=Date.now();save();if(S.est.status==="draft"){S.est.status="sent";save();setTimeout(rerenderKeep,800);}return;}
   const sent=e.target.closest&&e.target.closest("a[data-omwsent]");
   if(sent){const j=APP.jobs.find(x=>x.id===sent.dataset.omwsent);if(j){j.omwAt=Date.now();save();}setTimeout(()=>{OMW=null;rerenderKeep();},800);return;}
   const t=e.target.closest("button");if(!t)return;
@@ -5449,6 +5496,8 @@ document.addEventListener("click",e=>{
     const r=parseRequest(raw);REQ_EDIT={id:uid(),at:Date.now(),status:"new",raw,...r};REQ_PASTE=null;render();window.scrollTo(0,0);
     const got=["customer","phone","make","work","date"].filter(k=>r[k]).length;toast(got>=3?"Got it. Check the details.":"Fill in what's missing");return;}
   if(d.act==="reqcancel"){REQ_PASTE=null;REQ_EDIT=null;rerenderKeep();return;}
+  if(d.act==="reqest"){const r=REQ_EDIT;if(!r)return;if(!(r.customer||"").trim()){toast("Add the customer's name");return;}const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
+    REQ_EDIT=null;save();quoteFromReq(r);return;}
   if(d.act==="reqsave"||d.act==="reqbook"){const r=REQ_EDIT;if(!r)return;const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
     REQ_EDIT=null;save();if(d.act==="reqbook"){reqToDraft(r);render();window.scrollTo(0,0);return;}render();window.scrollTo(0,0);toast("Saved to your requests");return;}
   if(d.reqtype&&REQ_EDIT){REQ_EDIT.type=d.reqtype;if(d.reqtype==="ppi"&&!REQ_EDIT.work)REQ_EDIT.work="Pre-purchase inspection";rerenderKeep();return;}
@@ -5457,10 +5506,32 @@ document.addEventListener("click",e=>{
   if(d.reqedit){const r=APP.requests.find(x=>x.id===d.reqedit);if(r){REQ_EDIT={...r};REQ_PASTE=null;render();window.scrollTo(0,0);}return;}
   if(d.reqdel){APP.requests=APP.requests.filter(x=>x.id!==d.reqdel);save();rerenderKeep();toast("Request deleted");return;}
   if(d.reqbook){const r=APP.requests.find(x=>x.id===d.reqbook);if(r){reqToDraft(r);render();window.scrollTo(0,0);}return;}
-  if(d.reqquote){const r=APP.requests.find(x=>x.id===d.reqquote);if(!r)return;
-    const j=newJob({customer:r.customer,phone:r.phone,location:r.location,year:r.year,make:r.make,model:r.model,vin:r.vin,work:r.work,date:r.date&&r.date>=TODAY?r.date:TODAY,time:r.time,email:r.email,agreed:r.agreed||"",agreedTravel:r.agreedTravel!==false,notes:[r.email?"Email: "+r.email:"",r.notes&&r.notes!==r.work?r.notes.slice(0,400):""].filter(Boolean).join("\n")},"service");
-    j.docMode="est";applyAgreed(j);APP.jobs.push(j);r.status="quoted";r.jobId=j.id;save();openJob(j.id);setTimeout(()=>document.getElementById("docSeg")?.scrollIntoView({block:"start"}),50);toast("Build the estimate, then text it");
-    if(j.info.location&&hasHQ()&&!j.info.dist)calcDist("info",true);return;}
+  if(d.slotadd){const pre=d.slotadd,dd=document.getElementById(pre+"SlotD")?.value,tt=document.getElementById(pre+"SlotT")?.value||"";
+    if(!dd){toast("Pick a day first");document.getElementById(pre+"SlotD")?.focus();return;}
+    if(pre==="rq"&&REQ_EDIT){(REQ_EDIT.more=REQ_EDIT.more||[]).push({d:dd,t:tt});rerenderKeep();return;}
+    if(pre==="est"&&S){const l=slotsOf(S).slice();l.push({d:dd,t:tt});l.sort((a,b)=>(a.d+(a.t||"99"))<(b.d+(b.t||"99"))?-1:1);S.slots=l;S.info.date=l[0].d;S.info.time=l[0].t;save();rerenderKeep();return;}return;}
+  if(d.slotdel){const [pre,k]=d.slotdel.split("|");
+    if(pre==="rq"&&REQ_EDIT){(REQ_EDIT.more||[]).splice(+k,1);rerenderKeep();return;}
+    if(pre==="est"&&S){const l=slotsOf(S).slice();l.splice(+k,1);S.slots=l;if(l[0]){S.info.date=l[0].d;S.info.time=l[0].t;}save();rerenderKeep();return;}return;}
+  if(d.estbook){const j=APP.jobs.find(x=>x.id===d.estbook);if(!j)return;const sl=slotsOf(j);EST_BOOK={id:j.id,pick:sl.length?0:"other",d:"",t:""};rerenderKeep();
+    setTimeout(()=>document.querySelector(".est-book")?.scrollIntoView({block:"center",behavior:"smooth"}),60);return;}
+  if(d.act==="estbookno"){EST_BOOK=null;rerenderKeep();return;}
+  if(d.estbookgo){const j=APP.jobs.find(x=>x.id===d.estbookgo);if(!j||!EST_BOOK)return;let pk;
+    if(EST_BOOK.pick==="other"){if(!EST_BOOK.d){toast("Pick the day they want");document.querySelector("[data-estbd]")?.focus();return;}pk={d:EST_BOOK.d,t:EST_BOOK.t||""};}
+    else pk=slotsOf(j)[EST_BOOK.pick];if(!pk)return;
+    j.info.date=pk.d;j.info.time=pk.t||"";j.pending=false;j.bookedAt=Date.now();
+    j.est=j.est||{num:"",date:TODAY,status:"sent"};Object.assign(j.est,{status:"approved",approvedDate:TODAY,total:jobTotal(j)});
+    const rq=APP.requests.find(r=>r.jobId===j.id);if(rq)rq.status="booked";
+    EST_BOOK=null;BOOKED_NOW=j.id;linkTech(j);save();
+    if(S&&S.id===j.id&&APP.view!=="jobs"){rerenderKeep();setTimeout(()=>document.querySelector(".est-booked")?.scrollIntoView({block:"center",behavior:"smooth"}),60);}
+    else{openJob(j.id);SVC_TAB[j.id]="bill";j.docMode="est";render();setTimeout(()=>document.querySelector(".est-booked")?.scrollIntoView({block:"center"}),80);}
+    toast("Booked for "+slotTxt(pk));return;}
+  if(d.estdecline){const j=APP.jobs.find(x=>x.id===d.estdecline);if(!j)return;
+    if(APP.confirmDecl!==j.id){APP.confirmDecl=j.id;t.textContent="Tap again: customer declined";setTimeout(()=>{if(APP.confirmDecl===j.id){APP.confirmDecl=null;}},4000);return;}
+    APP.confirmDecl=null;j.est=j.est||{num:"",date:TODAY};j.est.status="declined";j.status="canceled";j.pending=false;j.declined=true;
+    const rq=APP.requests.find(r=>r.jobId===j.id);if(rq)rq.status="declined";save();if(APP.view==="jobs")rerenderKeep();else{APP.view="jobs";render();}toast("Marked declined");return;}
+  if(d.act==="gopend"){APP.view="jobs";APP.schedMode="list";render();setTimeout(()=>document.getElementById("pendList")?.scrollIntoView({block:"start"}),60);return;}
+  if(d.reqquote){const r=APP.requests.find(x=>x.id===d.reqquote);if(r)quoteFromReq(r);return;}
   if(d.reqno){const r=APP.requests.find(x=>x.id===d.reqno);if(r){REQ_NO={id:r.id,why:"booked",text:declineText(r,"booked")};rerenderKeep();}return;}
   if(d.reqwhy&&REQ_NO){const r=APP.requests.find(x=>x.id===REQ_NO.id);REQ_NO.why=d.reqwhy;REQ_NO.text=declineText(r,d.reqwhy);rerenderKeep();return;}
   if(d.act==="reqnoclose"){REQ_NO=null;rerenderKeep();return;}
@@ -5494,11 +5565,12 @@ document.addEventListener("click",e=>{
   if(d.vinlook){autoDecode(S,true);return;}
   if(d.vinuse){const dd=VIN_DEC[String(S.info.vin||"").toUpperCase()];if(dd){["year","make","model","trim","engine"].forEach(k=>{if(dd[k])S.info[k]=dd[k];});save();VINMSG=null;rerenderKeep();toast("Vehicle updated from the VIN");}return;}
   if(d.docmode){S.docMode=d.docmode;if(d.docmode==="inv")ensureInvoice();save();MENU_OPEN=false;MENU_SAVE=false;rerenderKeep();return;}
+  if(d.eststat==="approved"&&S&&S.pending){EST_BOOK={id:S.id,pick:slotsOf(S).length?0:"other",d:"",t:""};rerenderKeep();setTimeout(()=>document.querySelector(".est-book")?.scrollIntoView({block:"center",behavior:"smooth"}),60);return;}
   if(d.eststat){ensureEst();S.est.status=d.eststat;if(d.eststat==="approved"){S.est.approvedDate=TODAY;S.est.total=jobTotal(S);}save();rerenderKeep();return;}
   if(d.act==="estapprove"){ensureEst();Object.assign(S.est,{status:"approved",approvedDate:TODAY,total:jobTotal(S)});S.docMode="inv";ensureInvoice();if(S.status==="sched")S.status="active";save();render();
     document.querySelector(".doc-seg")?.scrollIntoView({block:"start"});toast(`Approved. Invoice ${S.invoice.num} is ready.`);return;}
   if(d.act==="pdfEstimate"){savePdf("estimate");return;}
-  if(d.act==="copyEstimate"){copyText(estimateText(),"estbox");if(S.est&&S.est.status==="draft"){S.est.status="sent";save();}return;}
+  if(d.act==="copyEstimate"){copyText(estimateText(),"estbox");if(S.est){if(S.pending)S.est.sentAt=Date.now();if(S.est.status==="draft")S.est.status="sent";save();}return;}
   if(d.act==="menuopen"){MENU_OPEN=!MENU_OPEN;MENU_SAVE=false;MENU_Q="";rerenderKeep();return;}
   if(d.act==="menuclose"){MENU_OPEN=false;MENU_SAVE=false;rerenderKeep();return;}
   if(d.act==="menusave"){MENU_SAVE=true;MENU_OPEN=false;rerenderKeep();setTimeout(()=>{const el=document.getElementById("menuName");if(el){el.focus();el.select();}},30);return;}
@@ -5600,7 +5672,7 @@ document.addEventListener("click",e=>{
   if(d.copen){CUST_OPEN=CUST_OPEN===d.copen?null:d.copen;CUST_DEL=null;CUST_EDIT=null;VEH_EDIT=null;VEH_OPEN=null;GARAGE_Q="";GARAGE_L="";const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");navTrack();renderChrome();return;}
   if(d.act==="saveest"){saveDraft({est:true});return;}
   if(d.cest!==undefined){const [cid,vk]=split2(d.cest);const c=(APP.customers||[]).find(x=>x.id===cid);if(!c)return;const v=vk?c.vehicles.find(x=>x.key===vk):null;
-    const info={date:TODAY};fillFromCustomer(info,c,v,!!v);const j=newJob(info,"service");j.custId=c.id;if(APP.settings.mpiAuto)mpiStart(j);APP.jobs.push(j);CUST_OPEN=null;openEstimate(j);return;}
+    const info={date:TODAY};fillFromCustomer(info,c,v,!!v);const j=newJob(info,"service");j.custId=c.id;j.slots=[];makePending(j);if(APP.settings.mpiAuto)mpiStart(j);APP.jobs.push(j);CUST_OPEN=null;openEstimate(j);return;}
   if(d.cbook){const [cid,vk,type]=split3(d.cbook);const c=APP.customers.find(x=>x.id===cid);const v=vk?c.vehicles.find(x=>x.key===vk):null;
     APP.view="jobs";CUST_OPEN=null;startAdd(null);fillFromCustomer(APP.draft,c,v,!!v);APP.draft.type=type;APP.draft.custId=c.id;render();window.scrollTo(0,0);return;}
   if(d.cdel){if(CUST_DEL!==d.cdel){CUST_DEL=d.cdel;const l=$("#custList");if(l)l.innerHTML=custListHTML(APP.custQ||"");return;}
@@ -5698,6 +5770,9 @@ document.addEventListener("input",e=>{
   if(d.qscustom){APP.settings.qsColor=t.value;const g=document.querySelector(".qs-grid");if(g)g.style.setProperty("--qs",t.value);clearTimeout(QI._t);QI._t=setTimeout(()=>{save();render();},500);return;}
   if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
   if(d.wxoff){APP.settings.wxOff=!t.checked;save();return;}
+  if(d.estpick!==undefined&&EST_BOOK){EST_BOOK.pick=d.estpick==="other"?"other":+d.estpick;rerenderKeep();return;}
+  if(d.estbd&&EST_BOOK){EST_BOOK.d=t.value;return;}
+  if(d.estbt&&EST_BOOK){EST_BOOK.t=t.value;return;}
   if(d.bulkj&&BULK){BULK.sel[d.bulkj]=t.checked;BULK.confirm=false;rerenderKeep();return;}
   if(d.bulkvia&&BULK){BULK.via=t.value;return;}
   if(d.bulkdate&&BULK){BULK.date=t.value;return;}

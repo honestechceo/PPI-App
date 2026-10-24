@@ -24,6 +24,38 @@ async function findPrice(kind: "solo" | "team" | "tech", interval: "month" | "ye
   return hits.sort((a, b) => b.created - a.created)[0] || null;
 }
 
+// "Delete my account" from inside the app (required by the App Store).
+// Owner: cancels the subscription, deletes the shop's files and every record (jobs, customers, invoices…) and the login.
+//        Technicians in that shop lose access. Technician: removes only their own login; the shop's jobs stay with the shop.
+async function deleteAccount(uid: string, mem: { shop_id: string; role: string } | null) {
+  if (mem && mem.role === "owner") {
+    const shopId = mem.shop_id;
+    const { data: sub } = await db.from("subscriptions").select("stripe_subscription, status").eq("shop_id", shopId).maybeSingle();
+    if (sub?.stripe_subscription && !["canceled", "incomplete_expired"].includes(sub.status || "")) {
+      try { await stripe.subscriptions.cancel(sub.stripe_subscription); } catch (e) { console.error("cancel", e); }
+    }
+    // files: everything in the shop's folder
+    for (let round = 0; round < 50; round++) {
+      const { data: files } = await db.storage.from("media").list(shopId, { limit: 1000 });
+      if (!files || !files.length) break;
+      const { error } = await db.storage.from("media").remove(files.map((f) => `${shopId}/${f.name}`));
+      if (error) { console.error("files", error); break; }
+    }
+    await db.from("shops").delete().eq("id", shopId);   // members, records, plan, invites, gifts, links go with it
+  } else if (mem) {
+    await db.from("shop_members").delete().eq("user_id", uid);
+  }
+  // let go of the login's name on anything that stays behind, then delete the login
+  await db.from("records").update({ updated_by: null }).eq("updated_by", uid);
+  await db.from("invites").update({ created_by: null }).eq("created_by", uid);
+  await db.from("invites").update({ accepted_by: null }).eq("accepted_by", uid);
+  await db.from("gifts").update({ created_by: null }).eq("created_by", uid);
+  await db.from("gifts").update({ redeemed_by: null }).eq("redeemed_by", uid);
+  const { error } = await db.auth.admin.deleteUser(uid);
+  if (error) return out({ error: "Couldn't delete the login: " + error.message }, 500);
+  return out({ deleted: true });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return out({ error: "POST only" }, 405);
@@ -36,6 +68,7 @@ Deno.serve(async (req) => {
     const ret = ALLOWED_RETURN.test(String(body.return_url || "")) ? String(body.return_url).split(/[?#]/)[0] : "https://honestechmobileapp.com/";
 
     const { data: mem } = await db.from("shop_members").select("shop_id, role").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (body.action === "delete_account") return await deleteAccount(user.id, mem);
     if (!mem) return out({ error: "No shop found for this account" }, 400);
     if (mem.role !== "owner") return out({ error: "Only the shop owner can manage the plan" }, 403);
     const shopId = mem.shop_id;

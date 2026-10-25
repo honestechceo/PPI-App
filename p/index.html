@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your invoice</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f141a">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#dfe5eb;--accent:#1f6feb;--ok:#1a7f37;--bad:#c62828}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+main{max-width:560px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom))}
+.top{text-align:center;padding:10px 0 4px}
+.top .biz{font-weight:800;font-size:20px;letter-spacing:.01em}
+.top .sub{color:var(--mute);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+h2{font-size:17px;margin:0 0 10px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .a{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:19px;padding-top:10px;margin-top:4px;border-top:2px solid var(--ink)}
+.mute{color:var(--mute);font-size:14px}
+.btn{display:block;width:100%;min-height:50px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;text-align:center;text-decoration:none;padding:12px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-size:17px}
+.btn:disabled{opacity:.6}
+.btn+.btn{margin-top:10px}
+.opt{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:8px;cursor:pointer;min-height:52px}
+.opt input{width:22px;height:22px;accent-color:var(--accent);margin:0;flex:none}
+.opt:has(input:checked){border-color:var(--accent);background:#eef4ff}
+input[type=text],textarea{width:100%;font:inherit;border:1px solid var(--line);border-radius:10px;padding:12px;min-height:48px;background:#fff;color:var(--ink)}
+textarea{min-height:70px;margin-top:8px}
+label.l{display:block;font-weight:700;margin:14px 0 6px}
+.pad{position:relative;border:1.5px dashed #9aa8b5;border-radius:12px;background:#fff;height:170px;touch-action:none}
+.pad canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:12px}
+.pad .ph{position:absolute;left:0;right:0;bottom:18px;text-align:center;color:#9aa8b5;pointer-events:none;border-top:1px solid #d5dce3;margin:0 18px;padding-top:4px;font-size:13px}
+.clr{background:none;border:0;color:var(--accent);font:inherit;font-weight:700;padding:6px 0;cursor:pointer}
+.err{color:var(--bad);font-weight:600;margin:10px 0 0}
+.done{text-align:center;padding:26px 16px}
+.done .big{font-size:52px;line-height:1}
+.done h2{font-size:22px;margin:10px 0 6px}
+.fine{font-size:13px;color:var(--mute);margin:12px 0}
+.foot{text-align:center;color:var(--mute);font-size:12px;margin-top:22px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}
+  .opt:has(input:checked){background:#16263d}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
+.paybtn{font-size:18px}
+.cards{display:flex;justify-content:center;gap:8px;margin-top:10px;color:var(--mute);font-size:13px}
+</style>
+</head><body>
+<main id="app"><p class="mute" style="text-align:center;margin-top:40px">Loading your invoice…</p></main>
+<script>
+(function(){
+var API="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake";
+var qs=new URLSearchParams(location.search),raw=location.search.slice(1).split("&")[0];
+var code=(qs.get("c")||(/=/.test(raw)?"":raw)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,""),sess=(qs.get("s")||"").replace(/[^A-Za-z0-9_]/g,"");
+var app=document.getElementById("app"),P=null,ES=false,BUSY=false,ERR="";
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function T(en,es){return ES?es:en;}
+function money(n){return (n<0?"−":"")+"$"+Math.abs(Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function smsHref(n,b){return "sms:"+String(n||"").replace(/[^\d+]/g,"")+(/iPhone|iPad|iPod/.test(navigator.userAgent)?"&":"?")+"body="+encodeURIComponent(b||"");}
+function head(){return '<div class="top"><div class="biz">'+esc(P.biz||"")+'</div><div class="sub">'+esc(T("Invoice","Factura"))+(P.num?" "+esc(P.num):"")+(P.veh?" · "+esc(P.veh):"")+'</div></div>';}
+function ask(){return P.phone?'<a class="btn" style="margin-top:14px" href="'+esc(smsHref(P.phone,""))+'">💬 '+esc(T("Text ","Escribir a ")+(P.biz||T("the shop","el taller")))+'</a>':"";}
+function pdf(){return P.pdf?'<a class="btn" style="margin-top:14px" href="'+esc(P.pdf)+'" target="_blank" rel="noopener">📄 '+esc(T("See the invoice (PDF)","Ver la factura (PDF)"))+'</a>':"";}
+function foot(){return '<p class="foot">'+esc(T("Sent with Honestech Mobile App","Enviado con Honestech Mobile App"))+'</p>';}
+function render(){if(!P)return;document.documentElement.lang=ES?"es":"en";document.title=T("Your invoice","Su factura")+(P.biz?" · "+P.biz:"");
+  if(P.state==="paid"){app.innerHTML=head()+'<div class="card done"><div class="big">✅</div><h2>'+esc(T("Paid. Thank you!","Pagado. ¡Gracias!"))+'</h2>'
+    +'<p>'+esc(P.paidAmount?T("We received ","Recibimos ")+money(P.paidAmount)+".":T("This invoice is paid.","Esta factura ya está pagada."))+'</p>'
+    +(P.paidVia==="Card"?'<p class="mute">'+esc(T("Your card receipt comes by email from Stripe if you entered your email.","Si puso su correo, Stripe le manda el recibo de su tarjeta."))+'</p>':"")+'</div>'+pdf()+ask()+foot();return;}
+  var ls=(P.lines||[]).map(function(l){return '<div class="row"><span>'+esc(l.d)+'</span><span class="a">'+money(l.a)+'</span></div>';}).join("");
+  var sum='<div class="card"><h2>'+esc(T("Hi","Hola")+(P.cust?" "+P.cust:""))+'</h2>'+ls+(P.paidPart?'<div class="row"><span>'+esc(T("Already paid","Ya pagado"))+'</span><span class="a">'+money(-P.paidPart)+'</span></div>':"")+'<div class="tot"><span>'+esc(T("Total due","Total a pagar"))+'</span><span>'+money(P.total)+'</span></div></div>';
+  if(P.state!=="open"){app.innerHTML=head()+sum+'<div class="card"><p style="margin:0">'+esc(T("To pay this invoice, text us and we'll tell you the ways to pay.","Para pagar esta factura, escríbanos y le decimos cómo pagar."))+'</p></div>'+pdf()+ask()+foot();return;}
+  app.innerHTML=head()+sum+'<div class="card"><button class="btn primary paybtn" type="button" id="go"'+(BUSY?" disabled":"")+'>'+esc(BUSY?T("Opening…","Abriendo…"):T("💳 Pay ","💳 Pagar ")+money(P.total))+'</button>'
+    +'<div class="cards">'+esc(T("Card · Apple Pay · Google Pay","Tarjeta · Apple Pay · Google Pay"))+'</div>'
+    +'<p class="fine" style="text-align:center;margin-bottom:0">'+esc(T("Secure checkout by Stripe. ","Pago seguro con Stripe. ")+(P.biz||"")+T(" never sees your card number."," nunca ve el número de su tarjeta."))+'</p>'
+    +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'</div>'+pdf()+ask()+foot();
+  document.getElementById("go").addEventListener("click",pay);}
+function pay(){if(BUSY)return;BUSY=true;ERR="";render();
+  fetch(API+"?act=pay",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code})}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
+    .then(function(x){if(x[0]&&x[1].url){location.href=x[1].url;return;}BUSY=false;ERR=x[1].error||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/already paid/.test(ERR))return load();render();})
+    .catch(function(){BUSY=false;ERR=T("No connection. Check your signal and try again.","Sin conexión. Revise su señal e intente de nuevo.");render();});}
+function load(){fetch(API+"?p="+encodeURIComponent(code)+(sess?"&s="+encodeURIComponent(sess):"")).then(function(r){return r.json().then(function(d){return [r.ok,d];});}).then(function(x){
+    if(!x[0]){app.innerHTML='<div class="card done"><div class="big">🔗</div><p>'+esc(x[1].error||"This link has expired. Ask the shop to send it again.")+'</p></div>';return;}
+    P=x[1];ES=P.lang==="es";BUSY=false;render();if(sess&&history.replaceState)history.replaceState(null,"",location.pathname+"?"+code);})
+  .catch(function(){app.innerHTML='<div class="card done"><p>Couldn\'t load the invoice. Check your connection and refresh.</p></div>';});}
+window.addEventListener("pageshow",function(e){if(e.persisted&&P){BUSY=false;load();}});
+if(code.length<6){app.innerHTML='<div class="card done"><p>This link is incomplete. Ask the shop to send it again.</p></div>';return;}
+load();
+})();
+</script>
+</body></html>

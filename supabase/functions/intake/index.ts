@@ -8,7 +8,10 @@
 // with no notification.
 import webpush from "npm:web-push@3.6.7";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", { apiVersion: "2024-06-20", httpClient: Stripe.createFetchHttpClient() });
+const FEE_BPS = Math.max(0, Math.min(500, Number(Deno.env.get("PLATFORM_FEE_BPS") || 0)));   // optional app fee per card payment, in 1/100 of a percent
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods": "GET, POST, OPTIONS" };
 const out = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, "Content-Type": "application/json" } });
@@ -146,7 +149,7 @@ async function fromResend(req: Request) {
 
 // ---------- online estimate approval (honestechmobileapp.com/e/?CODE) ----------
 type Slot = { d: string; t?: string };
-type Link = { path?: string; exp?: number; shop?: string; job?: string; est?: Record<string, unknown> };
+type Link = { path?: string; exp?: number; shop?: string; job?: string; est?: Record<string, unknown>; pay?: Record<string, unknown> };
 async function readLink(code: string): Promise<Link | null> {
   code = code.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
   if (code.length < 6) return null;
@@ -231,6 +234,74 @@ async function estApprove(req: Request) {
     return out({ ok: true, booked: pick });
   } catch (e) { console.error(e); return out({ error: "Something went wrong. Try again, or text the shop." }, 500); }
 }
+// ---------- pay an invoice by card (honestechmobileapp.com/p/?CODE) ----------
+const nyDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+async function payAcct(shop: string): Promise<string | null> {
+  const { data: f } = await db.storage.from("media").download(`_pay/${shop}.json`);
+  if (!f) return null;
+  try { return (JSON.parse(await f.text()).acct as string) || null; } catch (_) { return null; }
+}
+// mark the invoice paid once Stripe says the money came in (also done by stripe-webhook for connected accounts)
+async function markPaid(shop: string, job: string, s: Stripe.Checkout.Session) {
+  const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", shop).eq("kind", "job").eq("id", job).maybeSingle();
+  if (!row || row.deleted) return false;
+  const j = row.data as Record<string, any>;
+  j.invoice = j.invoice || {};
+  if (j.invoice.online && j.invoice.online.session === s.id) return true;
+  const amt = (s.amount_total || 0) / 100;
+  j.invoice.paid = true; j.invoice.paidVia = "Card"; j.invoice.paidDate = nyDate();
+  j.invoice.online = { at: Date.now(), amount: amt, session: s.id, pi: typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id || "" };
+  (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "paid online", at: Date.now(), by: "Customer" });
+  const { error } = await db.from("records").update({ data: j }).eq("shop_id", shop).eq("kind", "job").eq("id", job);
+  if (error) throw error;
+  await notifyManagers(shop, `💳 ${j.info?.customer || "A customer"} paid $${amt.toFixed(2)}`, `Invoice ${j.invoice.num || ""} is marked paid. The money goes to your Stripe account.`, "./?job=" + encodeURIComponent(job), "paid-" + job);
+  return true;
+}
+async function payGet(code: string, sess: string) {
+  const m = await readLink(code);
+  if (!m || !m.pay) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
+  const j = await loadJob(m);
+  if (!j) return out({ error: "This invoice is no longer available. Ask the shop to send it again." }, 404);
+  const acct = await payAcct(m.shop!);
+  // coming back from Stripe Checkout: confirm the payment right away instead of waiting for the webhook
+  if (sess && acct && !j.invoice?.paid && /^cs_[A-Za-z0-9_]+$/.test(sess)) {
+    try {
+      const s = await stripe.checkout.sessions.retrieve(sess, { stripeAccount: acct });
+      if (s.payment_status === "paid" && s.metadata?.job === m.job && s.metadata?.shop === m.shop) { await markPaid(m.shop!, m.job!, s); j.invoice = { ...(j.invoice || {}), paid: true, online: { amount: (s.amount_total || 0) / 100 } }; }
+    } catch (e) { console.error("session check", e); }
+  }
+  const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
+  const paid = !!j.invoice?.paid;
+  return out({ ...m.pay, pdf: sg?.signedUrl || "", state: paid ? "paid" : acct ? "open" : "nopay", paidAmount: j.invoice?.online?.amount || 0, paidVia: j.invoice?.paidVia || "" });
+}
+async function payStart(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const code = String(body.code || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+    const m = await readLink(code);
+    if (!m || !m.pay || !m.shop || !m.job) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
+    const j = await loadJob(m);
+    if (!j) return out({ error: "This invoice is no longer available." }, 404);
+    if (j.invoice?.paid) return out({ error: "This invoice is already paid. Thank you!" }, 409);
+    const acct = await payAcct(m.shop);
+    if (!acct) return out({ error: "The shop doesn't take card payments online yet. Text them to pay another way." }, 409);
+    const p = m.pay as Record<string, any>;
+    const cents = Math.round((Number(p.total) || 0) * 100);
+    if (cents < 50) return out({ error: "Nothing to pay on this invoice." }, 400);
+    const back = `https://honestechmobileapp.com/p/?c=${code}`;
+    const s = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name: `Invoice ${clip(p.num, 40)}`.trim() + (p.veh ? ` · ${clip(p.veh, 60)}` : ""), description: clip(p.biz, 120) || undefined } } }],
+      payment_intent_data: { description: `Invoice ${clip(p.num, 40)} · ${clip(p.custFull || p.cust, 60)}`, metadata: { shop: m.shop, job: m.job, num: clip(p.num, 40) }, ...(FEE_BPS ? { application_fee_amount: Math.floor(cents * FEE_BPS / 10000) } : {}) },
+      metadata: { kind: "invoice", shop: m.shop, job: m.job, code },
+      locale: p.lang === "es" ? "es" : "en",
+      success_url: back + "&s={CHECKOUT_SESSION_ID}",
+      cancel_url: back,
+    }, { stripeAccount: acct });
+    return out({ url: s.url });
+  } catch (e) { console.error(e); return out({ error: "Couldn't open the card payment page. Try again in a minute." }, 500); }
+}
+
 function fmtSlot(x: Slot) {
   const d = new Date(x.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   if (!x.t) return d;
@@ -277,6 +348,11 @@ Deno.serve(async (req) => {
         const { data: jr } = await db.from("records").select("id").eq("shop_id", shop).eq("kind", "job").eq("id", jobId).eq("deleted", false).maybeSingle();
         if (jr) { const snap = JSON.stringify(body.est); if (snap.length < 30000) { extra.job = jobId; extra.est = body.est; } }
       }
+      if (body.job && body.pay && typeof body.pay === "object") {
+        const jobId = clip(body.job, 80);
+        const { data: jr } = await db.from("records").select("id").eq("shop_id", shop).eq("kind", "job").eq("id", jobId).eq("deleted", false).maybeSingle();
+        if (jr) { const snap = JSON.stringify(body.pay); if (snap.length < 30000) { extra.job = jobId; extra.pay = body.pay; } }
+      }
       const rec = JSON.stringify({ path, exp: Date.now() + 366 * 864e5, by: me.id, shop, ...extra });
       const { error } = await db.storage.from("media").upload(`_links/${code}.json`, new Blob([rec], { type: "application/json" }), { upsert: false, contentType: "application/json" });
       if (error) return out({ error: error.message }, 500);
@@ -285,6 +361,8 @@ Deno.serve(async (req) => {
   }
   if (req.method === "GET" && new URL(req.url).searchParams.get("e")) return await estGet(new URL(req.url).searchParams.get("e") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "approve") return await estApprove(req);
+  if (req.method === "GET" && new URL(req.url).searchParams.get("p")) return await payGet(new URL(req.url).searchParams.get("p") || "", new URL(req.url).searchParams.get("s") || "");
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "pay") return await payStart(req);
   if (req.method === "GET") {
     // "Save to phone": hand the phone a contact card (.vcf) so Contacts offers Create New Contact. Nothing is stored.
     const v = new URL(req.url).searchParams.get("vcard") || "";

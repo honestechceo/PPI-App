@@ -24,6 +24,44 @@ async function findPrice(kind: "solo" | "team" | "tech", interval: "month" | "ye
   return hits.sort((a, b) => b.created - a.created)[0] || null;
 }
 
+// ---------- card payments on invoices (Stripe Connect) ----------
+// Each shop connects its own Stripe account. Customers pay the shop directly (direct charges); the shop pays Stripe's
+// normal card fees and sees payouts in its own Stripe dashboard. Which Stripe account belongs to which shop is kept in
+// storage at media/_pay/<shop>.json (only the server can read it).
+async function payAcct(shop: string): Promise<string | null> {
+  const { data: f } = await db.storage.from("media").download(`_pay/${shop}.json`);
+  if (!f) return null;
+  try { return (JSON.parse(await f.text()).acct as string) || null; } catch (_) { return null; }
+}
+async function payStatus(shop: string) {
+  const acct = await payAcct(shop);
+  if (!acct) return { connected: false, ready: false };
+  try {
+    const a = await stripe.accounts.retrieve(acct);
+    return { connected: true, ready: !!a.charges_enabled, submitted: !!a.details_submitted, name: a.business_profile?.name || a.settings?.dashboard?.display_name || "", due: (a.requirements?.currently_due || []).length };
+  } catch (e) { return { connected: false, ready: false, error: (e as Error).message }; }
+}
+async function paySetup(shop: string, email: string | undefined, ret: string) {
+  let acct = await payAcct(shop);
+  if (!acct) {
+    const { data: st } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "settings").eq("id", "main").maybeSingle();
+    const s = (st?.data || {}) as Record<string, unknown>;
+    const a = await stripe.accounts.create({
+      country: "US", email: email || undefined,
+      // the shop owns a full Stripe account, pays its own card fees, and Stripe handles disputes and onboarding
+      controller: { fees: { payer: "account" }, losses: { payments: "stripe" }, stripe_dashboard: { type: "full" }, requirement_collection: "stripe" },
+      capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+      business_profile: { name: String(s.biz || "") || undefined, mcc: "7538", product_description: "Mobile auto repair and inspections" },
+      metadata: { shop_id: shop },
+    } as any);
+    acct = a.id;
+    const { error } = await db.storage.from("media").upload(`_pay/${shop}.json`, new Blob([JSON.stringify({ acct, at: Date.now() })], { type: "application/json" }), { upsert: true, contentType: "application/json" });
+    if (error) throw error;
+  }
+  const link = await stripe.accountLinks.create({ account: acct, type: "account_onboarding", refresh_url: ret + "?pay=retry", return_url: ret + "?pay=done" });
+  return { url: link.url };
+}
+
 // "Delete my account" from inside the app (required by the App Store).
 // Owner: cancels the subscription, deletes the shop's files and every record (jobs, customers, invoices…) and the login.
 //        Technicians in that shop lose access. Technician: removes only their own login; the shop's jobs stay with the shop.
@@ -41,6 +79,7 @@ async function deleteAccount(uid: string, mem: { shop_id: string; role: string }
       const { error } = await db.storage.from("media").remove(files.map((f) => `${shopId}/${f.name}`));
       if (error) { console.error("files", error); break; }
     }
+    await db.storage.from("media").remove([`_pay/${shopId}.json`]);   // the shop keeps its own Stripe account
     await db.from("shops").delete().eq("id", shopId);   // members, records, plan, invites, gifts, links go with it
   } else if (mem) {
     await db.from("shop_members").delete().eq("user_id", uid);
@@ -70,11 +109,13 @@ Deno.serve(async (req) => {
     const { data: mem } = await db.from("shop_members").select("shop_id, role").eq("user_id", user.id).order("created_at", { ascending: false }).limit(1).maybeSingle();
     if (body.action === "delete_account") return await deleteAccount(user.id, mem);
     if (!mem) return out({ error: "No shop found for this account" }, 400);
+    if (body.action === "pay_status") return out(await payStatus(mem.shop_id));
     if (mem.role !== "owner") return out({ error: "Only the shop owner can manage the plan" }, 403);
     const shopId = mem.shop_id;
     const { data: sub } = await db.from("subscriptions").select("status, stripe_customer").eq("shop_id", shopId).maybeSingle();
     const paying = sub && ["active", "trialing", "past_due"].includes(sub.status);
 
+    if (body.action === "pay_setup") return out(await paySetup(shopId, user.email, ret));
     if (body.action === "portal" || (body.action === "checkout" && paying && sub?.stripe_customer)) {
       if (!sub?.stripe_customer) return out({ error: "No subscription yet. Pick a plan first." }, 400);
       const s = await stripe.billingPortal.sessions.create({ customer: sub.stripe_customer, return_url: ret });

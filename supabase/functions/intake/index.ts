@@ -61,7 +61,7 @@ async function shopFor(key: string) {
   return data?.shop_id as string | undefined || null;
 }
 
-async function notifyManagers(shop: string, title: string, body: string) {
+async function notifyManagers(shop: string, title: string, body: string, url = "./?view=requests", tag = "request") {
   try {
     const { data: k } = await db.from("push_keys").select("public_key, private_key").eq("id", 1).maybeSingle();
     if (!k) return;
@@ -70,7 +70,7 @@ async function notifyManagers(shop: string, title: string, body: string) {
     if (!ids.length) return;
     webpush.setVapidDetails("mailto:info@honestechservice.com", k.public_key, k.private_key);
     const { data: subs } = await db.from("push_subs").select("endpoint, p256dh, auth").in("user_id", ids);
-    const payload = JSON.stringify({ title: clip(title, 80), body: clip(body, 240), url: "./?view=requests", tag: "request" });
+    const payload = JSON.stringify({ title: clip(title, 80), body: clip(body, 240), url, tag });
     await Promise.all((subs || []).map(async (s) => {
       try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: "high" }); }
       catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) await db.from("push_subs").delete().eq("endpoint", s.endpoint); }
@@ -144,6 +144,100 @@ async function fromResend(req: Request) {
   return out(await save(shop, (subject ? `Subject: ${subject}\n` : "") + body, "email", { from: clip(from, 200) }));
 }
 
+// ---------- online estimate approval (honestechmobileapp.com/e/?CODE) ----------
+type Slot = { d: string; t?: string };
+type Link = { path?: string; exp?: number; shop?: string; job?: string; est?: Record<string, unknown> };
+async function readLink(code: string): Promise<Link | null> {
+  code = code.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+  if (code.length < 6) return null;
+  const { data: f } = await db.storage.from("media").download(`_links/${code}.json`);
+  if (!f) return null;
+  try { const m = JSON.parse(await f.text()) as Link; if (!m.path || (m.exp && Date.now() > m.exp)) return null; return m; } catch (_) { return null; }
+}
+function slotsOf(j: Record<string, any>): Slot[] {
+  const info = j.info || {};
+  const list: Slot[] = Array.isArray(j.slots) ? j.slots : info.date ? [{ d: info.date, t: info.time || "" }] : [];
+  return list.filter((x) => x && typeof x.d === "string" && x.d).map((x) => ({ d: x.d, t: x.t || "" }))
+    .sort((a, b) => (a.d + (a.t || "99")) < (b.d + (b.t || "99")) ? -1 : 1);
+}
+async function loadJob(m: Link) {
+  if (!m.shop || !m.job) return null;
+  const { data } = await db.from("records").select("data, deleted").eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job).maybeSingle();
+  if (!data || data.deleted) return null;
+  return data.data as Record<string, any>;
+}
+function estState(j: Record<string, any>) {
+  const e = j.est || {};
+  if (j.declined || e.status === "declined" || j.status === "canceled") return "closed";
+  if (e.status === "approved") return "approved";
+  if (j.status === "done" || (j.invoice && j.invoice.num && j.docMode === "inv")) return "closed";
+  return "open";
+}
+async function estGet(code: string) {
+  const m = await readLink(code);
+  if (!m || !m.est) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
+  const j = await loadJob(m);
+  if (!j) return out({ error: "This estimate is no longer available. Ask the shop to send it again." }, 404);
+  const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
+  const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
+  const state = estState(j);
+  return out({
+    ...m.est, state, pdf: sg?.signedUrl || "",
+    slots: j.pending ? slotsOf(j).filter((x) => x.d >= today) : [],
+    booked: !j.pending && j.info?.date ? { d: j.info.date, t: j.info.time || "" } : null,
+    approved: state === "approved" ? { name: j.est?.online?.name || j.sig?.est?.name || "", at: j.est?.online?.at || 0, ask: j.est?.online?.ask || "" } : null,
+  });
+}
+async function estApprove(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const m = await readLink(String(body.code || ""));
+    if (!m || !m.est || !m.shop || !m.job) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
+    const name = clip(body.name, 80).trim();
+    const sig = String(body.sig || "");
+    if (name.length < 2) return out({ error: "Type your name" }, 400);
+    if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(sig) || sig.length > 250000) return out({ error: "Sign in the box" }, 400);
+    const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job).maybeSingle();
+    if (!row || row.deleted) return out({ error: "This estimate is no longer available." }, 404);
+    const j = row.data as Record<string, any>;
+    const state = estState(j);
+    if (state === "approved") return out({ ok: true, already: true });
+    if (state !== "open") return out({ error: "This estimate is closed. Text the shop if you have questions." }, 409);
+    const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
+    let pick: Slot | null = null;
+    const ask = clip(body.ask, 300).trim();
+    if (body.slot && typeof body.slot === "object") {
+      const want = body.slot as Slot;
+      pick = slotsOf(j).find((x) => x.d === want.d && (x.t || "") === (want.t || "")) || null;
+      if (!pick) return out({ error: "That time isn't available anymore. Pick another one." }, 409);
+    }
+    const now = Date.now(), total = Number((m.est as any).total) || 0;
+    j.est = j.est || { num: (m.est as any).num || "", date: today };
+    Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total } });
+    j.sig = j.sig || {};
+    j.sig.est = { data: sig, name, at: now, online: true };
+    if (pick && j.pending) { j.info = j.info || {}; j.info.date = pick.d; j.info.time = pick.t || ""; j.pending = false; j.bookedAt = now; }
+    (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "approved online", at: now, by: name });
+    const { error } = await db.from("records").update({ data: j }).eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job);
+    if (error) throw error;
+    if (pick) {
+      // the request this job came from is now booked
+      const { data: rq } = await db.from("records").select("id, data").eq("shop_id", m.shop).eq("kind", "request").eq("deleted", false).eq("data->>jobId", m.job);
+      for (const r of rq || []) { const d = r.data as Record<string, unknown>; d.status = "booked"; await db.from("records").update({ data: d }).eq("shop_id", m.shop).eq("kind", "request").eq("id", r.id); }
+    }
+    const who = String(j.info?.customer || name), num = String((m.est as any).num || ""), when = pick ? fmtSlot(pick) : "";
+    await notifyManagers(m.shop, `✓ ${who} approved ${num ? "estimate " + num : "the estimate"}`,
+      pick ? `Booked for ${when}. It's on your schedule.` : ask ? `Wants a different time: ${ask}` : "Pick a time with them and book it.", "./?job=" + encodeURIComponent(m.job), "est-" + m.job);
+    return out({ ok: true, booked: pick });
+  } catch (e) { console.error(e); return out({ error: "Something went wrong. Try again, or text the shop." }, 500); }
+}
+function fmtSlot(x: Slot) {
+  const d = new Date(x.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  if (!x.t) return d;
+  const [h, mi] = x.t.split(":").map(Number);
+  return `${d} at ${((h + 11) % 12) + 1}:${String(mi || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method === "GET" && new URL(req.url).searchParams.get("d")) {
@@ -176,12 +270,21 @@ Deno.serve(async (req) => {
       const ABC = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
       const rnd = crypto.getRandomValues(new Uint8Array(8));
       const code = Array.from(rnd, (b) => ABC[b % ABC.length]).join("");
-      const rec = JSON.stringify({ path, exp: Date.now() + 366 * 864e5, by: me.id });
+      // an estimate link also carries a snapshot of the estimate so the customer can approve it online (/e/?CODE)
+      const extra: Record<string, unknown> = {};
+      if (body.job && body.est && typeof body.est === "object") {
+        const jobId = clip(body.job, 80);
+        const { data: jr } = await db.from("records").select("id").eq("shop_id", shop).eq("kind", "job").eq("id", jobId).eq("deleted", false).maybeSingle();
+        if (jr) { const snap = JSON.stringify(body.est); if (snap.length < 30000) { extra.job = jobId; extra.est = body.est; } }
+      }
+      const rec = JSON.stringify({ path, exp: Date.now() + 366 * 864e5, by: me.id, shop, ...extra });
       const { error } = await db.storage.from("media").upload(`_links/${code}.json`, new Blob([rec], { type: "application/json" }), { upsert: false, contentType: "application/json" });
       if (error) return out({ error: error.message }, 500);
       return out({ code });
     } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
   }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("e")) return await estGet(new URL(req.url).searchParams.get("e") || "");
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "approve") return await estApprove(req);
   if (req.method === "GET") {
     // "Save to phone": hand the phone a contact card (.vcf) so Contacts offers Create New Contact. Nothing is stored.
     const v = new URL(req.url).searchParams.get("vcard") || "";

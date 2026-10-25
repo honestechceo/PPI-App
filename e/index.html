@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your estimate</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f141a">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#dfe5eb;--accent:#1f6feb;--ok:#1a7f37;--bad:#c62828}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+main{max-width:560px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom))}
+.top{text-align:center;padding:10px 0 4px}
+.top .biz{font-weight:800;font-size:20px;letter-spacing:.01em}
+.top .sub{color:var(--mute);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+h2{font-size:17px;margin:0 0 10px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .a{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:19px;padding-top:10px;margin-top:4px;border-top:2px solid var(--ink)}
+.mute{color:var(--mute);font-size:14px}
+.btn{display:block;width:100%;min-height:50px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;text-align:center;text-decoration:none;padding:12px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-size:17px}
+.btn:disabled{opacity:.6}
+.btn+.btn{margin-top:10px}
+.opt{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:8px;cursor:pointer;min-height:52px}
+.opt input{width:22px;height:22px;accent-color:var(--accent);margin:0;flex:none}
+.opt:has(input:checked){border-color:var(--accent);background:#eef4ff}
+input[type=text],textarea{width:100%;font:inherit;border:1px solid var(--line);border-radius:10px;padding:12px;min-height:48px;background:#fff;color:var(--ink)}
+textarea{min-height:70px;margin-top:8px}
+label.l{display:block;font-weight:700;margin:14px 0 6px}
+.pad{position:relative;border:1.5px dashed #9aa8b5;border-radius:12px;background:#fff;height:170px;touch-action:none}
+.pad canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:12px}
+.pad .ph{position:absolute;left:0;right:0;bottom:18px;text-align:center;color:#9aa8b5;pointer-events:none;border-top:1px solid #d5dce3;margin:0 18px;padding-top:4px;font-size:13px}
+.clr{background:none;border:0;color:var(--accent);font:inherit;font-weight:700;padding:6px 0;cursor:pointer}
+.err{color:var(--bad);font-weight:600;margin:10px 0 0}
+.done{text-align:center;padding:26px 16px}
+.done .big{font-size:52px;line-height:1}
+.done h2{font-size:22px;margin:10px 0 6px}
+.fine{font-size:13px;color:var(--mute);margin:12px 0}
+.foot{text-align:center;color:var(--mute);font-size:12px;margin-top:22px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}
+  .opt:has(input:checked){background:#16263d}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
+</style>
+</head><body>
+<main id="app"><p class="mute" style="text-align:center;margin-top:40px">Loading your estimate…</p></main>
+<script>
+(function(){
+var API="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake";
+var code=(location.search.slice(1)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,"");
+var app=document.getElementById("app"),E=null,ES=false,PICK=null,OTHER=false,BUSY=false,ERR="",inked=false;
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function T(en,es){return ES?es:en;}
+function money(n){return "$"+(Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function fmtD(d){try{return new Date(d+"T12:00:00").toLocaleDateString(ES?"es-US":"en-US",{weekday:"short",month:"short",day:"numeric"});}catch(e){return d;}}
+function fmtT(t){if(!t)return "";var p=t.split(":"),h=+p[0],m=+p[1]||0;return ((h+11)%12+1)+":"+(m<10?"0":"")+m+" "+(h<12?"AM":"PM");}
+function slot(x){return fmtD(x.d)+(x.t?(ES?" a las ":" at ")+fmtT(x.t):"");}
+function smsHref(n,b){return "sms:"+String(n||"").replace(/[^\d+]/g,"")+(/iPhone|iPad|iPod/.test(navigator.userAgent)?"&":"?")+"body="+encodeURIComponent(b||"");}
+function head(){return '<div class="top"><div class="biz">'+esc(E.biz||"")+'</div><div class="sub">'+esc(T("Estimate","Presupuesto"))+(E.num?" "+esc(E.num):"")+(E.veh?" · "+esc(E.veh):"")+'</div></div>';}
+function ask(){return E.phone?'<a class="btn" href="'+esc(smsHref(E.phone,""))+'">💬 '+esc(T("Text ","Escribir a ")+(E.biz||T("the shop","el taller")))+'</a>':"";}
+function summary(){var ls=(E.lines||[]).map(function(l){return '<div class="row"><span>'+esc(l.d)+'</span><span class="a">'+money(l.a)+'</span></div>';}).join("");
+  return '<div class="card"><h2>'+esc(T("Hi","Hola")+(E.cust?" "+E.cust:""))+'</h2>'+ls+'<div class="tot"><span>'+esc(T("Estimated total","Total estimado"))+'</span><span>'+money(E.total)+'</span></div>'
+    +(E.valid?'<p class="mute" style="margin:8px 0 0">'+esc(T("Good until ","Válido hasta el "))+esc(fmtD(E.valid))+'</p>':"")
+    +(E.pdf?'<a class="btn" style="margin-top:14px" href="'+esc(E.pdf)+'" target="_blank" rel="noopener">📄 '+esc(T("See the full estimate (PDF)","Ver el presupuesto completo (PDF)"))+'</a>':"")+'</div>';}
+function render(){
+  if(!E)return;document.documentElement.lang=ES?"es":"en";document.title=T("Your estimate","Su presupuesto")+(E.biz?" · "+E.biz:"");
+  if(E.state==="approved"){var b=E.booked;
+    app.innerHTML=head()+'<div class="card done"><div class="big">✅</div><h2>'+esc(T("Estimate approved","Presupuesto aprobado"))+'</h2>'
+      +(b?'<p>'+esc(T("You're booked for ","Su cita es el "))+'<strong>'+esc(slot(b))+'</strong>.</p>':'<p>'+esc(T("Thanks! We'll text you to set the day and time.","¡Gracias! Le escribimos para acordar el día y la hora."))+'</p>')
+      +(E.approved&&E.approved.ask&&!b?'<p class="mute">'+esc(T("You asked for: ","Pidió: "))+esc(E.approved.ask)+'</p>':"")
+      +'<p class="mute">'+esc(T("We'll send a reminder before the appointment.","Le mandamos un recordatorio antes de la cita."))+'</p></div>'
+      +(E.pdf?'<a class="btn" style="margin-top:14px" href="'+esc(E.pdf)+'" target="_blank" rel="noopener">📄 '+esc(T("See the estimate (PDF)","Ver el presupuesto (PDF)"))+'</a>':"")+ask()+foot();return;}
+  if(E.state!=="open"){app.innerHTML=head()+summary()+'<div class="card"><p style="margin:0">'+esc(T("This estimate is closed. Text us if you have any questions.","Este presupuesto ya está cerrado. Escríbanos si tiene alguna pregunta."))+'</p></div>'+(E.phone?'<div style="margin-top:14px">'+ask()+'</div>':"")+foot();return;}
+  var sl=E.slots||[];
+  var times=sl.length?'<label class="l">'+esc(T("Pick a time","Escoja un horario"))+'</label>'+sl.map(function(x,k){return '<label class="opt"><input type="radio" name="t" value="'+k+'"'+(PICK===k&&!OTHER?" checked":"")+'><span>'+esc(slot(x))+'</span></label>';}).join("")
+      +'<label class="opt"><input type="radio" name="t" value="o"'+(OTHER?" checked":"")+'><span>'+esc(T("None of these work","Ninguno me queda"))+'</span></label>'
+      +(OTHER?'<textarea id="ask" placeholder="'+esc(T("What day and time works for you?","¿Qué día y hora le queda?"))+'"></textarea>':"")
+    :'<label class="l">'+esc(T("What day and time works for you?","¿Qué día y hora le queda?"))+'</label><textarea id="ask" placeholder="'+esc(T("For example: Saturday morning","Por ejemplo: el sábado en la mañana"))+'"></textarea>';
+  app.innerHTML=head()+summary()+'<div class="card"><h2>'+esc(T("Approve and book","Aprobar y agendar"))+'</h2>'+times
+    +'<label class="l" for="nm">'+esc(T("Your name","Su nombre"))+'</label><input type="text" id="nm" autocomplete="name" value="'+esc(E.custFull||"")+'">'
+    +'<label class="l">'+esc(T("Sign with your finger","Firme con el dedo"))+'</label><div class="pad"><canvas id="cv"></canvas><div class="ph">'+esc(T("Sign here","Firme aquí"))+'</div></div>'
+    +'<button class="clr" type="button" id="clr">'+esc(T("Clear","Borrar"))+'</button>'
+    +'<p class="fine">'+esc(T("By signing, you approve the work and price above. If more work turns out to be needed, we'll check with you first.","Al firmar, aprueba el trabajo y el precio de arriba. Si hace falta más trabajo, le consultamos primero."))+'</p>'
+    +'<button class="btn primary" type="button" id="go"'+(BUSY?" disabled":"")+'>'+esc(BUSY?T("Sending…","Enviando…"):T("✓ Approve estimate","✓ Aprobar presupuesto"))+'</button>'
+    +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'</div>'+(E.phone?'<div style="margin-top:14px">'+ask()+'</div>':"")+foot();
+  pad();
+  app.querySelectorAll('input[name=t]').forEach(function(r){r.addEventListener("change",function(){var keep=keepVals();if(r.value==="o"){OTHER=true;PICK=null;}else{OTHER=false;PICK=+r.value;}render();restore(keep);});});
+  document.getElementById("go").addEventListener("click",approve);
+  document.getElementById("clr").addEventListener("click",function(){var c=document.getElementById("cv");c.getContext("2d").clearRect(0,0,c.width,c.height);inked=false;app.querySelector(".ph").style.display="";});}
+function foot(){return '<p class="foot">'+esc(T("Sent with Honestech Mobile App","Enviado con Honestech Mobile App"))+'</p>';}
+var INK=null;
+function keepVals(){var c=document.getElementById("cv");return {nm:(document.getElementById("nm")||{}).value,ask:(document.getElementById("ask")||{}).value,ink:inked&&c?c.toDataURL():null};}
+function restore(k){if(k.nm!=null&&document.getElementById("nm"))document.getElementById("nm").value=k.nm;if(k.ask&&document.getElementById("ask"))document.getElementById("ask").value=k.ask;
+  if(k.ink){var c=document.getElementById("cv"),im=new Image();im.onload=function(){c.getContext("2d").drawImage(im,0,0);inked=true;app.querySelector(".ph").style.display="none";};im.src=k.ink;}}
+function pad(){var c=document.getElementById("cv"),r=c.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,2);c.width=r.width*dpr;c.height=r.height*dpr;
+  var x=c.getContext("2d");x.scale(dpr,dpr);x.lineWidth=2.6;x.lineCap="round";x.lineJoin="round";x.strokeStyle="#111";var down=false,lx=0,ly=0;inked=false;
+  function p(e){var b=c.getBoundingClientRect();return [e.clientX-b.left,e.clientY-b.top];}
+  c.addEventListener("pointerdown",function(e){down=true;c.setPointerCapture(e.pointerId);var q=p(e);lx=q[0];ly=q[1];x.beginPath();x.arc(lx,ly,1.2,0,7);x.fillStyle="#111";x.fill();inked=true;app.querySelector(".ph").style.display="none";var er=app.querySelector(".err");if(er)er.remove();e.preventDefault();});
+  c.addEventListener("pointermove",function(e){if(!down)return;var q=p(e);x.beginPath();x.moveTo(lx,ly);x.lineTo(q[0],q[1]);x.stroke();lx=q[0];ly=q[1];e.preventDefault();});
+  ["pointerup","pointercancel","pointerleave"].forEach(function(t){c.addEventListener(t,function(){down=false;});});}
+function sigData(){var c=document.getElementById("cv"),o=document.createElement("canvas"),w=600,h=Math.round(600*c.height/c.width);o.width=w;o.height=h;var x=o.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,w,h);x.drawImage(c,0,0,w,h);return o.toDataURL("image/jpeg",0.7);}
+function approve(){if(BUSY)return;var sl=E.slots||[],nm=(document.getElementById("nm").value||"").trim(),a=document.getElementById("ask"),askv=a?(a.value||"").trim():"";ERR="";
+  var keep=keepVals();
+  if(sl.length&&PICK==null&&!OTHER)ERR=T("Pick a time that works for you.","Escoja un horario.");
+  else if((OTHER||!sl.length)&&!askv)ERR=T("Tell us a day and time that works for you.","Díganos qué día y hora le queda.");
+  else if(nm.length<2)ERR=T("Type your name.","Escriba su nombre.");
+  else if(!inked)ERR=T("Sign in the box with your finger.","Firme en el recuadro con el dedo.");
+  if(ERR){render();restore(keep);return;}
+  var body={code:code,name:nm,sig:sigData(),slot:!OTHER&&PICK!=null?sl[PICK]:null,ask:askv};
+  BUSY=true;render();restore(keep);
+  fetch(API+"?act=approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
+    .then(function(x){BUSY=false;if(!x[0]||!x[1].ok){ERR=(x[1]&&x[1].error)||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/isn't available anymore/.test(ERR))return load();render();restore(keep);return;}
+      E.state="approved";E.booked=x[1].booked||null;E.approved={name:nm,ask:body.slot?"":askv};render();window.scrollTo(0,0);})
+    .catch(function(){BUSY=false;ERR=T("No connection. Check your signal and try again.","Sin conexión. Revise su señal e intente de nuevo.");render();restore(keep);});}
+function load(){fetch(API+"?e="+encodeURIComponent(code)).then(function(r){return r.json().then(function(d){return [r.ok,d];});}).then(function(x){
+    if(!x[0]){app.innerHTML='<div class="card done"><div class="big">🔗</div><p>'+esc(x[1].error||"This link has expired. Ask the shop to send it again.")+'</p></div>';return;}
+    E=x[1];ES=E.lang==="es";render();})
+  .catch(function(){app.innerHTML='<div class="card done"><p>Couldn\'t load the estimate. Check your connection and refresh.</p></div>';});}
+if(code.length<6){app.innerHTML='<div class="card done"><p>This link is incomplete. Ask the shop to send it again.</p></div>';return;}
+load();
+})();
+</script>
+</body></html>

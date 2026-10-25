@@ -1,16 +1,17 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Honestech"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="theme-color" content="#15202b"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Honestech Mobile Mechanic App</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&display=swap">
 <style>
 /* Layout: field tool. Sticky header with progress + numbered step strip, one inspection stage per screen, big tap targets, fixed prev/next bar. */
 :root{
   --bg:#eef1f4; --surface:#ffffff; --ink:#15202b; --muted:#5b6876; --line:#d5dbe2;
   --accent:#1d5fa8; --accent-ink:#ffffff; --accent-soft:#e2ecf8;
   --good:#1f7a45; --good-soft:#e1f2e8; --mon:#9a6200; --mon-soft:#fbf0d9; --bad:#b42323; --bad-soft:#fbe4e4; --na:#6b7480; --na-soft:#eceff2;
-  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
-  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
-  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --f-brand:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-display:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:var(--f-body);
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f151c; --surface:#18212b; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3744;
@@ -46,7 +47,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;backgroun
 .saved{flex:0 0 auto;align-self:center;font-size:11px;color:var(--muted);opacity:.85;transition:color .3s}
 .saved.flash{color:var(--good)}
 .brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-.brand h1{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.02em;margin:0;text-transform:uppercase}
+.brand h1{font-family:var(--f-brand);font-weight:700;font-size:22px;letter-spacing:.02em;margin:0;text-transform:uppercase}
 .brand{align-items:center}
 .brand h1{flex:1;min-width:0}
 .brand h1 .b2{color:var(--accent);white-space:nowrap}
@@ -68,8 +69,8 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;backgroun
 main{max-width:760px;margin:0 auto;padding:16px 16px 110px}
 .sample{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:var(--mon-soft);border:1px solid var(--mon);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:14px}
 .stage-head{margin:4px 0 14px}
-.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
-.stage-head h2{font-family:var(--f-display);font-weight:700;font-size:32px;line-height:1.05;margin:2px 0 6px;text-wrap:balance}
+.eyebrow{font-family:var(--f-body);font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--accent)}
+.stage-head h2{font-family:var(--f-display);font-weight:700;font-size:30px;letter-spacing:-.02em;line-height:1.1;margin:2px 0 6px;text-wrap:balance}
 .when{color:var(--muted);max-width:62ch;margin:0}
 .when strong{color:var(--ink)}
 
@@ -116,6 +117,16 @@ main{max-width:760px;margin:0 auto;padding:16px 16px 110px}
 .vinmsg.ok{color:var(--good)} .vinmsg.err{color:var(--bad)}
 .subh{font-family:var(--f-display);font-size:22px;font-weight:700;margin:6px 0 10px}
 
+svg.uic{width:1.15em;height:1.15em;vertical-align:-.2em;margin-right:.35em;flex:none}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:11;background:color-mix(in srgb,var(--surface) 92%,transparent);-webkit-backdrop-filter:saturate(1.6) blur(14px);backdrop-filter:saturate(1.6) blur(14px);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar[hidden]{display:none}
+.tabbar-in{max-width:620px;margin:0 auto;display:flex;justify-content:space-around}
+.tabbtn{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;border:0!important;background:transparent!important;padding:4px 2px!important;color:var(--muted);font-size:11px!important;font-weight:600;border-radius:10px;-webkit-tap-highlight-color:transparent}
+.tabbtn span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.tabbar .tabbtn[aria-current="page"]{color:var(--accent);background:transparent!important}
+@media (max-width:560px){.brand .saved{display:none}}
+.tabbtn[aria-current="page"] svg{stroke-width:2.3}
+.tabbtn:active{transform:scale(.94)}
 nav.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));z-index:10}
 .foot-inner{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 16px;font-weight:600;min-height:48px}
@@ -153,7 +164,7 @@ nav.foot{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border
 .rep-list .txt small{display:block;color:var(--muted)}
 .empty{color:var(--muted);font-size:14px}
 .copyrow{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
-.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20;pointer-events:none}
+.toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);padding:10px 16px;border-radius:999px;font-size:14px;z-index:20;pointer-events:none}
 .confirm{background:var(--bad-soft);border:1px solid var(--bad);border-radius:10px;padding:12px;margin-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f-mono);font-size:12px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px}
 @media (max-width:480px){
@@ -177,7 +188,7 @@ textarea.copybox{width:100%;min-height:160px;margin-top:10px;font-family:var(--f
 .day.has i{background:var(--accent)}
 .day[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
 .day.all{width:auto;padding:6px 12px;justify-content:center}
-.group-h{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:16px 0 8px}
+.group-h{font-family:var(--f-body);font-size:13px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
 .jobs{display:flex;flex-direction:column;gap:10px}
 .job{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:64px minmax(0,1fr);gap:4px 12px}
 .job .when-col{grid-row:span 3;border-right:1px solid var(--line);padding-right:10px}
@@ -762,7 +773,7 @@ a.btn{text-decoration:none;display:inline-flex;align-items:center;justify-conten
 .cal-dayhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:4px 0 10px;flex-wrap:wrap}
 .cal-dayhead strong{font-family:var(--f-display);font-size:20px}
 .madewith{margin-top:14px;font-size:11px;color:var(--muted);text-align:center;letter-spacing:.04em}
-body.gated nav.tabs{display:none}
+body.gated nav.tabs,body.gated #tabbar{display:none}
 .seat-pick{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin:6px 0 2px}.seat-pick select{width:auto;min-width:64px}
 .tech-step{display:flex;align-items:center;gap:12px}.tech-step span{flex:1}.tech-step strong{min-width:28px;text-align:center;font-size:20px}.tech-step .mini{min-width:44px;font-size:20px;line-height:1}
 
@@ -863,7 +874,6 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 <header class="top">
   <div class="top-inner">
     <div class="brand"><button type="button" class="back-btn" id="backBtn" data-navback="1" aria-label="Back" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg><span>Back</span></button><h1><span class="b1">Honestech</span> <span class="b2">Mobile Mechanic <small>App</small></span></h1><span class="saved" id="savedLbl" aria-live="polite"></span><button type="button" id="cloudDot" class="cloud-dot c-${"idle"}" data-nav="settings" aria-label="Cloud sync status" hidden>☁︎</button><button type="button" class="help-btn look-btn" data-look="1" aria-label="Look it up"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M20 20l-4.6-4.6"/></svg></button><button type="button" class="help-btn" data-nav="help" aria-label="Help">?</button><button type="button" class="help-btn quick-btn" data-act="quick" aria-label="Quick actions"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
-    <nav class="tabs" aria-label="Sections"><button class="navbtn" type="button" data-nav="dash" id="navDash">Home</button><button class="navbtn" type="button" data-nav="jobs" id="navJobs">Schedule</button><button class="navbtn" type="button" data-nav="customers" id="navCust">Customers</button><button class="navbtn" type="button" data-nav="expenses" id="navExp">Expenses</button><button class="navbtn" type="button" data-nav="settings" id="navSettings">Settings</button></nav>
     <div id="jobChrome">
       <div class="jobbar"><span class="veh" id="vehLabel"></span></div>
       <div class="bar"><i id="barFill"></i></div>
@@ -878,6 +888,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
   <span class="count" id="countLbl"></span>
   <button class="btn primary" id="nextBtn" type="button">Next</button>
 </div></nav>
+<nav class="tabbar" id="tabbar" aria-label="Sections"><div class="tabbar-in"><button class="navbtn tabbtn" type="button" data-nav="dash" id="navDash"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/></svg><span>Home</span></button><button class="navbtn tabbtn" type="button" data-nav="jobs" id="navJobs"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16.5" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><path d="M7.5 13.5h3M13.5 13.5h3M7.5 17h3"/></svg><span>Schedule</span></button><button class="navbtn tabbtn" type="button" data-nav="customers" id="navCust"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18.5 20a6.5 6.5 0 0 0-3-5.5"/></svg><span>Customers</span></button><button class="navbtn tabbtn" type="button" data-nav="expenses" id="navExp"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span>Expenses</span></button><button class="navbtn tabbtn" type="button" data-nav="settings" id="navSettings"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>Settings</span></button></div></nav>
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1066,14 +1077,25 @@ function trLines(text){if(!isEs())return text;
     return line;}).join("\n");}
 // ---- the app's own screens: translate text as it is drawn ----
 const I18N_SKIP=/^(SCRIPT|STYLE|TEXTAREA|CODE)$/;
-function i18nText(n){const pe=n.parentElement;if(!pe||I18N_SKIP.test(pe.tagName)||(pe.closest&&pe.closest("[data-noi18n]")))return;
+
+// ---- one consistent icon set in place of emoji at the start of buttons and headings ----
+const UI_ICONS={"📥": "<path d=\"M22 12h-6l-2 3h-4l-2-3H2\"/><path d=\"M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z\"/>", "🗺": "<path d=\"M9 4 3 6v14l6-2 6 2 6-2V4l-6 2z\"/><path d=\"M9 4v14M15 6v14\"/>", "📝": "<path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/>", "💬": "<path d=\"M21 12a8 8 0 0 1-11.6 7.1L3 21l1.9-6.4A8 8 0 1 1 21 12z\"/>", "🔔": "<path d=\"M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9\"/><path d=\"M10.3 21a1.9 1.9 0 0 0 3.4 0\"/>", "📋": "<rect x=\"8\" y=\"2\" width=\"8\" height=\"4\" rx=\"1\"/><path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\"/><path d=\"M9 12h6M9 16h4\"/>", "☆": "<path d=\"m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z\"/>", "⭐": "<path d=\"m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z\" fill=\"currentColor\"/>", "📄": "<path d=\"M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z\"/><path d=\"M14 2v6h6M8 13h8M8 17h6\"/>", "💾": "<path d=\"M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z\"/><path d=\"M17 21v-8H7v8M7 3v5h8\"/>", "📇": "<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2\"/><circle cx=\"9\" cy=\"11\" r=\"2.5\"/><path d=\"M5.5 17a3.5 3.5 0 0 1 7 0M15 10h3M15 14h3\"/>", "📍": "<path d=\"M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/>", "🚗": "<path d=\"M5 17H3v-5l2-5h14l2 5v5h-2\"/><path d=\"M3 12h18\"/><circle cx=\"7.5\" cy=\"17\" r=\"2\"/><circle cx=\"16.5\" cy=\"17\" r=\"2\"/>", "🧰": "<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z\"/>", "🔧": "<path d=\"M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9z\"/>", "🧾": "<path d=\"M5 3h14v18l-2.5-1.5L14 21l-2-1.5L10 21l-2.5-1.5L5 21z\"/><path d=\"M9 8h6M9 12h6M9 16h4\"/>", "🗑": "<path d=\"M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6\"/>", "📷": "<path d=\"M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z\"/><circle cx=\"12\" cy=\"13\" r=\"3.5\"/>", "📨": "<rect x=\"2\" y=\"4\" width=\"20\" height=\"16\" rx=\"2\"/><path d=\"m22 7-10 6L2 7\"/>", "🎨": "<circle cx=\"13.5\" cy=\"6.5\" r=\"1.2\"/><circle cx=\"17.5\" cy=\"10.5\" r=\"1.2\"/><circle cx=\"8.5\" cy=\"7.5\" r=\"1.2\"/><circle cx=\"6.5\" cy=\"12.5\" r=\"1.2\"/><path d=\"M12 2a10 10 0 0 0 0 20c1 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2a5.6 5.6 0 0 0 5.6-5.6C22 6 17.5 2 12 2z\"/>", "✨": "<path d=\"M12 3 13.9 9.1 20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z\"/>", "❓": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01\"/>", "⚙️": "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1\"/>", "☁️": "<path d=\"M17.5 19H8a6 6 0 1 1 1.3-11.9A5.5 5.5 0 0 1 19.8 9a5 5 0 0 1-2.3 10z\"/>", "🚫": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m4.9 4.9 14.2 14.2\"/>", "⏱": "<circle cx=\"12\" cy=\"13\" r=\"8\"/><path d=\"M12 9v4l2 2M10 2h4\"/>", "✍️": "<path d=\"M12 20h9\"/><path d=\"M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z\"/>", "📅": "<rect x=\"3\" y=\"4.5\" width=\"18\" height=\"16.5\" rx=\"2.5\"/><path d=\"M3 9.5h18M8 2.5v4M16 2.5v4\"/>", "🔍": "<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m21 21-4.3-4.3\"/>", "🔎": "<circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m21 21-4.3-4.3\"/>", "👤": "<circle cx=\"12\" cy=\"8\" r=\"4\"/><path d=\"M4 21a8 8 0 0 1 16 0\"/>", "⏳": "<path d=\"M6 2h12M6 22h12M7 2v4l5 6-5 6v4M17 2v4l-5 6 5 6v4\"/>", "🌐": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20\"/>", "🔒": "<rect x=\"4\" y=\"11\" width=\"16\" height=\"10\" rx=\"2\"/><path d=\"M8 11V7a4 4 0 0 1 8 0v4\"/>", "📦": "<path d=\"M21 8 12 3 3 8v8l9 5 9-5z\"/><path d=\"m3 8 9 5 9-5M12 13v8\"/>", "💵": "<rect x=\"2\" y=\"6\" width=\"20\" height=\"12\" rx=\"2\"/><circle cx=\"12\" cy=\"12\" r=\"2.5\"/><path d=\"M6 12h.01M18 12h.01\"/>", "⛽": "<path d=\"M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18M2 22h14M3 10h12\"/><path d=\"M15 13h2a2 2 0 0 1 2 2v3a1.5 1.5 0 0 0 3 0V9l-3-3\"/>", "🧭": "<circle cx=\"12\" cy=\"12\" r=\"10\"/><path d=\"m16 8-2.5 5.5L8 16l2.5-5.5z\"/>", "📊": "<path d=\"M3 3v18h18\"/><path d=\"M8 17v-5M13 17V8M18 17v-9\"/>", "📞": "<path d=\"M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z\"/>", "🖼": "<rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><circle cx=\"9\" cy=\"9\" r=\"2\"/><path d=\"m21 15-5-5L5 21\"/>", "📸": "<path d=\"M14.5 4h-5L7.5 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.5z\"/><circle cx=\"12\" cy=\"13\" r=\"3.5\"/>", "🎥": "<path d=\"m22 8-6 4 6 4z\"/><rect x=\"2\" y=\"6\" width=\"14\" height=\"12\" rx=\"2\"/>", "📁": "<path d=\"M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/>"};
+const ICON_RE=new RegExp("^\\s*("+Object.keys(UI_ICONS).map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|")+")\\uFE0F?\\s*");
+const ICON_HOST="button,a,h2,h3,h4,summary,.formh,.group-h,.lbl,strong,label,.tag,.st";
+function iconText(n){const pe=n.parentElement;if(!pe||I18N_SKIP.test(pe.tagName)||!pe.closest(ICON_HOST)||pe.closest(".tabbar,.qs-ico,[data-noicon]"))return;
+  const m=n.data.match(ICON_RE);if(!m)return;
+  const sv=document.createElementNS("http://www.w3.org/2000/svg","svg");sv.setAttribute("viewBox","0 0 24 24");sv.setAttribute("class","uic");sv.setAttribute("aria-hidden","true");
+  sv.setAttribute("fill","none");sv.setAttribute("stroke","currentColor");sv.setAttribute("stroke-width","2");sv.setAttribute("stroke-linecap","round");sv.setAttribute("stroke-linejoin","round");sv.innerHTML=UI_ICONS[m[1]];
+  n.data=n.data.slice(m[0].length);pe.insertBefore(sv,n);}
+function i18nText(n){if(UI_LANG==="es")i18nText_(n);iconText(n);}
+function i18nText_(n){const pe=n.parentElement;if(!pe||I18N_SKIP.test(pe.tagName)||(pe.closest&&pe.closest("[data-noi18n]")))return;
   const raw=n.data,t=raw.replace(/\s+/g," ").trim();if(!t||!/[A-Za-z]{2}/.test(t))return;
   const v=trKey(t);if(v!=null&&v!==t)n.data=(raw.match(/^\s*/)[0])+v+(raw.match(/\s*$/)[0]);}
-function i18nAttrs(el){for(const a of ["placeholder","aria-label","title"]){const v=el.getAttribute&&el.getAttribute(a);if(v&&/[A-Za-z]{2}/.test(v)){const t=trKey(v.trim());if(t!=null&&t!==v)el.setAttribute(a,t);}}}
+function i18nAttrs(el){if(UI_LANG!=="es")return;for(const a of ["placeholder","aria-label","title"]){const v=el.getAttribute&&el.getAttribute(a);if(v&&/[A-Za-z]{2}/.test(v)){const t=trKey(v.trim());if(t!=null&&t!==v)el.setAttribute(a,t);}}}
 function i18nTree(root){if(root.nodeType===3){i18nText(root);return;}if(root.nodeType!==1)return;if(I18N_SKIP.test(root.tagName))return;
   i18nAttrs(root);root.querySelectorAll&&root.querySelectorAll("[placeholder],[aria-label],[title]").forEach(i18nAttrs);
   const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let n;while(n=w.nextNode())i18nText(n);}
-function i18nStart(){document.documentElement.lang=UI_LANG;if(UI_LANG!=="es")return;
+function i18nStart(){document.documentElement.lang=UI_LANG;
   i18nTree(document.body);
   new MutationObserver(ms=>{for(const m of ms){if(m.type==="characterData")i18nText(m.target);else if(m.type==="attributes")i18nAttrs(m.target);else m.addedNodes.forEach(i18nTree);}})
     .observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:["placeholder","aria-label","title"]});}
@@ -3267,7 +3289,7 @@ function jobTotal(job){return totals(job).total;}
 
 /* ================= chrome ================= */
 function renderChrome(){try{syncLabel();}catch(e){}
-  {const bb=document.getElementById("backBtn");if(bb){bb.hidden=!NAV.stack.length||NAV_SKIP.has(APP.view);bb.parentElement.classList.toggle("has-back",!bb.hidden);}}
+  {const bb=document.getElementById("backBtn");if(bb){bb.hidden=!NAV.stack.length||NAV_SKIP.has(APP.view)||["dash","jobs","customers","expenses","settings"].includes(APP.view);bb.parentElement.classList.toggle("has-back",!bb.hidden);}}
   const inJob=APP.view==="job"&&S;
   $("#jobChrome").hidden=!inJob; $("#plainPad").hidden=!!inJob;
   $("#navJobs").setAttribute("aria-current",APP.view==="jobs"?"page":"false");
@@ -3275,7 +3297,10 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navCust").setAttribute("aria-current",APP.view==="customers"?"page":"false");
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
-  const foot=$("#foot");
+  const foot=$("#foot"),tb=$("#tabbar");
+  const ROOTS=["dash","jobs","customers","expenses","settings","requests","dispatch","help","lookup","pay","plan"];
+  const showTabs=()=>{tb.hidden=!ROOTS.includes(APP.view)||(APP.view==="jobs"&&APP.adding);};showTabs();
+  if(APP.view==="jobs"&&!APP.adding){foot.hidden=true;return;}
   if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="lookup"||APP.view==="pay"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
@@ -3358,7 +3383,7 @@ function renderJobs(){
   const owed=APP.jobs.filter(j=>j.status==="done"&&!j.invoice.paid).reduce((a,j)=>a+jobTotal(j),0);
   if(!APP.settings.wxOff&&!WX.busy&&!(WX.errAt&&Date.now()-WX.errAt<90e3)&&(!WX.data||Date.now()-(WX.at||0)>30*60e3))setTimeout(()=>loadWx(),0);
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true)+weatherCardHTML():""}
-  <div class="stage-head"><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2>
+  <div class="stage-head${isTech()?"":" dash-head"}"><div><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2></div>${isTech()||APP.adding?"":`<button class="btn primary" type="button" data-act="dashbook">+ Book a job</button>`}</div><div class="stage-sub">
   <p class="when">${upcoming.length} upcoming job${upcoming.length===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
   <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isBooked(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
@@ -5992,7 +6017,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape"&&QUICK){QUICK=null;r
 document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a.qs-sms");if(a&&QUICK){setTimeout(()=>{QUICK=null;render();},300);}});
 // ---- swipe left/right to move between the top tabs (Home, Schedule, Customers, Expenses, Settings) ----
 const SWIPE_VIEWS=["dash","jobs","customers","expenses","settings"];let SW=null;
-function swipeTabs(){return [...document.querySelectorAll(".tabs .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}
+function swipeTabs(){return [...document.querySelectorAll(".tabbar .navbtn")].filter(b=>b.offsetParent!==null&&SWIPE_VIEWS.includes(b.dataset.nav));}
 function swipeBlocked(el){
   for(let n=el;n&&n!==document.body;n=n.parentElement){
     if(/^(INPUT|TEXTAREA|SELECT|CANVAS|VIDEO)$/.test(n.tagName)||n.isContentEditable||n.hasAttribute&&n.hasAttribute("data-noswipe"))return true;

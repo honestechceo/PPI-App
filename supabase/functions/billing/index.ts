@@ -13,6 +13,15 @@ const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers
 const out = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const ALLOWED_RETURN = /^https:\/\/(honestechmobileapp\.com|www\.honestechmobileapp\.com|[a-z0-9-]+\.github\.io)(\/|$)/i;
 
+// two-step sign-in: a login that has an authenticator set up must have entered its code (aal2)
+async function mfaBlocked(token: string, uid: string) {
+  let aal = "aal1";
+  try { let p = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); p += "=".repeat((4 - p.length % 4) % 4); aal = JSON.parse(atob(p)).aal || "aal1"; } catch (_) { /* treat as aal1 */ }
+  if (aal === "aal2") return false;
+  const { data } = await db.auth.admin.mfa.listFactors({ userId: uid });
+  return (data?.factors || []).some((f: { status: string }) => f.status === "verified");
+}
+
 async function findPrice(kind: "solo" | "team" | "tech", interval: "month" | "year") {
   const want = kind === "solo" ? /solo/i : kind === "team" ? /team/i : /technician|tech\b/i;
   const res = await stripe.prices.list({ active: true, type: "recurring", limit: 100, expand: ["data.product"] });
@@ -103,6 +112,7 @@ Deno.serve(async (req) => {
     const { data: ud, error: ue } = await db.auth.getUser(token);
     if (ue || !ud?.user) return out({ error: "Please sign in again" }, 401);
     const user = ud.user;
+    if (await mfaBlocked(token, user.id)) return out({ error: "Enter your 6-digit sign-in code first" }, 401);
     const body = await req.json().catch(() => ({}));
     const ret = ALLOWED_RETURN.test(String(body.return_url || "")) ? String(body.return_url).split(/[?#]/)[0] : "https://honestechmobileapp.com/";
 

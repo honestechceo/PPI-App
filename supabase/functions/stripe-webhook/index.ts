@@ -52,11 +52,16 @@ async function invoicePaid(s: Stripe.Checkout.Session) {
   if (!row || row.deleted) return;
   const j = row.data as Record<string, any>;
   j.invoice = j.invoice || {};
-  if (j.invoice.online && j.invoice.online.session === s.id) return;
-  const amt = (s.amount_total || 0) / 100;
-  j.invoice.paid = true; j.invoice.paidVia = "Card"; j.invoice.paidDate = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
-  j.invoice.online = { at: Date.now(), amount: amt, session: s.id, pi: typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id || "" };
-  (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "paid online", at: Date.now(), by: "Customer" });
+  const dep = s.metadata?.kind === "deposit";
+  if ((dep ? j.invoice.deposit : j.invoice.online)?.session === s.id) return;
+  const amt = (s.amount_total || 0) / 100, day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+  const pi = typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id || "";
+  if (dep) j.invoice.deposit = { amount: amt, at: Date.now(), date: day, via: "Card", session: s.id, pi };
+  else {
+    j.invoice.paid = true; j.invoice.paidVia = "Card"; j.invoice.paidDate = day;
+    j.invoice.online = { at: Date.now(), amount: amt, session: s.id, pi };
+  }
+  (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: dep ? "deposit paid online" : "paid online", at: Date.now(), by: "Customer" });
   const { error } = await db.from("records").update({ data: j }).eq("shop_id", shop).eq("kind", "job").eq("id", job);
   if (error) throw error;
   try {
@@ -66,7 +71,7 @@ async function invoicePaid(s: Stripe.Checkout.Session) {
     if (!k || !ids.length) return;
     webpush.setVapidDetails("mailto:info@honestechservice.com", k.public_key, k.private_key);
     const { data: subs } = await db.from("push_subs").select("endpoint, p256dh, auth").in("user_id", ids);
-    const payload = JSON.stringify({ title: `💳 ${j.info?.customer || "A customer"} paid $${amt.toFixed(2)}`, body: `Invoice ${j.invoice.num || ""} is marked paid.`, url: "./?job=" + encodeURIComponent(job), tag: "paid-" + job });
+    const payload = JSON.stringify({ title: `💳 ${j.info?.customer || "A customer"} paid ${dep ? "a " : ""}$${amt.toFixed(2)}${dep ? " deposit" : ""}`, body: dep ? `Estimate ${j.est?.num || ""}. It comes off the final invoice.` : `Invoice ${j.invoice.num || ""} is marked paid.`, url: "./?job=" + encodeURIComponent(job), tag: "paid-" + job });
     await Promise.all((subs || []).map((x) => webpush.sendNotification({ endpoint: x.endpoint, keys: { p256dh: x.p256dh, auth: x.auth } }, payload, { TTL: 86400 }).catch(() => {})));
   } catch (e) { console.error("notify", e); }
 }
@@ -82,7 +87,7 @@ Deno.serve(async (req) => {
   try {
     if (event.account && (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded")) {
       const s = event.data.object as Stripe.Checkout.Session;
-      if (s.metadata?.kind === "invoice") await invoicePaid(s);
+      if (s.metadata?.kind === "invoice" || s.metadata?.kind === "deposit") await invoicePaid(s);
     } else if (event.type === "checkout.session.completed") {
       const s = event.data.object as Stripe.Checkout.Session;
       const shopId = s.client_reference_id;

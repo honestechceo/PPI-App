@@ -103,7 +103,7 @@ async function save(shop: string, raw: string, source: string, extra: Record<str
   if (error) throw error;
   if (!filtered && !extra.notice) {
     const name = (raw.match(/^\s*(?:full name|name|customer(?: name)?|your name)\s*\*?\s*:\s*(.+)$/im) || [])[1] || "";
-    await notifyManagers(shop, "New request" + (source === "website" ? " from your website" : ""), [EMPTY.test(name) ? "" : name.trim(), c.phone].filter(Boolean).join(" · ") || "Open the app to see it");
+    await notifyManagers(shop, source === "booking" ? "📅 New online booking" : "New request" + (source === "website" ? " from your website" : ""), [EMPTY.test(name) ? "" : name.trim(), c.phone].filter(Boolean).join(" · ") || "Open the app to see it");
   }
   return { ok: true, id, filtered: filtered || undefined };
 }
@@ -185,11 +185,22 @@ function estState(j: Record<string, any>) {
   if (j.status === "done" || (j.invoice && j.invoice.num && j.docMode === "inv")) return "closed";
   return "open";
 }
-async function estGet(code: string) {
+async function estGet(code: string, sess = "") {
   const m = await readLink(code);
   if (!m || !m.est) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
-  const j = await loadJob(m);
+  let j = await loadJob(m);
   if (!j) return out({ error: "This estimate is no longer available. Ask the shop to send it again." }, 404);
+  // coming back from paying the deposit: confirm it right away
+  if (sess && /^cs_[A-Za-z0-9_]+$/.test(sess) && !j.invoice?.deposit) {
+    const acct = await payAcct(m.shop!);
+    if (acct) {
+      try {
+        const s = await stripe.checkout.sessions.retrieve(sess, { stripeAccount: acct });
+        if (s.payment_status === "paid" && s.metadata?.kind === "deposit" && s.metadata?.job === m.job && s.metadata?.shop === m.shop) { await markDeposit(m.shop!, m.job!, s); j = (await loadJob(m)) || j; }
+      } catch (e) { console.error("deposit check", e); }
+    }
+  }
+  const dep = Number((m.est as any).deposit) || 0, depPaid = Number(j.invoice?.deposit?.amount) || 0;
   const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
   const state = estState(j);
@@ -198,6 +209,7 @@ async function estGet(code: string) {
     slots: j.pending ? slotsOf(j).filter((x) => x.d >= today) : [],
     booked: !j.pending && j.info?.date ? { d: j.info.date, t: j.info.time || "" } : null,
     approved: state === "approved" ? { name: j.est?.online?.name || j.sig?.est?.name || "", at: j.est?.online?.at || 0, ask: j.est?.online?.ask || "" } : null,
+    deposit: dep, depositPaid: depPaid, canPay: dep > 0 && !depPaid && !j.invoice?.paid && !!(await payAcct(m.shop!)),
   });
 }
 async function estApprove(req: Request) {
@@ -266,6 +278,20 @@ async function markPaid(shop: string, job: string, s: Stripe.Checkout.Session) {
   await notifyManagers(shop, `💳 ${j.info?.customer || "A customer"} paid $${amt.toFixed(2)}`, `Invoice ${j.invoice.num || ""} is marked paid. The money goes to your Stripe account.`, "./?job=" + encodeURIComponent(job), "paid-" + job);
   return true;
 }
+async function markDeposit(shop: string, job: string, s: Stripe.Checkout.Session) {
+  const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", shop).eq("kind", "job").eq("id", job).maybeSingle();
+  if (!row || row.deleted) return false;
+  const j = row.data as Record<string, any>;
+  j.invoice = j.invoice || {};
+  if (j.invoice.deposit && j.invoice.deposit.session === s.id) return true;
+  const amt = (s.amount_total || 0) / 100;
+  j.invoice.deposit = { amount: amt, at: Date.now(), date: nyDate(), via: "Card", session: s.id, pi: typeof s.payment_intent === "string" ? s.payment_intent : s.payment_intent?.id || "" };
+  (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "deposit paid online", at: Date.now(), by: "Customer" });
+  const { error } = await db.from("records").update({ data: j }).eq("shop_id", shop).eq("kind", "job").eq("id", job);
+  if (error) throw error;
+  await notifyManagers(shop, `💳 ${j.info?.customer || "A customer"} paid a $${amt.toFixed(2)} deposit`, `Estimate ${j.est?.num || ""}. It comes off the final invoice.`, "./?job=" + encodeURIComponent(job), "dep-" + job);
+  return true;
+}
 async function payGet(code: string, sess: string) {
   const m = await readLink(code);
   if (!m || !m.pay) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
@@ -276,7 +302,7 @@ async function payGet(code: string, sess: string) {
   if (sess && acct && !j.invoice?.paid && /^cs_[A-Za-z0-9_]+$/.test(sess)) {
     try {
       const s = await stripe.checkout.sessions.retrieve(sess, { stripeAccount: acct });
-      if (s.payment_status === "paid" && s.metadata?.job === m.job && s.metadata?.shop === m.shop) { await markPaid(m.shop!, m.job!, s); j.invoice = { ...(j.invoice || {}), paid: true, online: { amount: (s.amount_total || 0) / 100 } }; }
+      if (s.payment_status === "paid" && s.metadata?.kind === "invoice" && s.metadata?.job === m.job && s.metadata?.shop === m.shop) { await markPaid(m.shop!, m.job!, s); j.invoice = { ...(j.invoice || {}), paid: true, online: { amount: (s.amount_total || 0) / 100 } }; }
     } catch (e) { console.error("session check", e); }
   }
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
@@ -288,6 +314,7 @@ async function payStart(req: Request) {
     const body = await req.json().catch(() => ({}));
     const code = String(body.code || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
     const m = await readLink(code);
+    if (body.kind === "deposit") return await depositStart(m, code);
     if (!m || !m.pay || !m.shop || !m.job) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
     const j = await loadJob(m);
     if (!j) return out({ error: "This invoice is no longer available." }, 404);
@@ -309,6 +336,101 @@ async function payStart(req: Request) {
     }, { stripeAccount: acct });
     return out({ url: s.url });
   } catch (e) { console.error(e); return out({ error: "Couldn't open the card payment page. Try again in a minute." }, 500); }
+}
+
+async function depositStart(m: Link | null, code: string) {
+  if (!m || !m.est || !m.shop || !m.job) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
+  const j = await loadJob(m);
+  if (!j) return out({ error: "This estimate is no longer available." }, 404);
+  if (j.invoice?.deposit) return out({ error: "The deposit is already paid. Thank you!" }, 409);
+  if (estState(j) !== "approved") return out({ error: "Approve the estimate first." }, 409);
+  const acct = await payAcct(m.shop);
+  if (!acct) return out({ error: "The shop doesn't take card payments online yet." }, 409);
+  const p = m.est as Record<string, any>;
+  const cents = Math.round((Number(p.deposit) || 0) * 100);
+  if (cents < 50) return out({ error: "No deposit is needed for this estimate." }, 400);
+  const back = `https://honestechmobileapp.com/e/?c=${code}`;
+  const s = await stripe.checkout.sessions.create({
+    mode: "payment",
+    line_items: [{ quantity: 1, price_data: { currency: "usd", unit_amount: cents, product_data: { name: `Deposit · Estimate ${clip(p.num, 40)}`.trim() + (p.veh ? ` · ${clip(p.veh, 60)}` : ""), description: clip(p.biz, 120) || undefined } } }],
+    payment_intent_data: { description: `Deposit · Estimate ${clip(p.num, 40)} · ${clip(p.custFull || p.cust, 60)}`, metadata: { shop: m.shop, job: m.job, num: clip(p.num, 40), kind: "deposit" }, ...(FEE_BPS ? { application_fee_amount: Math.floor(cents * FEE_BPS / 10000) } : {}) },
+    metadata: { kind: "deposit", shop: m.shop, job: m.job, code },
+    locale: p.lang === "es" ? "es" : "en",
+    success_url: back + "&s={CHECKOUT_SESSION_ID}",
+    cancel_url: back,
+  }, { stripeAccount: acct });
+  return out({ url: s.url });
+}
+
+// ---------- online booking page (honestechmobileapp.com/b/?KEY) ----------
+// Customers pick a service and an open time from the shop's schedule. It arrives in Requests (nothing is booked by itself).
+type BookCfg = { days: number[]; start: string; end: string; len: number; lead: number; ahead: number; svcs: { n: string; p: string }[] };
+function bookCfg(s: Record<string, any>): BookCfg {
+  const days = Array.isArray(s.bookDays) && s.bookDays.length ? s.bookDays.map(Number).filter((d: number) => d >= 0 && d <= 6) : [1, 2, 3, 4, 5, 6];
+  const tm = (v: unknown, d: string) => /^\d{2}:\d{2}$/.test(String(v || "")) ? String(v) : d;
+  const svcs = String(s.bookSvcs || "").split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 30).map((l) => { const [n, p] = l.split("|").map((x) => x.trim()); return { n: clip(n, 80), p: clip(p || "", 30) }; });
+  return { days, start: tm(s.bookStart, "08:00"), end: tm(s.bookEnd, "17:00"), len: Math.max(30, Math.min(480, Number(s.bookLen) || 120)), lead: Math.max(0, Math.min(168, Number(s.bookLead) || 12)), ahead: Math.max(3, Math.min(60, Number(s.bookAhead) || 21)), svcs };
+}
+const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + (m || 0); };
+const nyNow = () => { const p = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()); const g = (t: string) => p.find((x) => x.type === t)?.value || "00"; return { d: `${g("year")}-${g("month")}-${g("day")}`, m: (Number(g("hour")) % 24) * 60 + Number(g("minute")) }; };
+const addDay = (d: string, n: number) => new Date(Date.parse(d + "T12:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+async function bookSlots(shop: string, cfg: BookCfg) {
+  const now = nyNow(), from = now.d, to = addDay(from, cfg.ahead);
+  const busy: Record<string, [number, number][]> = {};
+  const add = (d: string, t: string, len: number) => { if (!d || !t || !/^\d{2}:\d{2}/.test(t)) return; const a = toMin(t); (busy[d] = busy[d] || []).push([a, a + len]); };
+  const { data: jobs } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "job").eq("deleted", false).gte("data->info->>date", from).lte("data->info->>date", to);
+  for (const r of jobs || []) { const j = r.data as Record<string, any>; if (j.pending || ["canceled", "done"].includes(j.status) || j.declined) continue; add(j.info?.date, j.info?.time, Number(j.info?.dur) || cfg.len); }
+  const { data: reqs } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "request").eq("deleted", false).eq("data->>status", "new").eq("data->>booking", "true");
+  for (const r of reqs || []) { const q = r.data as Record<string, any>; add(q.date, q.time, cfg.len); }
+  const out: { d: string; t: string[] }[] = [];
+  for (let k = 0; k <= cfg.ahead; k++) {
+    const d = addDay(from, k), dow = new Date(d + "T12:00:00Z").getUTCDay();
+    if (!cfg.days.includes(dow)) continue;
+    const ts: string[] = [];
+    for (let a = toMin(cfg.start); a + cfg.len <= toMin(cfg.end); a += cfg.len) {
+      const mins = (k * 1440 + a) - now.m;
+      if (mins < cfg.lead * 60) continue;
+      if ((busy[d] || []).some(([x, y]) => a < y && x < a + cfg.len)) continue;
+      ts.push(`${String(Math.floor(a / 60)).padStart(2, "0")}:${String(a % 60).padStart(2, "0")}`);
+    }
+    if (ts.length) out.push({ d, t: ts });
+  }
+  return out;
+}
+async function bookShop(key: string) {
+  const shop = await shopFor(key);
+  if (!shop) return null;
+  const { data: st } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "settings").eq("id", "main").maybeSingle();
+  const s = (st?.data || {}) as Record<string, any>;
+  if (!s.bookOn) return null;
+  return { shop, s, cfg: bookCfg(s) };
+}
+async function bookGet(key: string) {
+  const b = await bookShop(key);
+  if (!b) return out({ error: "Online booking isn't available right now. Call or text the shop to book." }, 404);
+  const { s, cfg } = b;
+  return out({ biz: clip(s.biz, 120), phone: clip(s.phone, 40), area: clip(s.bookArea, 200), note: clip(s.bookNote, 400), len: cfg.len, svcs: cfg.svcs, slots: await bookSlots(b.shop, cfg) });
+}
+async function bookPost(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (body.website) return out({ ok: true });   // honeypot
+    const b = await bookShop(String(body.key || ""));
+    if (!b) return out({ error: "Online booking isn't available right now. Call or text the shop to book." }, 404);
+    const name = clip(body.name, 80).trim(), phone = clip(body.phone, 30).trim(), digits = phone.replace(/\D/g, "");
+    if (name.length < 2) return out({ error: "Type your name" }, 400);
+    if (digits.length < 10) return out({ error: "Type a phone number we can text" }, 400);
+    const slot = body.slot && typeof body.slot === "object" ? { d: clip(body.slot.d, 10), t: clip(body.slot.t, 5) } : null;
+    if (!slot) return out({ error: "Pick a day and time" }, 400);
+    const open = await bookSlots(b.shop, b.cfg);
+    if (!open.some((x) => x.d === slot.d && x.t.includes(slot.t))) return out({ error: "That time was just taken. Pick another one." }, 409);
+    const f = { email: clip(body.email, 120).trim(), location: clip(body.address, 200).trim(), year: clip(body.year, 4).trim(), make: clip(body.make, 40).trim(), model: clip(body.model, 60).trim(), work: clip(body.svc, 120).trim(), notes: clip(body.notes, 1000).trim() };
+    const lang = body.lang === "es" ? "es" : "";
+    const raw = [`Name: ${name}`, `Phone: ${phone}`, f.email && `Email: ${f.email}`, f.location && `Address: ${f.location}`, (f.year || f.make || f.model) && `Vehicle: ${[f.year, f.make, f.model].filter(Boolean).join(" ")}`, f.work && `Service: ${f.work}`, `Requested time: ${fmtSlot(slot)}`, f.notes && `Notes: ${f.notes}`].filter(Boolean).join("\n");
+    const r = await save(b.shop, raw, "booking", { parsed: true, booking: "true", customer: name, phone, ...f, date: slot.d, time: slot.t, type: /pre-?purchase|\bppi\b|inspection before/i.test(f.work) ? "ppi" : "service", ...(lang ? { lang } : {}) });
+    if (!r.ok) return out({ error: "Too many requests right now. Call or text the shop." }, 429);
+    return out({ ok: true });
+  } catch (e) { console.error(e); return out({ error: "Something went wrong. Try again, or call the shop." }, 500); }
 }
 
 function fmtSlot(x: Slot) {
@@ -369,8 +491,10 @@ Deno.serve(async (req) => {
       return out({ code });
     } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
   }
-  if (req.method === "GET" && new URL(req.url).searchParams.get("e")) return await estGet(new URL(req.url).searchParams.get("e") || "");
+  if (req.method === "GET" && new URL(req.url).searchParams.get("e")) return await estGet(new URL(req.url).searchParams.get("e") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "approve") return await estApprove(req);
+  if (req.method === "GET" && new URL(req.url).searchParams.get("bk")) return await bookGet(new URL(req.url).searchParams.get("bk") || "");
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "book") return await bookPost(req);
   if (req.method === "GET" && new URL(req.url).searchParams.get("p")) return await payGet(new URL(req.url).searchParams.get("p") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "pay") return await payStart(req);
   if (req.method === "GET") {

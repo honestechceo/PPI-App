@@ -147,6 +147,15 @@ async function fromResend(req: Request) {
   return out(await save(shop, (subject ? `Subject: ${subject}\n` : "") + body, "email", { from: clip(from, 200) }));
 }
 
+// two-step sign-in: a login that has an authenticator set up must have entered its code (aal2)
+async function mfaBlocked(token: string, uid: string) {
+  let aal = "aal1";
+  try { let p = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"); p += "=".repeat((4 - p.length % 4) % 4); aal = JSON.parse(atob(p)).aal || "aal1"; } catch (_) { /* treat as aal1 */ }
+  if (aal === "aal2") return false;
+  const { data } = await db.auth.admin.mfa.listFactors({ userId: uid });
+  return (data?.factors || []).some((f: { status: string }) => f.status === "verified");
+}
+
 // ---------- online estimate approval (honestechmobileapp.com/e/?CODE) ----------
 type Slot = { d: string; t?: string };
 type Link = { path?: string; exp?: number; shop?: string; job?: string; est?: Record<string, unknown>; pay?: Record<string, unknown> };
@@ -332,6 +341,7 @@ Deno.serve(async (req) => {
       const { data: ud } = await db.auth.getUser(token);
       const me = ud?.user;
       if (!me) return out({ error: "Please sign in again" }, 401);
+      if (await mfaBlocked(token, me.id)) return out({ error: "Enter your 6-digit sign-in code first" }, 401);
       const body = await req.json().catch(() => ({}));
       const path = String(body.path || "");
       const shop = path.split("/")[0];

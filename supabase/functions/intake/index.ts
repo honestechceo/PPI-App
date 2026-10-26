@@ -205,7 +205,7 @@ async function estGet(code: string, sess = "") {
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
   const state = estState(j);
   return out({
-    ...m.est, state, pdf: sg?.signedUrl || "",
+    ...m.est, ...(await shopBrand(m.shop!)), state, pdf: sg?.signedUrl || "",
     slots: j.pending ? slotsOf(j).filter((x) => x.d >= today) : [],
     booked: !j.pending && j.info?.date ? { d: j.info.date, t: j.info.time || "" } : null,
     approved: state === "approved" ? { name: j.est?.online?.name || j.sig?.est?.name || "", at: j.est?.online?.at || 0, ask: j.est?.online?.ask || "" } : null,
@@ -307,7 +307,7 @@ async function payGet(code: string, sess: string) {
   }
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
   const paid = !!j.invoice?.paid;
-  return out({ ...m.pay, pdf: sg?.signedUrl || "", state: paid ? "paid" : acct ? "open" : "nopay", paidAmount: j.invoice?.online?.amount || 0, paidVia: j.invoice?.paidVia || "" });
+  return out({ ...m.pay, ...(await shopBrand(m.shop!)), pdf: sg?.signedUrl || "", state: paid ? "paid" : acct ? "open" : "nopay", paidAmount: j.invoice?.online?.amount || 0, paidVia: j.invoice?.paidVia || "" });
 }
 async function payStart(req: Request) {
   try {
@@ -409,7 +409,7 @@ async function bookGet(key: string) {
   const b = await bookShop(key);
   if (!b) return out({ error: "Online booking isn't available right now. Call or text the shop to book." }, 404);
   const { s, cfg } = b;
-  return out({ biz: clip(s.biz, 120), phone: clip(s.phone, 40), area: clip(s.bookArea, 200), note: clip(s.bookNote, 400), len: cfg.len, svcs: cfg.svcs, slots: await bookSlots(b.shop, cfg) });
+  return out({ ...(await shopBrand(b.shop, s)), biz: clip(s.biz, 120), phone: clip(s.phone, 40), area: clip(s.bookArea, 200), note: clip(s.bookNote, 400), len: cfg.len, svcs: cfg.svcs, slots: await bookSlots(b.shop, cfg) });
 }
 async function bookPost(req: Request) {
   try {
@@ -431,6 +431,15 @@ async function bookPost(req: Request) {
     if (!r.ok) return out({ error: "Too many requests right now. Call or text the shop." }, 429);
     return out({ ok: true });
   } catch (e) { console.error(e); return out({ error: "Something went wrong. Try again, or call the shop." }, 500); }
+}
+
+// the shop's logo and accent color for the customer pages
+async function shopBrand(shop: string, s0?: Record<string, any>) {
+  let s = s0;
+  if (!s) { const { data: st } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "settings").eq("id", "main").maybeSingle(); s = (st?.data || {}) as Record<string, any>; }
+  const logo = typeof s.logo === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(s.logo) && s.logo.length < 400000 ? s.logo : "";
+  const accent = /^#[0-9a-f]{6}$/i.test(String(s.themeAccent || "")) ? String(s.themeAccent) : "";
+  return { logo, accent };
 }
 
 function fmtSlot(x: Slot) {

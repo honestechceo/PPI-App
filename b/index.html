@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Book a mobile mechanic</title>
+<meta name="theme-color" content="#0f141a">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#dfe5eb;--accent:#1f6feb;--ok:#1a7f37;--bad:#c62828}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%}
+main{max-width:560px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom))}
+.top{text-align:center;padding:10px 0 4px}
+.top .biz{font-weight:800;font-size:20px;letter-spacing:.01em}
+.top .sub{color:var(--mute);font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+h2{font-size:17px;margin:0 0 10px}
+.row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.row:first-of-type{border-top:0}
+.row .a{white-space:nowrap;font-variant-numeric:tabular-nums}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:19px;padding-top:10px;margin-top:4px;border-top:2px solid var(--ink)}
+.mute{color:var(--mute);font-size:14px}
+.btn{display:block;width:100%;min-height:50px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;text-align:center;text-decoration:none;padding:12px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-size:17px}
+.btn:disabled{opacity:.6}
+.btn+.btn{margin-top:10px}
+.opt{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:8px;cursor:pointer;min-height:52px}
+.opt input{width:22px;height:22px;accent-color:var(--accent);margin:0;flex:none}
+.opt:has(input:checked){border-color:var(--accent);background:#eef4ff}
+input[type=text],textarea{width:100%;font:inherit;border:1px solid var(--line);border-radius:10px;padding:12px;min-height:48px;background:#fff;color:var(--ink)}
+textarea{min-height:70px;margin-top:8px}
+label.l{display:block;font-weight:700;margin:14px 0 6px}
+.pad{position:relative;border:1.5px dashed #9aa8b5;border-radius:12px;background:#fff;height:170px;touch-action:none}
+.pad canvas{position:absolute;inset:0;width:100%;height:100%;border-radius:12px}
+.pad .ph{position:absolute;left:0;right:0;bottom:18px;text-align:center;color:#9aa8b5;pointer-events:none;border-top:1px solid #d5dce3;margin:0 18px;padding-top:4px;font-size:13px}
+.clr{background:none;border:0;color:var(--accent);font:inherit;font-weight:700;padding:6px 0;cursor:pointer}
+.err{color:var(--bad);font-weight:600;margin:10px 0 0}
+.done{text-align:center;padding:26px 16px}
+.done .big{font-size:52px;line-height:1}
+.done h2{font-size:22px;margin:10px 0 6px}
+.fine{font-size:13px;color:var(--mute);margin:12px 0}
+.foot{text-align:center;color:var(--mute);font-size:12px;margin-top:22px}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}
+  .opt:has(input:checked){background:#16263d}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;min-height:44px}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}
+.days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch}
+.day{flex:0 0 auto;width:64px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:8px 0;text-align:center;font:inherit;cursor:pointer;scroll-snap-align:start}
+.day small{display:block;font-size:12px;color:var(--mute);font-weight:600}
+.day b{display:block;font-size:20px}
+.day[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#fff}.day[aria-pressed=true] small{color:#dbe7ff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.grid3{display:grid;grid-template-columns:80px 1fr 1fr;gap:8px}
+.svc-p{font-weight:600;color:var(--mute);font-size:14px;margin-left:auto}
+.opt span{flex:1}
+.lang{display:inline-block;margin-top:8px;background:none;border:1px solid var(--line);border-radius:999px;padding:6px 10px;font:inherit;font-size:13px;color:var(--mute);cursor:pointer}
+main{position:relative}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+</style>
+</head><body>
+<main id="app"><p class="mute" style="text-align:center;margin-top:40px">Loading…</p></main>
+<script>
+(function(){
+var API="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake";
+var key=(location.search.slice(1).split("&")[0]||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,"");
+var app=document.getElementById("app"),B=null,ES=/^es\b/i.test(navigator.language||""),F={svc:"",other:"",day:"",time:"",name:"",phone:"",email:"",address:"",year:"",make:"",model:"",notes:""},BUSY=false,ERR="",DONE=false;
+try{var sv=JSON.parse(localStorage.getItem("bk-"+key)||"null");if(sv){["name","phone","email","address","year","make","model"].forEach(function(k){if(sv[k])F[k]=sv[k];});}}catch(e){}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function T(en,es){return ES?es:en;}
+function fmtD(d,o){try{return new Date(d+"T12:00:00").toLocaleDateString(ES?"es-US":"en-US",o);}catch(e){return d;}}
+function fmtT(t){var p=t.split(":"),h=+p[0],m=+p[1]||0;return ((h+11)%12+1)+":"+(m<10?"0":"")+m+" "+(h<12?"AM":"PM");}
+function fmtLen(m){return m%60?(m/60).toFixed(1).replace(/\.0$/,"")+" h":(m/60)+" h";}
+function grab(){["name","phone","email","address","year","make","model","notes","other"].forEach(function(k){var el=document.getElementById("f-"+k);if(el)F[k]=el.value;});}
+function render(){if(!B)return;document.documentElement.lang=ES?"es":"en";document.title=T("Book ","Agendar con ")+(B.biz||"");
+  var head='<div class="top"><div class="biz">'+esc(B.biz)+'</div><div class="sub">'+esc(T("Book a mobile mechanic","Agende un mecánico a domicilio"))+(B.area?" · "+esc(B.area):"")+'</div><button class="lang" type="button" id="lang">'+(ES?"English":"Español")+'</button></div>';
+  if(DONE){app.innerHTML=head+'<div class="card done"><div class="big">📅</div><h2>'+esc(T("Request sent","Solicitud enviada"))+'</h2><p>'+esc(T("You asked for ","Pidió el "))+'<strong>'+esc(fmtD(F.day,{weekday:"long",month:"long",day:"numeric"})+(ES?" a las ":" at ")+fmtT(F.time))+'</strong>.</p><p class="mute">'+esc(B.biz)+esc(T(" will text you to confirm the time and price."," le escribirá para confirmar la hora y el precio."))+'</p></div>'+foot();bind();return;}
+  var svcs=(B.svcs||[]).map(function(s){return '<label class="opt"><input type="radio" name="svc" value="'+esc(s.n)+'"'+(F.svc===s.n?" checked":"")+'><span>'+esc(s.n)+'</span>'+(s.p?'<span class="svc-p">'+esc(s.p)+'</span>':"")+'</label>';}).join("");
+  var other='<label class="opt"><input type="radio" name="svc" value="__o"'+(F.svc==="__o"||!(B.svcs||[]).length?" checked":"")+'><span>'+esc(T("Something else / not sure","Otra cosa / no estoy seguro"))+'</span></label>';
+  var showOther=F.svc==="__o"||!(B.svcs||[]).length;
+  var days=(B.slots||[]).map(function(x){return '<button type="button" class="day" data-day="'+x.d+'" aria-pressed="'+(F.day===x.d)+'"><small>'+esc(fmtD(x.d,{weekday:"short"}))+'</small><b>'+esc(fmtD(x.d,{day:"numeric"}))+'</b><small>'+esc(fmtD(x.d,{month:"short"}))+'</small></button>';}).join("");
+  var dsel=(B.slots||[]).filter(function(x){return x.d===F.day;})[0];
+  var times=dsel?'<div class="chips" style="margin-top:10px">'+dsel.t.map(function(t){return '<button type="button" class="chip" data-time="'+t+'" aria-pressed="'+(F.time===t)+'">'+fmtT(t)+'</button>';}).join("")+'</div>':'<p class="mute" style="margin:8px 0 0">'+esc(T("Pick a day to see open times.","Escoja un día para ver los horarios."))+'</p>';
+  app.innerHTML=head
+    +(B.note?'<div class="card"><p style="margin:0">'+esc(B.note)+'</p></div>':"")
+    +'<div class="card"><h2>'+esc(T("1. What do you need?","1. ¿Qué necesita?"))+'</h2>'+svcs+other+(showOther?'<textarea id="f-other" placeholder="'+esc(T("Describe the problem or service","Describa el problema o servicio"))+'">'+esc(F.other)+'</textarea>':"")
+    +'<label class="l">'+esc(T("Vehicle","Vehículo"))+'</label><div class="grid3"><input type="text" id="f-year" inputmode="numeric" maxlength="4" placeholder="'+esc(T("Year","Año"))+'" value="'+esc(F.year)+'"><input type="text" id="f-make" placeholder="'+esc(T("Make","Marca"))+'" value="'+esc(F.make)+'"><input type="text" id="f-model" placeholder="'+esc(T("Model","Modelo"))+'" value="'+esc(F.model)+'"></div></div>'
+    +'<div class="card"><h2>'+esc(T("2. Pick a time","2. Escoja un horario"))+'</h2>'+((B.slots||[]).length?'<div class="days">'+days+'</div>'+times+'<p class="mute" style="margin:10px 0 0">'+esc(T("Each visit takes about ","Cada visita dura unas "))+esc(fmtLen(B.len||120))+'.</p>':'<p style="margin:0">'+esc(T("No open times online right now. Call or text us to book.","No hay horarios disponibles en línea. Llámenos o escríbanos para agendar."))+'</p>')+'</div>'
+    +'<div class="card"><h2>'+esc(T("3. Your info","3. Sus datos"))+'</h2>'
+    +'<label class="l" for="f-name">'+esc(T("Name","Nombre"))+'</label><input type="text" id="f-name" autocomplete="name" value="'+esc(F.name)+'">'
+    +'<label class="l" for="f-phone">'+esc(T("Mobile phone","Celular"))+'</label><input type="text" id="f-phone" inputmode="tel" autocomplete="tel" value="'+esc(F.phone)+'">'
+    +'<label class="l" for="f-email">'+esc(T("Email (optional)","Correo (opcional)"))+'</label><input type="text" id="f-email" inputmode="email" autocomplete="email" value="'+esc(F.email)+'">'
+    +'<label class="l" for="f-address">'+esc(T("Where's the car?","¿Dónde está el carro?"))+'</label><input type="text" id="f-address" autocomplete="street-address" placeholder="'+esc(T("Street, town","Calle, ciudad"))+'" value="'+esc(F.address)+'">'
+    +'<label class="l" for="f-notes">'+esc(T("Anything else? (optional)","¿Algo más? (opcional)"))+'</label><textarea id="f-notes">'+esc(F.notes)+'</textarea>'
+    +'<div class="hp"><label>Website<input type="text" id="f-website" tabindex="-1" autocomplete="off"></label></div>'
+    +'<button class="btn primary" type="button" id="go" style="margin-top:16px"'+(BUSY?" disabled":"")+'>'+esc(BUSY?T("Sending…","Enviando…"):T("Request this time","Pedir este horario"))+'</button>'
+    +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'<p class="fine" style="text-align:center">'+esc(T("This sends a request. We'll text you to confirm.","Esto envía una solicitud. Le escribimos para confirmar."))+'</p></div>'
+    +(B.phone?'<a class="btn" href="tel:'+esc(String(B.phone).replace(/[^\d+]/g,""))+'">📞 '+esc(T("Call ","Llamar a "))+esc(B.biz)+'</a>':"")+foot();
+  bind();}
+function bind(){var l=document.getElementById("lang");if(l)l.onclick=function(){grab();ES=!ES;render();};
+  app.querySelectorAll("input[name=svc]").forEach(function(r){r.onchange=function(){grab();F.svc=r.value;render();};});
+  app.querySelectorAll("[data-day]").forEach(function(b){b.onclick=function(){grab();F.day=b.dataset.day;F.time="";render();var t=app.querySelector("[data-time]");if(t)t.scrollIntoView({block:"nearest",behavior:"smooth"});};});
+  app.querySelectorAll("[data-time]").forEach(function(b){b.onclick=function(){grab();F.time=b.dataset.time;render();};});
+  var g=document.getElementById("go");if(g)g.onclick=send;}
+function foot(){return '<p class="foot">'+esc(T("Booking by Honestech Mobile App","Reservas con Honestech Mobile App"))+'</p>';}
+function send(){if(BUSY)return;grab();ERR="";
+  var svc=F.svc==="__o"||!(B.svcs||[]).length?F.other.trim():F.svc;
+  if(!svc)ERR=T("Tell us what you need.","Díganos qué necesita.");
+  else if(!F.day||!F.time)ERR=T("Pick a day and time.","Escoja un día y una hora.");
+  else if(F.name.trim().length<2)ERR=T("Type your name.","Escriba su nombre.");
+  else if(F.phone.replace(/\D/g,"").length<10)ERR=T("Type a phone number we can text.","Escriba un número al que podamos escribirle.");
+  else if(!F.address.trim())ERR=T("Tell us where the car is.","Díganos dónde está el carro.");
+  if(ERR){render();var e=app.querySelector(".err");if(e)e.scrollIntoView({block:"center"});return;}
+  BUSY=true;render();
+  var body={key:key,name:F.name.trim(),phone:F.phone.trim(),email:F.email.trim(),address:F.address.trim(),year:F.year.trim(),make:F.make.trim(),model:F.model.trim(),svc:svc,notes:F.notes.trim(),slot:{d:F.day,t:F.time},lang:ES?"es":"en",website:(document.getElementById("f-website")||{}).value||""};
+  try{localStorage.setItem("bk-"+key,JSON.stringify({name:body.name,phone:body.phone,email:body.email,address:body.address,year:body.year,make:body.make,model:body.model}));}catch(e){}
+  fetch(API+"?act=book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
+    .then(function(x){BUSY=false;if(x[0]&&x[1].ok){DONE=true;render();window.scrollTo(0,0);return;}ERR=x[1].error||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/just taken/.test(ERR)){F.time="";return load(true);}render();})
+    .catch(function(){BUSY=false;ERR=T("No connection. Check your signal and try again.","Sin conexión. Revise su señal e intente de nuevo.");render();});}
+function load(keepErr){fetch(API+"?bk="+encodeURIComponent(key)).then(function(r){return r.json().then(function(d){return [r.ok,d];});}).then(function(x){
+    if(!x[0]){app.innerHTML='<div class="card done"><div class="big">📅</div><p>'+esc(x[1].error||"Online booking isn't available right now.")+'</p></div>';return;}
+    B=x[1];if(!keepErr)ERR="";if(B.slots&&B.slots.length&&!B.slots.some(function(s){return s.d===F.day;}))F.day=B.slots[0].d;render();})
+  .catch(function(){app.innerHTML='<div class="card done"><p>Couldn\'t load. Check your connection and refresh.</p></div>';});}
+if(key.length<8){app.innerHTML='<div class="card done"><p>This booking link is incomplete.</p></div>';return;}
+load();
+})();
+</script>
+</body></html>

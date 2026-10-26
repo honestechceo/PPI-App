@@ -46,7 +46,8 @@ label.l{display:block;font-weight:700;margin:14px 0 6px}
 <script>
 (function(){
 var API="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake";
-var code=(location.search.slice(1)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,"");
+var qs=new URLSearchParams(location.search),raw=location.search.slice(1).split("&")[0];
+var code=(qs.get("c")||(/=/.test(raw)?"":raw)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,""),sess=(qs.get("s")||"").replace(/[^A-Za-z0-9_]/g,""),DBUSY=false;
 var app=document.getElementById("app"),E=null,ES=false,PICK=null,OTHER=false,BUSY=false,ERR="",inked=false;
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
 function T(en,es){return ES?es:en;}
@@ -67,7 +68,7 @@ function render(){
     app.innerHTML=head()+'<div class="card done"><div class="big">✅</div><h2>'+esc(T("Estimate approved","Presupuesto aprobado"))+'</h2>'
       +(b?'<p>'+esc(T("You're booked for ","Su cita es el "))+'<strong>'+esc(slot(b))+'</strong>.</p>':'<p>'+esc(T("Thanks! We'll text you to set the day and time.","¡Gracias! Le escribimos para acordar el día y la hora."))+'</p>')
       +(E.approved&&E.approved.ask&&!b?'<p class="mute">'+esc(T("You asked for: ","Pidió: "))+esc(E.approved.ask)+'</p>':"")
-      +'<p class="mute">'+esc(T("We'll send a reminder before the appointment.","Le mandamos un recordatorio antes de la cita."))+'</p></div>'
+      +'<p class="mute">'+esc(T("We'll send a reminder before the appointment.","Le mandamos un recordatorio antes de la cita."))+'</p></div>'+depCard()
       +(E.pdf?'<a class="btn" style="margin-top:14px" href="'+esc(E.pdf)+'" target="_blank" rel="noopener">📄 '+esc(T("See the estimate (PDF)","Ver el presupuesto (PDF)"))+'</a>':"")+ask()+foot();return;}
   if(E.state!=="open"){app.innerHTML=head()+summary()+'<div class="card"><p style="margin:0">'+esc(T("This estimate is closed. Text us if you have any questions.","Este presupuesto ya está cerrado. Escríbanos si tiene alguna pregunta."))+'</p></div>'+(E.phone?'<div style="margin-top:14px">'+ask()+'</div>':"")+foot();return;}
   var sl=E.slots||[];
@@ -79,6 +80,7 @@ function render(){
     +'<label class="l" for="nm">'+esc(T("Your name","Su nombre"))+'</label><input type="text" id="nm" autocomplete="name" value="'+esc(E.custFull||"")+'">'
     +'<label class="l">'+esc(T("Sign with your finger","Firme con el dedo"))+'</label><div class="pad"><canvas id="cv"></canvas><div class="ph">'+esc(T("Sign here","Firme aquí"))+'</div></div>'
     +'<button class="clr" type="button" id="clr">'+esc(T("Clear","Borrar"))+'</button>'
+    +(E.deposit>0&&E.canPay?'<p class="fine" style="margin-bottom:0"><strong>'+esc(T("Deposit: ","Depósito: "))+money(E.deposit)+'</strong> '+esc(T("by card after you approve. It comes off your final invoice.","con tarjeta después de aprobar. Se descuenta de su factura final."))+'</p>':"")
     +'<p class="fine">'+esc(T("By signing, you approve the work and price above. If more work turns out to be needed, we'll check with you first.","Al firmar, aprueba el trabajo y el precio de arriba. Si hace falta más trabajo, le consultamos primero."))+'</p>'
     +'<button class="btn primary" type="button" id="go"'+(BUSY?" disabled":"")+'>'+esc(BUSY?T("Sending…","Enviando…"):T("✓ Approve estimate","✓ Aprobar presupuesto"))+'</button>'
     +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'</div>'+(E.phone?'<div style="margin-top:14px">'+ask()+'</div>':"")+foot();
@@ -86,6 +88,18 @@ function render(){
   app.querySelectorAll('input[name=t]').forEach(function(r){r.addEventListener("change",function(){var keep=keepVals();if(r.value==="o"){OTHER=true;PICK=null;}else{OTHER=false;PICK=+r.value;}render();restore(keep);});});
   document.getElementById("go").addEventListener("click",approve);
   document.getElementById("clr").addEventListener("click",function(){var c=document.getElementById("cv");c.getContext("2d").clearRect(0,0,c.width,c.height);inked=false;app.querySelector(".ph").style.display="";});}
+function depCard(){if(!(E.deposit>0))return "";
+  if(E.depositPaid)return '<div class="card"><p style="margin:0">✅ <strong>'+esc(T("Deposit paid: ","Depósito pagado: "))+money(E.depositPaid)+'</strong>. '+esc(T("It comes off your final invoice.","Se descuenta de su factura final."))+'</p></div>';
+  if(!E.canPay)return "";
+  return '<div class="card"><h2>'+esc(T("Deposit to hold your appointment","Depósito para apartar su cita"))+'</h2><p style="margin:0 0 12px">'+esc(T("A deposit of ","Se pide un depósito de "))+'<strong>'+money(E.deposit)+'</strong>'+esc(T(" holds your time and covers parts. It comes off your final invoice."," para apartar su horario y cubrir las piezas. Se descuenta de su factura final."))+'</p>'
+    +'<button class="btn primary" type="button" id="dep"'+(DBUSY?" disabled":"")+'>'+esc(DBUSY?T("Opening…","Abriendo…"):T("💳 Pay ","💳 Pagar ")+money(E.deposit)+T(" deposit"," de depósito"))+'</button><div class="mute" style="text-align:center;margin-top:8px">'+esc(T("Card · Apple Pay · Google Pay","Tarjeta · Apple Pay · Google Pay"))+'</div>'
+    +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'</div>';}
+function payDep(){if(DBUSY)return;DBUSY=true;ERR="";render();
+  fetch(API+"?act=pay",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code:code,kind:"deposit"})}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
+    .then(function(x){if(x[0]&&x[1].url){location.href=x[1].url;return;}DBUSY=false;ERR=x[1].error||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/already paid/.test(ERR))return load();render();})
+    .catch(function(){DBUSY=false;ERR=T("No connection. Check your signal and try again.","Sin conexión. Revise su señal e intente de nuevo.");render();});}
+document.addEventListener("click",function(e){if(e.target&&e.target.id==="dep")payDep();});
+window.addEventListener("pageshow",function(e){if(e.persisted&&E){DBUSY=false;load();}});
 function foot(){return '<p class="foot">'+esc(T("Sent with Honestech Mobile App","Enviado con Honestech Mobile App"))+'</p>';}
 var INK=null;
 function keepVals(){var c=document.getElementById("cv");return {nm:(document.getElementById("nm")||{}).value,ask:(document.getElementById("ask")||{}).value,ink:inked&&c?c.toDataURL():null};}
@@ -109,11 +123,11 @@ function approve(){if(BUSY)return;var sl=E.slots||[],nm=(document.getElementById
   BUSY=true;render();restore(keep);
   fetch(API+"?act=approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
     .then(function(x){BUSY=false;if(!x[0]||!x[1].ok){ERR=(x[1]&&x[1].error)||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/isn't available anymore/.test(ERR))return load();render();restore(keep);return;}
-      E.state="approved";E.booked=x[1].booked||null;E.approved={name:nm,ask:body.slot?"":askv};render();window.scrollTo(0,0);})
+      E.state="approved";E.booked=x[1].booked||null;E.approved={name:nm,ask:body.slot?"":askv};render();window.scrollTo(0,0);if(E.deposit>0)setTimeout(function(){var d=document.getElementById("dep");if(d)d.scrollIntoView({block:"center",behavior:"smooth"});},300);})
     .catch(function(){BUSY=false;ERR=T("No connection. Check your signal and try again.","Sin conexión. Revise su señal e intente de nuevo.");render();restore(keep);});}
-function load(){fetch(API+"?e="+encodeURIComponent(code)).then(function(r){return r.json().then(function(d){return [r.ok,d];});}).then(function(x){
+function load(){fetch(API+"?e="+encodeURIComponent(code)+(sess?"&s="+encodeURIComponent(sess):"")).then(function(r){return r.json().then(function(d){return [r.ok,d];});}).then(function(x){
     if(!x[0]){app.innerHTML='<div class="card done"><div class="big">🔗</div><p>'+esc(x[1].error||"This link has expired. Ask the shop to send it again.")+'</p></div>';return;}
-    E=x[1];ES=E.lang==="es";render();})
+    E=x[1];ES=E.lang==="es";DBUSY=false;render();if(sess&&history.replaceState){history.replaceState(null,"",location.pathname+"?"+code);sess="";}})
   .catch(function(){app.innerHTML='<div class="card done"><p>Couldn\'t load the estimate. Check your connection and refresh.</p></div>';});}
 if(code.length<6){app.innerHTML='<div class="card done"><p>This link is incomplete. Ask the shop to send it again.</p></div>';return;}
 load();

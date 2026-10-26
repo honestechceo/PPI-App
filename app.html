@@ -548,7 +548,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .slot-add{display:flex;gap:6px;flex-wrap:wrap;align-items:center}.slot-add input{flex:1 1 130px;min-width:0}
 .est-book{border:2px solid var(--accent);border-radius:12px;padding:10px 12px;margin:8px 0}.est-book .check{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:15px;width:100%}.est-book .formh{font-size:16px}.est-book .slot-add{margin:4px 0 6px}
 .est-booked{border:2px solid #2b8a3e;border-radius:12px;padding:10px 12px}
-.mfa-set{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.mfa-set .acts,.mfa-box .acts{display:flex;flex-wrap:wrap;gap:8px}.mfa-qr{width:190px;height:190px;background:#fff;padding:8px;border-radius:10px;align-self:flex-start}.mfa-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}.mfa-code{font-size:24px!important;letter-spacing:.3em;text-align:center;max-width:220px}.mfa-secret{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all}
+.mfa-set{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.mfa-set .acts,.mfa-box .acts{display:flex;flex-wrap:wrap;gap:8px}.mfa-qr{width:190px;height:190px;image-rendering:pixelated;background:#fff;padding:8px;border-radius:10px;align-self:flex-start}.mfa-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}.mfa-code{font-size:24px!important;letter-spacing:.3em;text-align:center;max-width:220px}.mfa-secret{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all}
 .book-days{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.chip-t{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 12px;font:inherit;font-weight:600;min-height:40px}.chip-t[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .pay-online{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--bg);display:flex;flex-direction:column;gap:8px}.pay-online .acts{display:flex;flex-wrap:wrap;gap:8px}
 .job.pend{display:block}.job.pend .who{margin-bottom:2px}
@@ -1274,6 +1274,12 @@ async function authCall(path,token,{method="GET",body}={}){
   let r;try{r=await fetch(SUPA_URL+path,{method,headers:{"apikey":SUPA_KEY,"Content-Type":"application/json","Authorization":"Bearer "+token},body:body===undefined?undefined:JSON.stringify(body)});}catch(e){throw {code:"offline",msg:"No connection"};}
   const txt=await r.text();let j=null;try{j=txt?JSON.parse(txt):null;}catch(e){}
   if(!r.ok){const m=(j&&(j.msg||j.message||j.error_description||j.error))||("Error "+r.status);throw {code:"http",status:r.status,msg:String(m)};}return j;}
+// the QR picture: drawn here from the setup link (Supabase's own SVG doesn't show in Safari because it isn't URL-encoded)
+async function mfaQrSrc(t){
+  try{if(t.uri&&await loadQr()){const q=window.qrcode(0,"M");q.addData(t.uri);q.make();return q.createDataURL(6,4);}}catch(e){}
+  let qr=String(t.qr_code||"");const m=/^data:image\/svg\+xml;(?:charset=)?utf-?8,([\s\S]*)$/i.exec(qr);
+  if(m){let svg=m[1];try{if(/^%3C/i.test(svg))svg=decodeURIComponent(svg);}catch(e){}qr="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);}
+  return qr;}
 async function mfaList(token){const u=await authCall("/auth/v1/user",token);return ((u&&u.factors)||[]).filter(f=>(f.factor_type||f.type)==="totp");}
 async function mfaVerified(token){return (await mfaList(token)).find(f=>f.status==="verified")||null;}
 async function mfaCheck(token,factorId,code){code=String(code||"").replace(/\D/g,"");if(code.length!==6)throw {msg:"Type the 6-digit code from your authenticator app"};
@@ -1326,7 +1332,7 @@ document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.c
   if(a==="start"){if(MFA.busy)return;MFA.busy=true;MFA.err="";mfaRender();
     try{await freshToken();for(const f of (await mfaList(AUTH.access_token)).filter(f=>f.status!=="verified")){await authCall(`/auth/v1/factors/${f.id}`,AUTH.access_token,{method:"DELETE"}).catch(()=>{});}
       const r=await authCall("/auth/v1/factors",AUTH.access_token,{method:"POST",body:{factor_type:"totp",friendly_name:"Authenticator "+new Date().toISOString().slice(0,16),issuer:"Honestech"}});
-      MFA.enroll={id:r.id,qr:r.totp&&r.totp.qr_code,secret:r.totp&&r.totp.secret,uri:r.totp&&r.totp.uri};MFA.busy=false;}
+      MFA.enroll={id:r.id,qr:await mfaQrSrc(r.totp||{}),secret:r.totp&&r.totp.secret,uri:r.totp&&r.totp.uri};MFA.busy=false;}
     catch(x){fail(x);}mfaRender();setTimeout(()=>document.getElementById("mfaSet")?.scrollIntoView({block:"start",behavior:"smooth"}),60);return;}
   if(a==="copy"){copyText((MFA.enroll&&MFA.enroll.secret)||"");return;}
   if(a==="cancel"){const E=MFA.enroll;MFA.enroll=null;MFA.err="";mfaRender();if(E)authCall(`/auth/v1/factors/${E.id}`,AUTH.access_token,{method:"DELETE"}).catch(()=>{});return;}

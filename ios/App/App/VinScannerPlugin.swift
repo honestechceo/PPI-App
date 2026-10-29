@@ -2,14 +2,13 @@ import Foundation
 import UIKit
 import AVFoundation
 import Vision
-import VisionKit
 import Capacitor
 
-// VIN scanner for the iPhone app, using Apple's own readers:
-//  - scan():      live camera with Live Text (VisionKit DataScanner, iPhone XS and newer, iOS 16+).
-//                 Reads the VIN barcode AND the printed VIN text (door jamb label, windshield plate).
-//  - readImage(): a photo the user took; Vision finds barcodes and text in it (any iPhone).
-// Both return { vin, checkOk, source } or { cancelled: true } / { vin: null }.
+// VIN scanner for the iPhone app.
+//  - scan():      full-screen camera with a scan box. Apple's Vision reads the VIN barcode
+//                 or the printed VIN text inside the box (door jamb label, windshield plate).
+//  - readImage(): reads a photo the user took (barcodes + text).
+// Both resolve { vin, checkOk, source } — or { cancelled: true } / { denied: true } / { vin: null }.
 @objc(VinScannerPlugin)
 public class VinScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "VinScannerPlugin"
@@ -19,41 +18,42 @@ public class VinScannerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "scan", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readImage", returnType: CAPPluginReturnPromise)
     ]
-    private var live: AnyObject?   // keeps the live scanner session alive while it's on screen
 
     @objc func isAvailable(_ call: CAPPluginCall) {
-        Task { @MainActor in
-            if #available(iOS 16.0, *) {
-                call.resolve(["available": DataScannerViewController.isSupported])
-            } else {
-                call.resolve(["available": false])
-            }
-        }
+        call.resolve(["available": AVCaptureDevice.default(for: .video) != nil])
     }
 
     @objc func scan(_ call: CAPPluginCall) {
-        guard #available(iOS 16.0, *) else { call.resolve(["available": false]); return }
         AVCaptureDevice.requestAccess(for: .video) { granted in
             Task { @MainActor in
-                guard DataScannerViewController.isSupported else { call.resolve(["available": false]); return }
                 guard granted else { call.resolve(["denied": true]); return }
-                guard DataScannerViewController.isAvailable else { call.resolve(["available": false]); return }
                 guard let host = self.bridge?.viewController else { call.reject("No screen to show the scanner on"); return }
-                let session = LiveVinScan(call: call) { [weak self] in self?.live = nil }
-                self.live = session
-                session.present(on: host)
+                let vc = VinCameraViewController { result in call.resolve(result) }
+                vc.modalPresentationStyle = .fullScreen
+                host.present(vc, animated: true)
             }
         }
     }
 
     @objc func readImage(_ call: CAPPluginCall) {
         guard let b64 = call.getString("data"), let data = Data(base64Encoded: b64.components(separatedBy: ",").last ?? b64),
-              let img = UIImage(data: data), let cg = img.cgImage else {
+              let img = UIImage(data: data) else {
             call.reject("Couldn't read that photo"); return
         }
+        VinPhotoReader.read(img) { m in
+            if let m = m { call.resolve(["vin": m.vin, "checkOk": m.checkOk, "source": m.source]) }
+            else { call.resolve(["vin": NSNull()]) }
+        }
+    }
+}
+
+// Reads a still photo: barcodes first, then any check-digit-valid text.
+enum VinPhotoReader {
+    static func read(_ img: UIImage, done: @escaping (VinMatch?) -> Void) {
+        guard let cg = img.cgImage else { done(nil); return }
         let orientation = CGImagePropertyOrientation(img.imageOrientation)
         DispatchQueue.global(qos: .userInitiated).async {
-            var found: [(String, String)] = []   // (text, source)
+            var found: [(String, String)] = []
             let barcodes = VNDetectBarcodesRequest()
             barcodes.symbologies = [.code39, .code128, .dataMatrix, .qr, .pdf417]
             let text = VNRecognizeTextRequest()
@@ -63,17 +63,13 @@ public class VinScannerPlugin: CAPPlugin, CAPBridgedPlugin {
             try? handler.perform([barcodes, text])
             for o in barcodes.results ?? [] { if let p = o.payloadStringValue { found.append((p, "barcode")) } }
             for o in text.results ?? [] { for c in o.topCandidates(3) { found.append((c.string, "text")) } }
-            // barcode first, then any check-digit-valid text, then a barcode without a valid check digit
             var best: VinMatch? = nil
             for (s, src) in found {
                 guard let m = VinMatch.find(in: s, source: src) else { continue }
                 if m.checkOk && (best == nil || !best!.checkOk || (src == "barcode" && best!.source != "barcode")) { best = m }
                 else if best == nil && src == "barcode" { best = m }
             }
-            DispatchQueue.main.async {
-                if let b = best { call.resolve(["vin": b.vin, "checkOk": b.checkOk, "source": b.source]) }
-                else { call.resolve(["vin": NSNull()]) }
-            }
+            DispatchQueue.main.async { done(best) }
         }
     }
 }
@@ -114,119 +110,317 @@ struct VinMatch {
     }
 }
 
-@available(iOS 16.0, *)
-@MainActor
-final class LiveVinScan: NSObject, DataScannerViewControllerDelegate {
-    private let call: CAPPluginCall
-    private let done: () -> Void
-    private var scanner: DataScannerViewController?
+// Runs Vision on camera frames (off the main thread) and reports VINs it reads inside the scan box.
+final class VinFrameReader: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    private let lock = NSLock()
+    private var roi = CGRect(x: 0.05, y: 0.35, width: 0.9, height: 0.3)   // Vision coordinates (0-1, origin bottom-left)
+    private var busy = false
+    private var last = Date.distantPast
+    private var frame = 0
+    var onMatch: (@Sendable (VinMatch) -> Void)?
+
+    func setRegion(_ r: CGRect) { lock.lock(); roi = r; lock.unlock() }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        lock.lock()
+        if busy || Date().timeIntervalSince(last) < 0.12 { lock.unlock(); return }
+        busy = true; last = Date(); frame += 1
+        let region = roi, n = frame
+        lock.unlock()
+        defer { lock.lock(); busy = false; lock.unlock() }
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+
+        let barcodes = VNDetectBarcodesRequest()
+        barcodes.symbologies = [.code39, .code128, .dataMatrix, .qr, .pdf417]
+        barcodes.regionOfInterest = region
+        var requests: [VNRequest] = [barcodes]
+        // text is slower: read it on every other frame
+        let text = VNRecognizeTextRequest()
+        if n % 2 == 0 {
+            text.recognitionLevel = .accurate
+            text.usesLanguageCorrection = false
+            text.regionOfInterest = region
+            text.minimumTextHeight = 0.02
+            requests.append(text)
+        }
+        // the camera's frames are sideways; .right turns them upright for a phone held in portrait
+        let handler = VNImageRequestHandler(cvPixelBuffer: pixels, orientation: .right, options: [:])
+        try? handler.perform(requests)
+        var out: [VinMatch] = []
+        for o in barcodes.results ?? [] { if let p = o.payloadStringValue, let m = VinMatch.find(in: p, source: "barcode") { out.append(m) } }
+        if n % 2 == 0 {
+            for o in text.results ?? [] { for c in o.topCandidates(2) { if let m = VinMatch.find(in: c.string, source: "text") { out.append(m) } } }
+        }
+        for m in out { onMatch?(m) }
+    }
+}
+
+// The scanner screen: camera, dimmed surroundings, a scan box with corner brackets and a moving line.
+final class VinCameraViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    private let finishWith: ([String: Any]) -> Void
+    private let session = AVCaptureSession()
+    private let queue = DispatchQueue(label: "vin.camera")
+    private let reader = VinFrameReader()
+    private var device: AVCaptureDevice?
+    private var preview: AVCaptureVideoPreviewLayer!
+    private let dim = CAShapeLayer()
+    private let corners = CAShapeLayer()
+    private let line = CALayer()
+    private let hint = UILabel()
     private var finished = false
     private var seen: [String: Int] = [:]   // VINs without a valid check digit must be read 3 times
 
-    init(call: CAPPluginCall, done: @escaping () -> Void) { self.call = call; self.done = done }
+    init(finish: @escaping ([String: Any]) -> Void) {
+        self.finishWith = finish
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("not used") }
 
-    func present(on host: UIViewController) {
-        let s = DataScannerViewController(
-            recognizedDataTypes: [.barcode(symbologies: [.code39, .code128, .dataMatrix, .qr, .pdf417]), .text()],
-            qualityLevel: .accurate, recognizesMultipleItems: true, isHighFrameRateTrackingEnabled: false,
-            isPinchToZoomEnabled: true, isGuidanceEnabled: false, isHighlightingEnabled: true)
-        s.delegate = self
-        s.modalPresentationStyle = .fullScreen
-        addOverlay(to: s)
-        scanner = s
-        host.present(s, animated: true) { try? s.startScanning() }
+    override var prefersStatusBarHidden: Bool { true }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+
+    // the scan box: wide and short, a little above the middle
+    private var box: CGRect {
+        let b = view.bounds, w = b.width - 40, h = min(130, w * 0.32)
+        return CGRect(x: 20, y: b.midY - h / 2 - 60, width: w, height: h)
     }
 
-    private func addOverlay(to s: DataScannerViewController) {
-        let v = s.overlayContainerView
-        let hint = UILabel()
-        hint.text = "Point at the VIN on the door jamb label or windshield. It fills in by itself."
-        hint.numberOfLines = 0
-        hint.textAlignment = .center
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        preview = AVCaptureVideoPreviewLayer(session: session)
+        preview.videoGravity = .resizeAspectFill
+        view.layer.addSublayer(preview)
+
+        dim.fillRule = .evenOdd
+        dim.fillColor = UIColor.black.withAlphaComponent(0.55).cgColor
+        view.layer.addSublayer(dim)
+        corners.strokeColor = UIColor.white.cgColor
+        corners.fillColor = UIColor.clear.cgColor
+        corners.lineWidth = 5
+        corners.lineCap = .round
+        view.layer.addSublayer(corners)
+        line.backgroundColor = UIColor(red: 0.36, green: 0.85, blue: 0.85, alpha: 0.95).cgColor
+        line.shadowColor = line.backgroundColor
+        line.shadowOpacity = 0.9
+        line.shadowRadius = 4
+        line.shadowOffset = .zero
+        view.layer.addSublayer(line)
+
+        let title = UILabel()
+        title.text = "SCAN VIN"
+        title.textColor = .white
+        let titleFont: UIFont
+        if #available(iOS 16.0, *) { titleFont = .systemFont(ofSize: 20, weight: .heavy, width: .condensed) } else { titleFont = .systemFont(ofSize: 20, weight: .heavy) }
+        title.attributedText = NSAttributedString(string: "SCAN VIN", attributes: [.kern: 2.0, .font: titleFont, .foregroundColor: UIColor.white])
+        let close = pill("✕", action: #selector(cancelTapped), size: 20)
+        let light = pill("Light", action: #selector(lightTapped), size: 17)
+        hint.text = "Fit the VIN barcode or the printed VIN in the box"
         hint.textColor = .white
-        hint.font = .systemFont(ofSize: 16, weight: .semibold)
-        hint.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-        hint.layer.cornerRadius = 12
-        hint.clipsToBounds = true
-        hint.translatesAutoresizingMaskIntoConstraints = false
-        let cancel = UIButton(type: .system)
-        cancel.setTitle("Cancel", for: .normal)
-        cancel.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        cancel.tintColor = .white
-        cancel.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-        cancel.layer.cornerRadius = 22
-        cancel.contentEdgeInsets = UIEdgeInsets(top: 10, left: 22, bottom: 10, right: 22)
-        cancel.translatesAutoresizingMaskIntoConstraints = false
-        cancel.addTarget(self, action: #selector(cancelTapped), for: .touchUpInside)
-        let light = UIButton(type: .system)
-        light.setTitle("Light", for: .normal)
-        light.titleLabel?.font = .systemFont(ofSize: 18, weight: .semibold)
-        light.tintColor = .white
-        light.backgroundColor = UIColor.black.withAlphaComponent(0.55)
-        light.layer.cornerRadius = 22
-        light.contentEdgeInsets = UIEdgeInsets(top: 10, left: 22, bottom: 10, right: 22)
-        light.translatesAutoresizingMaskIntoConstraints = false
-        light.addTarget(self, action: #selector(lightTapped), for: .touchUpInside)
-        v.addSubview(hint); v.addSubview(cancel); v.addSubview(light)
-        let g = v.safeAreaLayoutGuide
+        hint.font = .systemFont(ofSize: 17, weight: .semibold)
+        hint.textAlignment = .center
+        hint.numberOfLines = 0
+        hint.layer.shadowColor = UIColor.black.cgColor
+        hint.layer.shadowOpacity = 0.8
+        hint.layer.shadowRadius = 4
+        hint.layer.shadowOffset = .zero
+        let photo = UIButton(type: .system)
+        photo.setTitle("Take photo instead", for: .normal)
+        photo.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
+        photo.setTitleColor(.black, for: .normal)
+        photo.backgroundColor = .white
+        photo.layer.cornerRadius = 12
+        photo.contentEdgeInsets = UIEdgeInsets(top: 14, left: 30, bottom: 14, right: 30)
+        photo.addTarget(self, action: #selector(photoTapped), for: .touchUpInside)
+        for v in [title, close, light, hint, photo] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; view.addSubview(v) }
+        let g = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            cancel.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
-            cancel.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 16),
-            light.topAnchor.constraint(equalTo: g.topAnchor, constant: 12),
-            light.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -16),
-            hint.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -24),
-            hint.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 20),
-            hint.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -20),
-            hint.heightAnchor.constraint(greaterThanOrEqualToConstant: 64)
+            close.topAnchor.constraint(equalTo: g.topAnchor, constant: 8),
+            close.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            close.widthAnchor.constraint(equalToConstant: 64), close.heightAnchor.constraint(equalToConstant: 48),
+            light.centerYAnchor.constraint(equalTo: close.centerYAnchor),
+            light.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            light.widthAnchor.constraint(equalToConstant: 64), light.heightAnchor.constraint(equalToConstant: 48),
+            title.centerYAnchor.constraint(equalTo: close.centerYAnchor),
+            title.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            photo.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -16),
+            photo.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            hint.bottomAnchor.constraint(equalTo: photo.topAnchor, constant: -14),
+            hint.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            hint.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24)
         ])
+
+        reader.onMatch = { [weak self] m in Task { @MainActor in self?.consider(m) } }
+        setUpCamera()
     }
 
-    @objc private func cancelTapped() { finish(["cancelled": true]) }
-
-    @objc private func lightTapped() {
-        guard let dev = AVCaptureDevice.default(for: .video), dev.hasTorch else { return }
-        do { try dev.lockForConfiguration(); dev.torchMode = dev.torchMode == .on ? .off : .on; dev.unlockForConfiguration() } catch {}
+    private func pill(_ t: String, action: Selector, size: CGFloat) -> UIButton {
+        let b = UIButton(type: .system)
+        b.setTitle(t, for: .normal)
+        b.titleLabel?.font = .systemFont(ofSize: size, weight: .semibold)
+        b.setTitleColor(.white, for: .normal)
+        b.backgroundColor = UIColor.white.withAlphaComponent(0.22)
+        b.layer.cornerRadius = 24
+        b.addTarget(self, action: action, for: .touchUpInside)
+        return b
     }
 
-    private func consider(_ items: [RecognizedItem]) {
-        guard !finished else { return }
-        var candidates: [VinMatch] = []
-        for item in items {
-            switch item {
-            case .barcode(let b): if let p = b.payloadStringValue, let m = VinMatch.find(in: p, source: "barcode") { candidates.append(m) }
-            case .text(let t): if let m = VinMatch.find(in: t.transcript, source: "text") { candidates.append(m) }
-            @unknown default: break
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        preview.frame = view.bounds
+        let r = box
+        let p = UIBezierPath(rect: view.bounds)
+        p.append(UIBezierPath(roundedRect: r, cornerRadius: 4))
+        dim.path = p.cgPath
+        let c = UIBezierPath(), L: CGFloat = 26, R: CGFloat = 10
+        // four rounded corner brackets
+        c.move(to: CGPoint(x: r.minX, y: r.minY + L)); c.addLine(to: CGPoint(x: r.minX, y: r.minY + R))
+        c.addQuadCurve(to: CGPoint(x: r.minX + R, y: r.minY), controlPoint: CGPoint(x: r.minX, y: r.minY)); c.addLine(to: CGPoint(x: r.minX + L, y: r.minY))
+        c.move(to: CGPoint(x: r.maxX - L, y: r.minY)); c.addLine(to: CGPoint(x: r.maxX - R, y: r.minY))
+        c.addQuadCurve(to: CGPoint(x: r.maxX, y: r.minY + R), controlPoint: CGPoint(x: r.maxX, y: r.minY)); c.addLine(to: CGPoint(x: r.maxX, y: r.minY + L))
+        c.move(to: CGPoint(x: r.maxX, y: r.maxY - L)); c.addLine(to: CGPoint(x: r.maxX, y: r.maxY - R))
+        c.addQuadCurve(to: CGPoint(x: r.maxX - R, y: r.maxY), controlPoint: CGPoint(x: r.maxX, y: r.maxY)); c.addLine(to: CGPoint(x: r.maxX - L, y: r.maxY))
+        c.move(to: CGPoint(x: r.minX + L, y: r.maxY)); c.addLine(to: CGPoint(x: r.minX + R, y: r.maxY))
+        c.addQuadCurve(to: CGPoint(x: r.minX, y: r.maxY - R), controlPoint: CGPoint(x: r.minX, y: r.maxY)); c.addLine(to: CGPoint(x: r.minX, y: r.maxY - L))
+        corners.path = c.cgPath
+        line.frame = CGRect(x: r.minX + 24, y: r.minY + 12, width: r.width - 48, height: 2)
+        line.removeAllAnimations()
+        let a = CABasicAnimation(keyPath: "position.y")
+        a.fromValue = r.minY + 12; a.toValue = r.maxY - 12
+        a.duration = 1.4; a.autoreverses = true; a.repeatCount = .infinity
+        a.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        line.add(a, forKey: "scan")
+        updateRegion()
+    }
+
+    // Vision reads only what's in the box (plus a little margin), in upright-image coordinates.
+    private func updateRegion() {
+        guard let d = device else { return }
+        let dims = CMVideoFormatDescriptionGetDimensions(d.activeFormat.formatDescription)
+        let imgW = CGFloat(min(dims.width, dims.height)), imgH = CGFloat(max(dims.width, dims.height))   // upright (portrait)
+        let b = view.bounds
+        let scale = max(b.width / imgW, b.height / imgH)   // aspect fill
+        let shownW = imgW * scale, shownH = imgH * scale
+        let offX = (shownW - b.width) / 2, offY = (shownH - b.height) / 2
+        let r = box.insetBy(dx: -16, dy: -28)
+        var x = (r.minX + offX) / shownW, w = r.width / shownW
+        var yTop = (r.minY + offY) / shownH, h = r.height / shownH
+        x = max(0, x); yTop = max(0, yTop); w = min(1 - x, w); h = min(1 - yTop, h)
+        reader.setRegion(CGRect(x: x, y: 1 - yTop - h, width: w, height: h))
+    }
+
+    private func setUpCamera() {
+        // A multi-camera device lets the phone switch to its close-focus lens on its own (Pro iPhones can't focus close with the main lens).
+        let types: [AVCaptureDevice.DeviceType] = [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+        let found = AVCaptureDevice.DiscoverySession(deviceTypes: types, mediaType: .video, position: .back).devices
+        guard let dev = types.lazy.compactMap({ t in found.first(where: { $0.deviceType == t }) }).first ?? AVCaptureDevice.default(for: .video),
+              let input = try? AVCaptureDeviceInput(device: dev) else {
+            hint.text = "The camera isn't available. Tap Take photo instead."
+            return
+        }
+        device = dev
+        session.beginConfiguration()
+        session.sessionPreset = session.canSetSessionPreset(.hd1920x1080) ? .hd1920x1080 : .high
+        if session.canAddInput(input) { session.addInput(input) }
+        let out = AVCaptureVideoDataOutput()
+        out.alwaysDiscardsLateVideoFrames = true
+        out.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange]
+        out.setSampleBufferDelegate(reader, queue: DispatchQueue(label: "vin.frames"))
+        if session.canAddOutput(out) { session.addOutput(out) }
+        session.commitConfiguration()
+
+        do {
+            try dev.lockForConfiguration()
+            if dev.isFocusModeSupported(.continuousAutoFocus) { dev.focusMode = .continuousAutoFocus }
+            if dev.isAutoFocusRangeRestrictionSupported { dev.autoFocusRangeRestriction = .near }
+            if dev.isSmoothAutoFocusSupported { dev.isSmoothAutoFocusEnabled = false }
+            // Multi-camera devices start on the ultra-wide lens: begin at the main lens ("1x"); near a label the
+            // phone switches to its close-focus (macro) lens by itself.
+            let base = dev.virtualDeviceSwitchOverVideoZoomFactors.first.map { CGFloat(truncating: $0) } ?? 1
+            let macro = dev.deviceType == .builtInTripleCamera || dev.deviceType == .builtInDualWideCamera
+            // Apple's recommended zoom for close-up codes: if the lens can't focus as close as the label
+            // needs to be to fill the box, zoom in so the label can be held farther away and stay sharp.
+            var extra: CGFloat = 1
+            let minFocusMM = Float(dev.minimumFocusDistance)
+            if minFocusMM > 0 {
+                let dims = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription)
+                let wide = dev.activeFormat.videoFieldOfView * .pi / 180
+                // across the phone held upright = the sensor's short side
+                let fov = 2 * atan(tan(wide / 2) * Float(min(dims.width, dims.height)) / Float(max(dims.width, dims.height)))
+                let labelMM: Float = 60, fill: Float = 0.8
+                let needMM = (labelMM / fill) / 2 / tan(fov / 2)
+                if needMM < minFocusMM { extra = CGFloat(minFocusMM / needMM) }
             }
-        }
-        if let ok = candidates.first(where: { $0.checkOk }) { win(ok); return }
-        for m in candidates {
-            seen[m.vin, default: 0] += 1
-            if seen[m.vin]! >= 3 { win(m); return }   // e.g. European VINs, which have no check digit
-        }
+            extra = min(extra, macro ? 1.5 : 3)
+            dev.videoZoomFactor = max(dev.minAvailableVideoZoomFactor, min(base * extra, dev.activeFormat.videoMaxZoomFactor))
+            dev.unlockForConfiguration()
+        } catch {}
+        queue.async { [session] in session.startRunning() }
+    }
+
+    private func consider(_ m: VinMatch) {
+        guard !finished else { return }
+        if m.checkOk { win(m); return }
+        seen[m.vin, default: 0] += 1
+        if seen[m.vin]! >= 3 { win(m) }   // e.g. European VINs, which have no check digit
     }
 
     private func win(_ m: VinMatch) {
+        corners.strokeColor = UIColor.systemGreen.cgColor
+        line.isHidden = true
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        finish(["vin": m.vin, "checkOk": m.checkOk, "source": m.source])
+        hint.text = m.vin
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.finish(["vin": m.vin, "checkOk": m.checkOk, "source": m.source])
+        }
     }
 
     private func finish(_ result: [String: Any]) {
         guard !finished else { return }
         finished = true
-        if let dev = AVCaptureDevice.default(for: .video), dev.hasTorch, dev.torchMode == .on {
-            try? dev.lockForConfiguration(); dev.torchMode = .off; dev.unlockForConfiguration()
-        }
-        scanner?.stopScanning()
-        scanner?.dismiss(animated: true)
-        call.resolve(result)
-        done()
+        setTorch(false)
+        reader.onMatch = nil
+        queue.async { [session] in session.stopRunning() }
+        dismiss(animated: true) { self.finishWith(result) }
     }
 
-    func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) { consider(allItems) }
-    func dataScanner(_ dataScanner: DataScannerViewController, didUpdate updatedItems: [RecognizedItem], allItems: [RecognizedItem]) { consider(allItems) }
-    func dataScanner(_ dataScanner: DataScannerViewController, didTapOn item: RecognizedItem) { consider([item]) }
-    func dataScanner(_ dataScanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
-        finish(["available": false])
+    @objc private func cancelTapped() { finish(["cancelled": true]) }
+
+    @objc private func lightTapped() { setTorch(device?.torchMode != .on) }
+
+    private func setTorch(_ on: Bool) {
+        guard let d = device, d.hasTorch else { return }
+        do { try d.lockForConfiguration(); d.torchMode = on ? .on : .off; d.unlockForConfiguration() } catch {}
+    }
+
+    // "Take photo instead": the phone's camera, then the same reader on the still photo
+    @objc private func photoTapped() {
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else { return }
+        setTorch(false)
+        queue.async { [session] in session.stopRunning() }
+        let p = UIImagePickerController()
+        p.sourceType = .camera
+        p.delegate = self
+        present(p, animated: true)
+    }
+
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+        picker.dismiss(animated: true)
+        queue.async { [session] in session.startRunning() }
+    }
+
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        guard let img = info[.originalImage] as? UIImage else { return }
+        hint.text = "Reading the photo…"
+        VinPhotoReader.read(img) { [weak self] m in
+            guard let self = self else { return }
+            if let m = m { self.win(m) }
+            else {
+                self.hint.text = "No VIN found in that photo. Get closer so the VIN fills more of the picture, or try again."
+                self.queue.async { [session = self.session] in session.startRunning() }
+            }
+        }
     }
 }
 

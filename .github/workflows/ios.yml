@@ -73,6 +73,20 @@ jobs:
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/check.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/check.log" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$RUNNER_TEMP/check.log"; exit 1; }
           tail -20 "$RUNNER_TEMP/check.log"
+      - name: Self-check in the iPhone simulator
+        if: steps.mode.outputs.upload != 'true'
+        continue-on-error: true
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -path '*Debug-iphonesimulator/App.app' -maxdepth 6 | head -1)
+          DEV=$(xcrun simctl list devices available | grep -E 'iPhone 1[5-9]|iPhone 2' | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
+          echo "app=$APP device=$DEV"
+          xcrun simctl boot "$DEV" || true
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch --console-pty "$DEV" com.honestechmobileapp.app > "$RUNNER_TEMP/sim.log" 2>&1 &
+          sleep 40; kill $! 2>/dev/null || true
+          grep -a "HT-DIAG\|ERROR\|Error\|error" "$RUNNER_TEMP/sim.log" | head -20 | while IFS= read -r l; do echo "::notice::${l:0:900}"; done
+          tail -40 "$RUNNER_TEMP/sim.log"
       - name: App Store certificate and profile
         if: steps.mode.outputs.upload == 'true'
         run: |

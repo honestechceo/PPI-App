@@ -81,7 +81,14 @@ jobs:
           show_errors() { grep -E "error:|Error|failed|No profiles|No signing|requires a provisioning|not registered|Provisioning" "$1" | grep -v "warning:" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$1"; }
           KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
           KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
-          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          # rebuild the key file from its text, whatever happened to the line breaks when it was pasted
+          body=$(printf '%s' "$ASC_KEY_P8" | sed -e 's/\\n//g' -e 's/-----[A-Z ]*-----//g' | tr -d ' \r\n\t')
+          { echo "-----BEGIN PRIVATE KEY-----"; printf '%s\n' "$body" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
+          if ! openssl pkey -in "$KEY" -noout 2>/dev/null; then
+            echo "::error::The ASC_KEY_P8 secret isn't a complete Apple key (${#body} key characters found; a full key has about 200). Open the AuthKey .p8 file for the GitHub key, copy ALL of it, and paste it into the ASC_KEY_P8 secret again."
+            exit 1
+          fi
+          echo "Key file OK (${#body} characters)"
           AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
           BUILD=$((100 + ${{ github.run_number }}))
           echo "Version $APP_VERSION ($BUILD)"

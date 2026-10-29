@@ -1,0 +1,16 @@
+{
+  "appId": "com.honestechmobileapp.app",
+  "appName": "Honestech",
+  "webDir": "www",
+  "backgroundColor": "#0b1118",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#0b1118",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

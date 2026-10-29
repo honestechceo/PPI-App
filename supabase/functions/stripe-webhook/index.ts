@@ -5,7 +5,7 @@
 // Deploy with "Verify JWT" turned OFF (Stripe can't send a Supabase login).
 // Card payments on invoices: add a second Stripe webhook for "Connected accounts" (event checkout.session.completed)
 // pointing here, and save its signing secret as STRIPE_CONNECT_WEBHOOK_SECRET.
-import webpush from "npm:web-push@3.6.7";
+import { pushTo } from "../_shared/push.ts";
 import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -68,11 +68,9 @@ async function invoicePaid(s: Stripe.Checkout.Session) {
     const { data: k } = await db.from("push_keys").select("public_key, private_key").eq("id", 1).maybeSingle();
     const { data: members } = await db.from("shop_members").select("user_id, role").eq("shop_id", shop);
     const ids = (members || []).filter((m) => m.role === "owner" || m.role === "admin").map((m) => m.user_id);
-    if (!k || !ids.length) return;
-    webpush.setVapidDetails("mailto:info@honestechservice.com", k.public_key, k.private_key);
+    if (!ids.length) return;
     const { data: subs } = await db.from("push_subs").select("endpoint, p256dh, auth").in("user_id", ids);
-    const payload = JSON.stringify({ title: `💳 ${j.info?.customer || "A customer"} paid ${dep ? "a " : ""}$${amt.toFixed(2)}${dep ? " deposit" : ""}`, body: dep ? `Estimate ${j.est?.num || ""}. It comes off the final invoice.` : `Invoice ${j.invoice.num || ""} is marked paid.`, url: "./?job=" + encodeURIComponent(job), tag: "paid-" + job });
-    await Promise.all((subs || []).map((x) => webpush.sendNotification({ endpoint: x.endpoint, keys: { p256dh: x.p256dh, auth: x.auth } }, payload, { TTL: 86400 }).catch(() => {})));
+    await pushTo(db, subs || [], k || null, { title: `💳 ${j.info?.customer || "A customer"} paid ${dep ? "a " : ""}$${amt.toFixed(2)}${dep ? " deposit" : ""}`, body: dep ? `Estimate ${j.est?.num || ""}. It comes off the final invoice.` : `Invoice ${j.invoice.num || ""} is marked paid.`, url: "./?job=" + encodeURIComponent(job), tag: "paid-" + job });
   } catch (e) { console.error("notify", e); }
 }
 

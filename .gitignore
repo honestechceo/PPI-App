@@ -1,0 +1,3 @@
+# iPhone app build (made by the "iPhone app" GitHub workflow)
+node_modules/
+www/

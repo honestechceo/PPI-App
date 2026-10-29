@@ -1,0 +1,21 @@
+{
+  "name": "honestech-mobile-app",
+  "private": true,
+  "description": "Honestech Mobile Mechanic App: iPhone build (Capacitor). The web app itself needs none of this.",
+  "scripts": {
+    "www": "python3 build.py --www",
+    "sync": "python3 build.py --www && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/share": "^8.0.3",
+    "@capacitor/status-bar": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}

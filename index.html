@@ -21,7 +21,7 @@
 </style>
 <div id="splash" role="img" aria-label="Honestech Mobile Mechanic App"><div class="sp-mk"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true"><defs><linearGradient id="hbg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a2634"/><stop offset="1" stop-color="#080c11"/></linearGradient><radialGradient id="hgl" cx=".5" cy=".52" r=".42"><stop offset="0" stop-color="#28466e" stop-opacity=".55"/><stop offset="1" stop-color="#28466e" stop-opacity="0"/></radialGradient><linearGradient id="hor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffbe28"/><stop offset="1" stop-color="#ec7600"/></linearGradient><linearGradient id="hbl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#50aaff"/><stop offset="1" stop-color="#165ad7"/></linearGradient><linearGradient id="hst" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f5f8fc"/><stop offset="1" stop-color="#a0acba"/></linearGradient><mask id="hwm" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><rect width="1024" height="1024" fill="#000"/> <g fill="#fff"><rect x="230" y="466" width="564" height="92" rx="46"/><circle cx="210" cy="512" r="104"/><circle cx="814" cy="512" r="104"/></g> <g fill="#000"><rect x="44" y="469.5" width="178.5" height="85"/><circle cx="222.5" cy="512" r="42.5"/><rect x="801.5" y="469.5" width="178.5" height="85"/><circle cx="801.5" cy="512" r="42.5"/></g></mask><filter id="hol" x="-10%" y="-10%" width="120%" height="120%"><feMorphology in="SourceAlpha" operator="dilate" radius="7" result="d"/><feFlood flood-color="#0e141c"/><feComposite in2="d" operator="in" result="o"/><feMerge><feMergeNode in="o"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="hsh" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14"/></filter></defs><rect width="1024" height="1024" rx="225" fill="url(#hbg)"/><rect width="1024" height="1024" rx="225" fill="url(#hgl)"/><g opacity=".5" filter="url(#hsh)"><rect x="262" y="230" width="158" height="564" rx="34"/><rect x="604" y="230" width="158" height="564" rx="34"/></g><rect x="262" y="230" width="158" height="564" rx="34" fill="url(#hor)"/><rect x="604" y="230" width="158" height="564" rx="34" fill="url(#hbl)"/><g class="sp-wr" transform="rotate(20 512 522)"><g filter="url(#hol)"><rect width="1024" height="1024" fill="url(#hst)" mask="url(#hwm)"/></g></g></svg></div><div><div class="sp-w"><span style="color:#ffa31a">HONES</span><span style="color:#3b96ff">TECH</span></div><div class="sp-s">MOBILE MECHANIC APP</div></div><div class="sp-bar"><i></i></div></div>
 <script>(function(){var s=document.getElementById("splash");if(!s)return;
-  var app=false,seen=false;try{app=(window.navigator.standalone===true)||matchMedia("(display-mode: standalone)").matches||!!localStorage.getItem("honestech-auth");seen=!!sessionStorage.getItem("hs-splash");sessionStorage.setItem("hs-splash","1");}catch(e){}
+  var app=false,seen=false;try{app=!!window.Capacitor||(window.navigator.standalone===true)||matchMedia("(display-mode: standalone)").matches||!!localStorage.getItem("honestech-auth");seen=!!sessionStorage.getItem("hs-splash");sessionStorage.setItem("hs-splash","1");}catch(e){}
   if(!app||seen||/[?&]noSplash\b/.test(location.search)){s.remove();return;}
   var t0=Date.now(),gone=false;function done(){if(gone)return;gone=true;setTimeout(function(){s.classList.add("out");setTimeout(function(){s.remove();},420);},Math.max(0,1100-(Date.now()-t0)));}
   document.addEventListener("DOMContentLoaded",done);setTimeout(done,3500);})();</script>
@@ -1032,6 +1032,29 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
+/* ================= iPhone app (Capacitor) bridges. On the web, NATIVE is false and nothing here runs. ================= */
+const NATIVE=!!(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform());
+const CAP_PL={};
+function capPlugin(n){if(!NATIVE||typeof window.Capacitor.registerPlugin!=="function")return null;return CAP_PL[n]||(CAP_PL[n]=window.Capacitor.registerPlugin(n));}
+// links people open outside the app (gift, invite, password reset, billing return) must point at the real site
+const SITE_URL="https://honestechmobileapp.com/";
+const appURL=()=>NATIVE?SITE_URL:location.href.split(/[?#]/)[0];
+const blobB64=b=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(String(r.result).split(",")[1]||"");r.onerror=()=>no(r.error);r.readAsDataURL(b);});
+// the iPhone share sheet with real files (Save to Files, Messages, Mail, AirDrop, Print…)
+async function nativeShareFiles(files,text){const FS=capPlugin("Filesystem"),SH=capPlugin("Share");if(!FS||!SH)throw {msg:"Sharing isn't available"};
+  const uris=[];let k=0;
+  for(const f of files){const name=String(f.name||"file").replace(/[^\w.\-]+/g,"_").slice(-80)||"file";
+    const r=await FS.writeFile({path:`share/${Date.now()}-${k++}/${name}`,data:await blobB64(f),directory:"CACHE",recursive:true});uris.push(r.uri);}
+  try{await SH.share({files:uris,text:text||undefined});}
+  catch(e){const m=String(e&&(e.message||e.errorMessage)||e);if(/cancel/i.test(m))throw {name:"AbortError"};throw e;}}
+function nativeHaptic(kind){if(!NATIVE)return;const H=capPlugin("Haptics");if(!H)return;
+  (kind==="success"?H.notification({type:"SUCCESS"}):H.impact({style:"LIGHT"})).catch(()=>{});}
+function nativeStatusBar(){if(!NATIVE)return;const SB=capPlugin("StatusBar");if(!SB)return;
+  try{const cs=getComputedStyle(document.documentElement),bar=document.documentElement.classList.contains("bars-x")?cs.getPropertyValue("--bar-ink"):cs.getPropertyValue("--ink");
+    const c=String(bar).trim(),m=/^#?([0-9a-f]{6})$/i.exec(c)||null;let lightText=true;
+    if(m){const v=parseInt(m[1],16),L=(0.2126*(v>>16&255)+0.7152*(v>>8&255)+0.0722*(v&255))/255;lightText=L>0.5;}
+    else{const r=/rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(c);if(r){const L=(0.2126*r[1]+0.7152*r[2]+0.0722*r[3])/255;lightText=L>0.5;}}
+    const st=lightText?"DARK":"LIGHT";if(nativeStatusBar.last!==st){nativeStatusBar.last=st;SB.setStyle({style:st}).catch(()=>{});}}catch(e){}}
 /* ================= Inspection checklist, in field order ================= */
 const BASE_SECTIONS = [
   {id:"arrive", title:"Arrival & Documents", when:"<strong>Before anyone starts the car.</strong> Touch the hood and upper radiator hose to confirm the engine is cold, then match paperwork to the vehicle.",
@@ -1531,7 +1554,7 @@ function payOnlineHTML(){if(isTech())return "";
 (()=>{const m=/[?&]pay=(done|retry)\b/.exec(location.search);if(!m)return;history.replaceState(null,"",location.pathname);
   setTimeout(()=>{APP.view="settings";render();loadPaySt(true).then(()=>{render();setTimeout(()=>document.getElementById("payOnline")?.scrollIntoView({block:"center"}),80);
     toast(PAYST&&PAYST.ready?"Card payments are on":m[1]==="retry"?"That Stripe link expired. Tap Finish Stripe setup again":"Stripe is still reviewing a few details");});},400);})();
-async function openBilling(body){const r=await supa("/functions/v1/billing",{method:"POST",body:{...body,return_url:location.origin+location.pathname}});
+async function openBilling(body){const r=await supa("/functions/v1/billing",{method:"POST",body:{...body,return_url:appURL()}});
   if(!r||!r.url)throw {msg:(r&&r.error)||"Couldn't open the billing page"};location.href=r.url;}
 function planStatusLine(){const a=access();
   return a.kind==="account"?"No account yet":a.kind==="comp"?"Free forever (owner account)":a.kind==="paid"?`${a.plan==="team"?"Team":"Solo"} plan${a.status==="past_due"?" · payment problem, update your card":""}${a.end?` · renews ${fmtDate(String(a.end).slice(0,10),{month:"short",day:"numeric"})}`:""}`
@@ -1773,7 +1796,7 @@ let GIFT_NOTE="";
 const GIFTS={list:null,at:0,busy:false,msg:"",form:{name:"",contact:"",months:1}};
 async function loadGifts(){if(!AUTH||!PLAN||!PLAN.comp)return;try{const r=await supa("/rest/v1/rpc/list_gifts",{method:"POST",body:{}});GIFTS.list=Array.isArray(r)?r:[];GIFTS.at=Date.now();}catch(e){GIFTS.list=GIFTS.list||[];}
   if(APP.view==="settings")rerenderKeep();}
-const giftLink=t=>location.origin+location.pathname+"?gift="+String(t).replace(/"/g,"");
+const giftLink=t=>appURL()+"?gift="+String(t).replace(/"/g,"");
 function giftMsg(name,months,link){const first=(name||"").trim().split(/\s+/)[0];
   return `${first?first+", here":"Here"}'s ${mo(months)} free of the Honestech Mobile Mechanic App: book jobs, run inspections, send estimates and invoices, all from your phone. It's on top of the ${PRICES.trialDays}-day free trial, so ${mo(months+1)} free, no card needed. Tap to claim it: ${link}`;}
 function giftCardHTML(){
@@ -2096,7 +2119,7 @@ let RECOVERY=null;
   else if(q.get("error_code"))RECOVERY={err:q.get("error_code")==="otp_expired"?"That reset link has expired or was already used. Send a new one.":(q.get("error_description")||"That link didn't work. Send a new one.").replace(/\+/g," ")};
   history.replaceState(null,"",location.pathname+location.search);})();
 async function sendReset(email){email=String(email||"").trim().toLowerCase();if(!email)throw {msg:"Type your email first, then tap Forgot password"};
-  await supa("/auth/v1/recover?redirect_to="+encodeURIComponent(location.origin+location.pathname),{method:"POST",auth:false,body:{email}});}
+  await supa("/auth/v1/recover?redirect_to="+encodeURIComponent(appURL()),{method:"POST",auth:false,body:{email}});}
 async function setNewPassword(pw){if(!pw||pw.length<6)throw {msg:"Use a password with at least 6 characters"};
   const u=await supa("/auth/v1/user",{method:"PUT",auth:false,headers:{Authorization:"Bearer "+RECOVERY.token},body:{password:pw}});
   const email=(u&&u.email)||(u&&u.user&&u.user.email);RECOVERY=null;await cloudSignIn(email,pw,false);}
@@ -2479,7 +2502,7 @@ let TECH_NEW=null,TECH_DEL=null;
 let TEAM={at:0,list:[],busy:"",msg:""};
 function inviteTech(t){if(!t)return;TEAM.busy=t.id;TEAM.msg="";rerenderKeep();
     supa("/rest/v1/rpc/create_invite",{method:"POST",body:{p_tech_id:t.id,p_tech_name:t.name}}).then(tok=>{
-      const link=location.origin+location.pathname+"?invite="+String(tok).replace(/"/g,"");
+      const link=appURL()+"?invite="+String(tok).replace(/"/g,"");
       const msg=`Hi ${t.name.split(/\s+/)[0]}, join ${bizName()} on the Honestech Mobile Mechanic App to see the jobs I assign you. Tap to set up your login: ${link} Then add it to your home screen (the app shows you how) so you get job alerts.`;
       TEAM.busy="";TEAM.at=0;loadTeam();
       if(t.phone&&CAN_CAL){location.href=smsHref(t.phone,msg);toast("Invite ready. Send the text.");}
@@ -3473,7 +3496,7 @@ function custDetailHTML(c,js){
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const res=id=>S.results[id]||(S.results[id]={r:"",note:"",val:"",photos:[]});
-function toast(msg,ms){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms||2600)}
+function toast(msg,ms){nativeHaptic();const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,ms||2600)}
 const vehOf=(i)=>[i.year,i.make,i.model,i.trim].filter(Boolean).join(" ");
 function bizName(){return APP.settings.biz||"Your business name";}
 /* ---- distance from home base (address is private: used only here, never printed) ---- */
@@ -4214,7 +4237,7 @@ function applyTheme(){
   else{const c=themeColors(st);
     [["--accent",c.acc],["--accent-ink",c.ink],["--accent-soft",c.soft],["--bg",c.bg],["--surface",c.surf],["--line",c.line]].forEach(([k,v])=>root.style.setProperty(k,rgb2hex(v)));}
   const tc=document.querySelector('meta[name="theme-color"]');if(tc)tc.content=getComputedStyle(root).getPropertyValue("--surface").trim()||"#15202b";
-  applyBgImg(st);applyCards(st);applyText(st);applyBars(st);
+  applyBgImg(st);applyCards(st);applyText(st);applyBars(st);nativeStatusBar();
 }
 // text color inside the information blocks and outside them (on the page background / picture)
 const TEXT_COLORS=[["","Auto"],["#ffffff","White"],["#d7dde5","Light gray"],["#2b3440","Dark gray"],["#000000","Black"]];
@@ -4566,8 +4589,9 @@ async function getSaver(){
   if(IN_CLAUDE){const d=CLAUDE_DL||await CLAUDE_DL_READY;return d?{save:(filename,data)=>d.save({filename,data}).then(r=>r.status)}:null;}
   if(!webSaveAvailable())return null;
   return {save:async(filename,data)=>{
-    const type=/\.pdf$/i.test(filename)?"application/pdf":"text/plain";
+    const type=/\.pdf$/i.test(filename)?"application/pdf":/\.csv$/i.test(filename)?"text/csv":"text/plain";
     const blob=data instanceof Blob?data:new Blob([data],{type});
+    if(NATIVE){try{const f=new File([blob],filename,{type:blob.type||type});await nativeShareFiles([f]);return "saved";}catch(e){if(e&&e.name==="AbortError")throw {code:"declined"};throw e;}}
     let file=null;try{file=new File([blob],filename,{type:blob.type||type});}catch(e){}
     if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
       try{await navigator.share({files:[file]});return "saved";}
@@ -4768,6 +4792,8 @@ function buildIcs({uid,date,time,mins=60,title,location,desc,alarmMin}){
 }
 function openIcs(filename,text){
   if(!CAN_CAL){toast("Calendar reminders work in the home-screen app, not inside Claude.");return;}
+  if(NATIVE&&typeof SUPA_URL==="string"&&SUPA_URL){const b64=btoa(unescape(encodeURIComponent(text))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    if(b64.length<6000){openOutside(`${SUPA_URL}/functions/v1/intake?ics=${b64}`);toast("Tap Add to Calendar");return;}}
   const blob=new Blob([text],{type:"text/calendar;charset=utf-8"});
   const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;
   if(!IS_IOS)a.download=filename;
@@ -5020,8 +5046,9 @@ function shareMedia(){
   const ms=S.media||[],files=ms.map(m=>MEDIA_FILE[m.id]).filter(Boolean);
   if(files.length<ms.length&&ms.some(m=>!MEDIA_FILE[m.id]&&m.cloud===1)){toast("Downloading photos and videos… tap Send again in a moment.");preloadMedia(S,"all");return;}
   if(!files.length){toast("Still loading, try again in a second.");preloadMedia(S);return;}
-  if(!(navigator.canShare&&navigator.canShare({files}))){toast("Sharing photos and videos isn't supported here.");return;}
   const i=S.info,text=`${vehOf(i)||"Your vehicle"}: ${i.work||"service"} — photos and videos from ${bizName()}.`;
+  if(NATIVE){toast("Opening share…");nativeShareFiles(files,text).catch(e=>{if(e&&e.name!=="AbortError")toast("Couldn't share. Try fewer or shorter videos.");});return;}
+  if(!(navigator.canShare&&navigator.canShare({files}))){toast("Sharing photos and videos isn't supported here.");return;}
   navigator.share({files,text}).catch(e=>{if(e&&e.name!=="AbortError")toast("Couldn't share. Try fewer or shorter videos.");});
 }
 
@@ -5980,7 +6007,7 @@ document.addEventListener("input",mpiInput,true);document.addEventListener("chan
 
 
 /* ================= notifications: push + "text the tech" prompt ================= */
-const IS_STANDALONE=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+const IS_STANDALONE=NATIVE||(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
 /* ================= install guide: put the app on the home screen ================= */
 const INST_KEY="honestech-inst-later";let INST_PROMPT=null,INST_TAB="";
 window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();INST_PROMPT=e;try{if(APP.view==="jobs"){const y=window.scrollY;render();window.scrollTo(0,y);}}catch(x){}});
@@ -6048,14 +6075,27 @@ async function instNow(){if(!INST_PROMPT){openInstall();return;}const e=INST_PRO
 
 let PUSH={state:"",busy:false,msg:""};
 function pushState(){
+  if(NATIVE){if(!capPlugin("PushNotifications"))return "unsupported";return PUSH.state==="on"||localStorage.getItem("honestech-push")==="on"?"on":"off";}
   if(!("serviceWorker" in navigator)||!navigator.serviceWorker.controller&&!/github\.io$|honestechmobileapp\.com$/.test(location.hostname))return "unsupported";
   if(!("PushManager" in window)||!("Notification" in window))return IS_IOS&&!IS_STANDALONE?"needs-install":"unsupported";
   if(Notification.permission==="denied")return "denied";
   return PUSH.state==="on"||(Notification.permission==="granted"&&localStorage.getItem("honestech-push")==="on")?"on":"off";
 }
 const b64u=s=>{const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from([...b].map(c=>c.charCodeAt(0)));};
+async function nativePushToken(){const PN=capPlugin("PushNotifications");
+  let p=await PN.checkPermissions();if(p.receive==="prompt"||p.receive==="prompt-with-rationale")p=await PN.requestPermissions();
+  if(p.receive!=="granted")throw {msg:"Notifications are off for Honestech. Turn them on in your iPhone's Settings → Notifications → Honestech."};
+  const hs=[];const clear=()=>hs.forEach(h=>Promise.resolve(h).then(x=>x&&x.remove&&x.remove()).catch(()=>{}));
+  return await new Promise((ok,no)=>{let done=false;const fin=(f,v)=>{if(done)return;done=true;clear();f(v);};
+    hs.push(PN.addListener("registration",t=>fin(ok,t&&t.value)));
+    hs.push(PN.addListener("registrationError",e=>fin(no,{msg:"Couldn't turn on notifications"+(e&&e.error?": "+e.error:"")})));
+    PN.register().catch(e=>fin(no,{msg:"Couldn't turn on notifications"}));setTimeout(()=>fin(no,{msg:"Notifications didn't answer. Try again."}),20000);});}
+async function nativeSaveToken(tok){if(!tok||!AUTH)return;
+  await supa("/rest/v1/push_subs?on_conflict=endpoint",{method:"POST",body:[{endpoint:"apns:"+tok,user_id:AUTH.user_id,p256dh:"apns",auth:"apns",ua:"iPhone app"}],headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
+  try{localStorage.setItem("honestech-apns",tok);}catch(e){}}
 async function enablePush(){
   if(!AUTH)throw {msg:"Sign in first"};
+  if(NATIVE){await nativeSaveToken(await nativePushToken());PUSH.state="on";try{localStorage.setItem("honestech-push","on");}catch(e){}return;}
   const perm=await Notification.requestPermission();if(perm!=="granted")throw {msg:perm==="denied"?"Notifications are blocked. Turn them on for this app in your phone's Settings → Notifications.":"Notifications weren't allowed."};
   const reg=await navigator.serviceWorker.ready;
   const k=await supa("/functions/v1/notify",{method:"POST",body:{action:"key"}});if(!k||!k.key)throw {msg:"Couldn't reach the notification server"};
@@ -6065,7 +6105,11 @@ async function enablePush(){
   await supa("/rest/v1/push_subs?on_conflict=endpoint",{method:"POST",body:[{endpoint:j.endpoint,user_id:AUTH.user_id,p256dh:j.keys.p256dh,auth:j.keys.auth,ua:navigator.userAgent.slice(0,120)}],headers:{Prefer:"resolution=merge-duplicates,return=minimal"}});
   PUSH.state="on";try{localStorage.setItem("honestech-push","on");}catch(e){}
 }
-async function disablePush(){try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+async function disablePush(){
+  if(NATIVE){try{const tok=localStorage.getItem("honestech-apns");if(tok)await supa(`/rest/v1/push_subs?endpoint=eq.${encodeURIComponent("apns:"+tok)}`,{method:"DELETE"}).catch(()=>{});
+      localStorage.removeItem("honestech-apns");await capPlugin("PushNotifications").unregister().catch(()=>{});}catch(e){}
+    PUSH.state="off";try{localStorage.removeItem("honestech-push");}catch(e){}return;}
+  try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
   if(sub){await supa(`/rest/v1/push_subs?endpoint=eq.${encodeURIComponent(sub.endpoint)}`,{method:"DELETE"}).catch(()=>{});await sub.unsubscribe();}}catch(e){}
   PUSH.state="off";try{localStorage.removeItem("honestech-push");}catch(e){}}
 function pushCardHTML(compact){
@@ -6104,7 +6148,12 @@ let OPEN_JOB=null;
 (()=>{const m=/[?&]job=([^&]+)/.exec(location.search);if(m){OPEN_JOB=decodeURIComponent(m[1]);history.replaceState(null,"",location.pathname);}
   if(/[?&]view=requests\b/.test(location.search)){OPEN_JOB="@requests";history.replaceState(null,"",location.pathname);}})();
 function tryOpenJob(){if(!OPEN_JOB)return;if(OPEN_JOB==="@requests"){if(!AUTH||isTech())return;OPEN_JOB=null;APP.view="requests";render();window.scrollTo(0,0);return;}const j=APP.jobs.find(x=>String(x.id)===OPEN_JOB);if(j){OPEN_JOB=null;openJob(j.id);}}
-if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type==="open"&&d.url&&/[?&]view=requests\b/.test(d.url)){OPEN_JOB="@requests";if(AUTH)syncNow().then(tryOpenJob);return;}if(d.type==="open"&&d.url){const m=/[?&]job=([^&]+)/.exec(d.url);if(m){OPEN_JOB=decodeURIComponent(m[1]);tryOpenJob();if(OPEN_JOB&&AUTH)syncNow().then(tryOpenJob);}}});
+function openFromPush(url){if(!url)return;if(/[?&]view=requests\b/.test(url)){OPEN_JOB="@requests";if(AUTH)syncNow().then(tryOpenJob);return;}const m=/[?&]job=([^&]+)/.exec(url);if(m){OPEN_JOB=decodeURIComponent(m[1]);tryOpenJob();if(OPEN_JOB&&AUTH)syncNow().then(tryOpenJob);}}
+if("serviceWorker" in navigator)navigator.serviceWorker.addEventListener("message",e=>{const d=e.data||{};if(d.type==="open"&&d.url)openFromPush(d.url);});
+if(NATIVE&&capPlugin("PushNotifications")){const PN=capPlugin("PushNotifications");
+  PN.addListener("pushNotificationActionPerformed",a=>{const d=(a&&a.notification&&a.notification.data)||{};openFromPush(d.url||(d.aps&&d.aps.url)||"");});
+  // Apple can change a phone's push token; refresh it quietly on each launch when notifications are on
+  setTimeout(()=>{try{if(AUTH&&localStorage.getItem("honestech-push")==="on")PN.checkPermissions().then(p=>{if(p.receive==="granted")return nativePushToken().then(t=>{if(t&&t!==localStorage.getItem("honestech-apns"))return nativeSaveToken(t);});}).catch(()=>{});}catch(e){}},4000);}
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("button");if(!b)return;const a=b.dataset.act;if(!/^push/.test(a||""))return;e.stopPropagation();
   if(a==="pushOn"){PUSH.busy=true;PUSH.msg="";rerenderKeep();enablePush().then(()=>{PUSH.busy=false;rerenderKeep();toast("Notifications are on");}).catch(err=>{PUSH.busy=false;PUSH.msg=(err&&err.msg)||"Couldn't turn on notifications";rerenderKeep();});return;}
   if(a==="pushOff"){disablePush().then(()=>{rerenderKeep();toast("Notifications are off");});return;}
@@ -6565,7 +6614,7 @@ document.addEventListener("click",e=>{
   if(d.act==="pdfEstimate"){savePdf("estimate");return;}
   if(d.act==="demoadd"){addDemoData();render();toast("Sample jobs added");return;}
   if(d.act==="demodel"){if(APP.confirmDemo!==1){APP.confirmDemo=1;t.textContent="Tap again to remove";setTimeout(()=>{APP.confirmDemo=0;},4000);return;}APP.confirmDemo=0;removeDemoData();render();toast("Sample jobs removed");return;}
-  if(d.act==="paysetup"){if(PAYBUSY)return;PAYBUSY=true;rerenderKeep();supa("/functions/v1/billing",{method:"POST",body:{action:"pay_setup",return_url:location.origin+location.pathname}})
+  if(d.act==="paysetup"){if(PAYBUSY)return;PAYBUSY=true;rerenderKeep();supa("/functions/v1/billing",{method:"POST",body:{action:"pay_setup",return_url:appURL()}})
       .then(r=>{if(r&&r.url){PAYST=null;location.href=r.url;return;}throw {msg:(r&&r.error)||"Couldn't open Stripe"};})
       .catch(e=>{PAYBUSY=false;toast(/connect|platform/i.test((e&&e.msg)||"")?"Card payments aren't switched on for the app yet. Try again later.":(e&&e.msg)||"Couldn't open Stripe. Check your connection.");rerenderKeep();});return;}
   if(d.act==="payrefresh"){loadPaySt(true).then(()=>{rerenderKeep();toast(PAYST&&PAYST.ready?"Card payments are on":"Stripe still needs a few details");});return;}

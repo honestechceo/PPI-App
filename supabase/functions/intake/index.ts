@@ -6,7 +6,7 @@
 //      Each shop forwards to r-SHOPKEY@<receiving domain>. Needs secrets RESEND_API_KEY and RESEND_WEBHOOK_SECRET.
 // Requests with no usable phone or email (spam calls, "Not provided") and blocked numbers go to the shop's Filtered list
 // with no notification.
-import webpush from "npm:web-push@3.6.7";
+import { pushTo } from "../_shared/push.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import Stripe from "https://esm.sh/stripe@14.25.0?target=deno";
 
@@ -67,17 +67,11 @@ async function shopFor(key: string) {
 async function notifyManagers(shop: string, title: string, body: string, url = "./?view=requests", tag = "request") {
   try {
     const { data: k } = await db.from("push_keys").select("public_key, private_key").eq("id", 1).maybeSingle();
-    if (!k) return;
     const { data: members } = await db.from("shop_members").select("user_id, role").eq("shop_id", shop);
     const ids = (members || []).filter((m) => m.role === "owner" || m.role === "admin").map((m) => m.user_id);
     if (!ids.length) return;
-    webpush.setVapidDetails("mailto:info@honestechservice.com", k.public_key, k.private_key);
     const { data: subs } = await db.from("push_subs").select("endpoint, p256dh, auth").in("user_id", ids);
-    const payload = JSON.stringify({ title: clip(title, 80), body: clip(body, 240), url, tag });
-    await Promise.all((subs || []).map(async (s) => {
-      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: "high" }); }
-      catch (e) { const c = (e as { statusCode?: number }).statusCode; if (c === 404 || c === 410) await db.from("push_subs").delete().eq("endpoint", s.endpoint); }
-    }));
+    await pushTo(db, subs || [], k || null, { title: clip(title, 80), body: clip(body, 240), url, tag });
   } catch (e) { console.error("notify failed", e); }
 }
 
@@ -507,6 +501,17 @@ Deno.serve(async (req) => {
   if (req.method === "GET" && new URL(req.url).searchParams.get("p")) return await payGet(new URL(req.url).searchParams.get("p") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "pay") return await payStart(req);
   if (req.method === "GET") {
+    // "Add to calendar" from the iPhone app: hand Safari the calendar file so it offers Add to Calendar. Nothing is stored.
+    const ics = new URL(req.url).searchParams.get("ics") || "";
+    if (ics) {
+      if (ics.length > 8000) return out({ error: "bad request" }, 400);
+      try {
+        const bin = atob(ics.replace(/-/g, "+").replace(/_/g, "/"));
+        const txt = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+        if (!/^BEGIN:VCALENDAR/.test(txt) || !/END:VCALENDAR\s*$/.test(txt)) return out({ error: "bad request" }, 400);
+        return new Response(txt, { headers: { ...CORS, "Content-Type": "text/calendar; charset=utf-8", "Content-Disposition": 'inline; filename="event.ics"' } });
+      } catch (_) { return out({ error: "bad request" }, 400); }
+    }
     // "Save to phone": hand the phone a contact card (.vcf) so Contacts offers Create New Contact. Nothing is stored.
     const v = new URL(req.url).searchParams.get("vcard") || "";
     if (!v || v.length > 4000) return out({ error: "bad request" }, 400);

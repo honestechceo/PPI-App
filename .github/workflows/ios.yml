@@ -1,0 +1,106 @@
+# Builds the iPhone app (Capacitor) on GitHub's Macs.
+#  - Pull requests: a quick compile check for the iPhone simulator (no Apple account needed).
+#  - main, or "Run workflow" by hand: once the Apple secrets below are added, it signs the app
+#    and uploads it to App Store Connect, where it shows up in TestFlight a few minutes later.
+# Repo secrets (Settings → Secrets and variables → Actions), all from Apple:
+#   APPLE_TEAM_ID   10-character Team ID (developer.apple.com → Membership details)
+#   ASC_KEY_ID      App Store Connect API key ID     (Users and Access → Integrations → App Store Connect API, role Admin)
+#   ASC_ISSUER_ID   the Issuer ID shown above that key list
+#   ASC_KEY_P8      the downloaded AuthKey_XXXX.p8 file's full text
+name: iPhone app
+on:
+  pull_request:
+    paths: ["app.html", "build.py", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
+  push:
+    branches: [main]
+    paths: ["app.html", "build.py", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: "Upload to TestFlight (needs the Apple secrets)"
+        type: boolean
+        default: true
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  APP_VERSION: "1.0"
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+      - name: App files (www/)
+        run: |
+          python3 build.py --www
+          cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
+          # the libraries the app loads, kept inside the app so it works with no signal
+          while read -r url _ local; do
+            [ -n "$url" ] || continue
+            curl -fsSL --retry 3 "$url" -o "www/$local"
+          done < www/vendor/SOURCES.txt
+          ls -la www www/vendor
+      - name: Sync into the Xcode project
+        run: npx cap sync ios
+      - name: Signed upload or check build?
+        id: mode
+        run: |
+          up=false
+          if [ -n "$APPLE_TEAM_ID" ] && [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$ASC_KEY_P8" ]; then
+            if [ "${{ github.event_name }}" = "push" ] || { [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.upload }}" = "true" ]; }; then up=true; fi
+          elif [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "::notice::Apple secrets aren't added yet, so this run only checks that the app builds."
+          fi
+          echo "upload=$up" >> "$GITHUB_OUTPUT"
+      - name: Check build (iPhone simulator, unsigned)
+        if: steps.mode.outputs.upload != 'true'
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -60
+      - name: Archive, sign and upload to App Store Connect
+        if: steps.mode.outputs.upload == 'true'
+        run: |
+          set -o pipefail
+          KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
+          KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          BUILD=$((100 + ${{ github.run_number }}))
+          echo "Version $APP_VERSION ($BUILD)"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            "${AUTH[@]}" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD" archive | tail -80
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/out" "${AUTH[@]}" | tail -40
+          echo "::notice::Uploaded version $APP_VERSION ($BUILD). It appears in App Store Connect → TestFlight after Apple finishes processing (usually 5-20 minutes)."
+      - name: Clean up the key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keys"

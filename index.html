@@ -6230,7 +6230,7 @@ async function openScanner(targetId){
       if(r&&r.vin){vinFillInto(targetId,nativeVin(r));return;}
       if(r&&r.cancelled)return;
       if(r&&r.denied){toast("Camera is off for Honestech. Turn it on in iPhone Settings → Honestech → Camera.");return;}
-    }catch(e){}
+    }catch(e){toast("VIN scanner couldn't start ("+String(e&&(e.message||e.code)||e).slice(0,80)+"). Using the basic scanner.",5000);}
     // older iPhones without Live Text: the scanner below (with Take a photo, read by Apple's recognition)
   }
   const el=document.createElement("div");el.className="scan-ov";el.setAttribute("role","dialog");el.setAttribute("aria-label","Scan VIN");

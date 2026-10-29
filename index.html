@@ -1034,7 +1034,7 @@ body.tech-mode [data-nav="requests"],body.tech-mode .svc-doc,body.tech-mode [dat
 <script>
 /* ================= iPhone app (Capacitor) bridges. On the web, NATIVE is false and nothing here runs. ================= */
 const NATIVE=!!(window.Capacitor&&typeof window.Capacitor.isNativePlatform==="function"&&window.Capacitor.isNativePlatform());
-const CAP_PL={};
+const CAP_PL={};let NATIVE_MODAL=false;
 function capPlugin(n){if(!NATIVE||typeof window.Capacitor.registerPlugin!=="function")return null;return CAP_PL[n]||(CAP_PL[n]=window.Capacitor.registerPlugin(n));}
 // links people open outside the app (gift, invite, password reset, billing return) must point at the real site
 const SITE_URL="https://honestechmobileapp.com/";
@@ -6184,11 +6184,19 @@ let SCAN=null;
 function scanClose(){if(!SCAN)return;SCAN.stop=true;clearTimeout(SCAN.timer);try{SCAN.stream&&SCAN.stream.getTracks().forEach(t=>t.stop());}catch(e){}
   SCAN.el&&SCAN.el.remove();document.body.classList.remove("scanning");const f=SCAN.target;SCAN=null;setTimeout(()=>document.getElementById(f)?.focus({preventScroll:true}),50);}
 function scanFill(res){if(!SCAN)return;const id=SCAN.target;scanClose();vinFillInto(id,res);}
-function vinFillInto(id,res){
+function vinFillInto(id,res,quiet){
   const el=document.getElementById(id);if(!el)return;el.value=res.vin;el.dispatchEvent(new Event("input",{bubbles:true}));
   if(id==="ve-vin")document.querySelector('[data-vdecode]')?.click();
+  if(quiet)return;
+  VIN_KEEP={id,res,at:Date.now()};
   if(navigator.vibrate)try{navigator.vibrate(60);}catch(e){}
   toast(res.ok?"VIN scanned: "+res.vin:"VIN scanned. Double-check it, the check digit doesn't match: "+res.vin);}
+// a scanned VIN survives a screen refresh for 2 minutes (closing the camera can trigger a sync + refresh)
+let VIN_KEEP=null;
+function vinKeep(){if(!VIN_KEEP)return;if(Date.now()-VIN_KEEP.at>120000){VIN_KEEP=null;return;}
+  const el=document.getElementById(VIN_KEEP.id);if(el&&!el.value.trim())vinFillInto(VIN_KEEP.id,VIN_KEEP.res,true);}
+{const r0=render;render=function(){const r=r0.apply(this,arguments);try{vinKeep();}catch(e){}return r;};}
+document.addEventListener("input",e=>{if(VIN_KEEP&&e.isTrusted&&e.target&&e.target.id===VIN_KEEP.id)VIN_KEEP=null;},true);
 function scanMsg(t){const m=SCAN&&SCAN.el.querySelector(".scan-msg");if(m)m.textContent=t;}
 async function decodeSource(src,w,h){
   // 1) phone's built-in barcode reader (Android Chrome, some desktops)
@@ -6230,11 +6238,13 @@ async function scanPhoto(file){
 async function openScanner(targetId){
   if(SCAN)scanClose();
   if(NATIVE&&capPlugin("VinScanner")){
-    try{const r=await capPlugin("VinScanner").scan();
+    NATIVE_MODAL=true;let r=null,err=null;
+    try{r=await capPlugin("VinScanner").scan();}catch(e){err=e;}finally{setTimeout(()=>{NATIVE_MODAL=false;},4000);}
+    if(!err){
       if(r&&r.vin){vinFillInto(targetId,nativeVin(r));return;}
       if(r&&r.cancelled)return;
       if(r&&r.denied){toast("Camera is off for Honestech. Turn it on in iPhone Settings → Honestech → Camera.");return;}
-    }catch(e){toast("VIN scanner couldn't start ("+String(e&&(e.message||e.code)||e).slice(0,80)+"). Using the basic scanner.",5000);}
+    }else{const e=err;toast("VIN scanner couldn't start ("+String(e&&(e.message||e.code)||e).slice(0,80)+"). Using the basic scanner.",5000);}
     // older iPhones without Live Text: the scanner below (with Take a photo, read by Apple's recognition)
   }
   const el=document.createElement("div");el.className="scan-ov";el.setAttribute("role","dialog");el.setAttribute("aria-label","Scan VIN");
@@ -6981,7 +6991,8 @@ try{syncCustomers();}catch(e){console.error(e);}
 render();i18nStart();
 if(RESUMED_DRAFT)setTimeout(()=>toast("Your unfinished booking was restored"),400);
 setTimeout(()=>autoSnapshot(),1500);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"){autoSnapshot();if(AUTH)syncNow();}else if(AUTH)syncNow();});
+// (not while the iPhone app's own camera screen is up: coming back from it isn't really leaving the app)
+document.addEventListener("visibilitychange",()=>{if(typeof NATIVE_MODAL!=="undefined"&&NATIVE_MODAL)return;if(document.visibilityState==="hidden"){autoSnapshot();if(AUTH)syncNow();}else if(AUTH)syncNow();});
 window.addEventListener("online",()=>{if(AUTH)syncNow();});
 setInterval(()=>{if(AUTH&&document.visibilityState==="visible")syncNow();},60000);
 setTimeout(()=>{syncLabel();if(AUTH)syncNow();else setTimeout(()=>countyFill(20),3000);if(AUTH&&GIFT)redeemGift();},800);

@@ -22,19 +22,20 @@ public class VinScannerPlugin: CAPPlugin, CAPBridgedPlugin {
     private var live: AnyObject?   // keeps the live scanner session alive while it's on screen
 
     @objc func isAvailable(_ call: CAPPluginCall) {
-        if #available(iOS 16.0, *) {
-            call.resolve(["available": DataScannerViewController.isSupported])
-        } else {
-            call.resolve(["available": false])
+        Task { @MainActor in
+            if #available(iOS 16.0, *) {
+                call.resolve(["available": DataScannerViewController.isSupported])
+            } else {
+                call.resolve(["available": false])
+            }
         }
     }
 
     @objc func scan(_ call: CAPPluginCall) {
-        guard #available(iOS 16.0, *), DataScannerViewController.isSupported else {
-            call.resolve(["available": false]); return
-        }
+        guard #available(iOS 16.0, *) else { call.resolve(["available": false]); return }
         AVCaptureDevice.requestAccess(for: .video) { granted in
-            DispatchQueue.main.async {
+            Task { @MainActor in
+                guard DataScannerViewController.isSupported else { call.resolve(["available": false]); return }
                 guard granted else { call.resolve(["denied": true]); return }
                 guard DataScannerViewController.isAvailable else { call.resolve(["available": false]); return }
                 guard let host = self.bridge?.viewController else { call.reject("No screen to show the scanner on"); return }
@@ -114,6 +115,7 @@ struct VinMatch {
 }
 
 @available(iOS 16.0, *)
+@MainActor
 final class LiveVinScan: NSObject, DataScannerViewControllerDelegate {
     private let call: CAPPluginCall
     private let done: () -> Void

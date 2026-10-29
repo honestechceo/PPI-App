@@ -57,6 +57,84 @@ def api(method: str, path: str, body=None):
         raise SystemExit(1)
 
 
+# ---- one signing key for every build, derived from the API key secret, so the same certificate is reused
+#      (a new certificate per build made Apple email "certificate revoked" each time the oldest was retired)
+import hashlib, hmac
+
+
+class _Drbg:
+    def __init__(self, seed: bytes):
+        self.seed, self.n = seed, 0
+
+    def bits(self, k: int) -> int:
+        out = b""
+        while len(out) * 8 < k:
+            self.n += 1
+            out += hashlib.sha256(self.seed + self.n.to_bytes(8, "big")).digest()
+        return int.from_bytes(out, "big") >> (len(out) * 8 - k)
+
+
+_SMALL = [p for p in range(3, 2000, 2) if all(p % q for q in range(3, int(p ** 0.5) + 1, 2))]
+
+
+def _is_prime(n: int, rng: _Drbg) -> bool:
+    if any(n % p == 0 for p in _SMALL):
+        return n in _SMALL
+    d, r = n - 1, 0
+    while d % 2 == 0:
+        d //= 2; r += 1
+    for _ in range(40):
+        a = 2 + rng.bits(n.bit_length() - 1) % (n - 4)
+        x = pow(a, d, n)
+        if x in (1, n - 1):
+            continue
+        for _ in range(r - 1):
+            x = pow(x, 2, n)
+            if x == n - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def _prime(rng: _Drbg, bits: int, e: int) -> int:
+    while True:
+        c = rng.bits(bits) | (3 << (bits - 2)) | 1
+        if (c - 1) % e and _is_prime(c, rng):
+            return c
+
+
+def _der_int(v: int) -> bytes:
+    b = v.to_bytes((v.bit_length() + 8) // 8, "big")
+    return b"\x02" + _der_len(len(b)) + b
+
+
+def _der_len(n: int) -> bytes:
+    if n < 128:
+        return bytes([n])
+    b = n.to_bytes((n.bit_length() + 7) // 8, "big")
+    return bytes([0x80 | len(b)]) + b
+
+
+def signing_key_pem(secret: bytes) -> tuple[str, int]:
+    """RSA-2048 key made the same way every time from the secret. Returns (PKCS#1 PEM, modulus)."""
+    rng = _Drbg(hmac.new(secret, b"honestech-apple-distribution-v1", hashlib.sha256).digest())
+    e = 65537
+    while True:
+        p, q = _prime(rng, 1024, e), _prime(rng, 1024, e)
+        if p != q and (p * q).bit_length() == 2048:
+            break
+    if p < q:
+        p, q = q, p
+    n, phi = p * q, (p - 1) * (q - 1)
+    d = pow(e, -1, phi)
+    body = b"".join(_der_int(x) for x in [0, n, e, d, p, q, d % (p - 1), d % (q - 1), pow(q, -1, p)])
+    der = b"\x30" + _der_len(len(body)) + body
+    b64 = base64.b64encode(der).decode()
+    pem = "-----BEGIN RSA PRIVATE KEY-----\n" + "\n".join(b64[i:i + 64] for i in range(0, len(b64), 64)) + "\n-----END RSA PRIVATE KEY-----\n"
+    return pem, n
+
+
 def main():
     TMP.mkdir(parents=True, exist_ok=True)
     # 1. the app's ID
@@ -67,21 +145,35 @@ def main():
         raise SystemExit(1)
     bundle_id = ids[0]["id"]
 
-    # 2. a fresh Apple Distribution certificate (Apple allows only a few: retire the oldest when at the limit)
-    certs = api("GET", "/certificates?filter[certificateType]=DISTRIBUTION&limit=50")["data"]
-    certs.sort(key=lambda c: c["attributes"].get("expirationDate") or "")
-    while len(certs) >= 2:
-        old = certs.pop(0)
-        print("Retiring old distribution certificate", old["id"])
-        api("DELETE", f"/certificates/{old['id']}")
+    # 2. the Apple Distribution certificate: reuse ours if Apple still has it, otherwise make it (once)
     key = TMP / "dist.key"
-    csr = TMP / "dist.csr"
-    subprocess.run([OPENSSL, "genrsa", "-out", str(key), "2048"], check=True, capture_output=True)
-    subprocess.run([OPENSSL, "req", "-new", "-key", str(key), "-out", str(csr), "-subj", "/CN=Honestech GitHub/O=Honestech/C=US"], check=True, capture_output=True)
-    made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": "DISTRIBUTION", "csrContent": csr.read_text()}}})["data"]
-    cert_id = made["id"]
+    key_pem, modulus = signing_key_pem(open(KEY_PATH, "rb").read().strip())
+    key.write_text(key_pem)
+    certs = api("GET", "/certificates?filter[certificateType]=DISTRIBUTION&limit=50")["data"]
     cer = TMP / "dist.cer"
-    cer.write_bytes(base64.b64decode(made["attributes"]["certificateContent"]))
+    cert_id = None
+    for c in certs:
+        content = c["attributes"].get("certificateContent")
+        if not content:
+            continue
+        cer.write_bytes(base64.b64decode(content))
+        mod = subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-noout", "-modulus"], capture_output=True, text=True).stdout
+        if mod.strip().split("=")[-1].upper() == format(modulus, "X"):
+            cert_id = c["id"]
+            print("Reusing distribution certificate", cert_id)
+            break
+    if not cert_id:
+        certs.sort(key=lambda c: c["attributes"].get("expirationDate") or "")
+        while len(certs) >= 2:   # Apple allows only a few
+            old = certs.pop(0)
+            print("Retiring old distribution certificate", old["id"])
+            api("DELETE", f"/certificates/{old['id']}")
+        csr = TMP / "dist.csr"
+        subprocess.run([OPENSSL, "req", "-new", "-key", str(key), "-out", str(csr), "-subj", "/CN=Honestech GitHub/O=Honestech/C=US"], check=True, capture_output=True)
+        made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": "DISTRIBUTION", "csrContent": csr.read_text()}}})["data"]
+        cert_id = made["id"]
+        cer.write_bytes(base64.b64decode(made["attributes"]["certificateContent"]))
+        print("Made distribution certificate", cert_id)
     pem = TMP / "dist.pem"
     subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-out", str(pem)], check=True, capture_output=True)
     p12 = TMP / "dist.p12"

@@ -1046,6 +1046,10 @@ async function nativeShareFiles(files,text){const FS=capPlugin("Filesystem"),SH=
     const r=await FS.writeFile({path:`share/${Date.now()}-${k++}/${name}`,data:await blobB64(f),directory:"CACHE",recursive:true});uris.push(r.uri);}
   try{await SH.share({files:uris,text:text||undefined});}
   catch(e){const m=String(e&&(e.message||e.errorMessage)||e);if(/cancel/i.test(m))throw {name:"AbortError"};throw e;}}
+// startup self-check for the iPhone app (shows in the build Mac's simulator log; harmless elsewhere)
+if(NATIVE)setTimeout(()=>{try{const C=window.Capacitor;
+  console.log("HT-DIAG "+JSON.stringify({registerPlugin:typeof C.registerPlugin,headers:(C.PluginHeaders||[]).map(h=>h.name),vin:!!capPlugin("VinScanner")}));
+  const V=capPlugin("VinScanner");if(V)V.isAvailable().then(r=>console.log("HT-DIAG vin.isAvailable "+JSON.stringify(r))).catch(e=>console.log("HT-DIAG vin.error "+(e&&e.message)));}catch(e){console.log("HT-DIAG error "+e.message);}},2500);
 function nativeHaptic(kind){if(!NATIVE)return;const H=capPlugin("Haptics");if(!H)return;
   (kind==="success"?H.notification({type:"SUCCESS"}):H.impact({style:"LIGHT"})).catch(()=>{});}
 function nativeStatusBar(){if(!NATIVE)return;const SB=capPlugin("StatusBar");if(!SB)return;

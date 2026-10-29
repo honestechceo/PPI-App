@@ -71,11 +71,14 @@ jobs:
           set -o pipefail
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO build | tail -60
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/check.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/check.log" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$RUNNER_TEMP/check.log"; exit 1; }
+          tail -20 "$RUNNER_TEMP/check.log"
       - name: Archive, sign and upload to App Store Connect
         if: steps.mode.outputs.upload == 'true'
         run: |
           set -o pipefail
+          # put Xcode's error lines on the run's summary page, so they can be read without the full log
+          show_errors() { grep -E "error:|Error|failed|No profiles|No signing|requires a provisioning|not registered|Provisioning" "$1" | grep -v "warning:" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$1"; }
           KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
           KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
           printf '%s\n' "$ASC_KEY_P8" > "$KEY"
@@ -85,7 +88,8 @@ jobs:
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
             "${AUTH[@]}" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
-            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD" archive | tail -80
+            MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD" archive > "$RUNNER_TEMP/archive.log" 2>&1 || { show_errors "$RUNNER_TEMP/archive.log"; exit 1; }
+          tail -30 "$RUNNER_TEMP/archive.log"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -99,7 +103,8 @@ jobs:
           </dict></plist>
           PLIST
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/out" "${AUTH[@]}" | tail -40
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/out" "${AUTH[@]}" > "$RUNNER_TEMP/export.log" 2>&1 || { show_errors "$RUNNER_TEMP/export.log"; exit 1; }
+          tail -30 "$RUNNER_TEMP/export.log"
           echo "::notice::Uploaded version $APP_VERSION ($BUILD). It appears in App Store Connect → TestFlight after Apple finishes processing (usually 5-20 minutes)."
       - name: Clean up the key
         if: always()

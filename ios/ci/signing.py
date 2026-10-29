@@ -160,7 +160,7 @@ def main():
         mod = subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-noout", "-modulus"], capture_output=True, text=True).stdout
         if mod.strip().split("=")[-1].upper() == format(modulus, "X"):
             cert_id = c["id"]
-            print("Reusing distribution certificate", cert_id)
+            print(f"::notice::Signing: reused the App Store certificate ({cert_id})")
             break
     if not cert_id:
         certs.sort(key=lambda c: c["attributes"].get("expirationDate") or "")
@@ -173,7 +173,7 @@ def main():
         made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": "DISTRIBUTION", "csrContent": csr.read_text()}}})["data"]
         cert_id = made["id"]
         cer.write_bytes(base64.b64decode(made["attributes"]["certificateContent"]))
-        print("Made distribution certificate", cert_id)
+        print(f"::notice::Signing: made the App Store certificate ({cert_id}); later builds reuse it")
     pem = TMP / "dist.pem"
     subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-out", str(pem)], check=True, capture_output=True)
     p12 = TMP / "dist.p12"

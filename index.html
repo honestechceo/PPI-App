@@ -6179,7 +6179,8 @@ function extractVin(raw){
 let SCAN=null;
 function scanClose(){if(!SCAN)return;SCAN.stop=true;clearTimeout(SCAN.timer);try{SCAN.stream&&SCAN.stream.getTracks().forEach(t=>t.stop());}catch(e){}
   SCAN.el&&SCAN.el.remove();document.body.classList.remove("scanning");const f=SCAN.target;SCAN=null;setTimeout(()=>document.getElementById(f)?.focus({preventScroll:true}),50);}
-function scanFill(res){if(!SCAN)return;const id=SCAN.target;scanClose();
+function scanFill(res){if(!SCAN)return;const id=SCAN.target;scanClose();vinFillInto(id,res);}
+function vinFillInto(id,res){
   const el=document.getElementById(id);if(!el)return;el.value=res.vin;el.dispatchEvent(new Event("input",{bubbles:true}));
   if(id==="ve-vin")document.querySelector('[data-vdecode]')?.click();
   if(navigator.vibrate)try{navigator.vibrate(60);}catch(e){}
@@ -6210,15 +6211,28 @@ async function scanLoop(){
     if(SCAN)SCAN.busy=false;}
   if(SCAN&&!SCAN.stop)SCAN.timer=setTimeout(scanLoop,SCAN.zx?350:200);
 }
+// iPhone app: Apple's own readers (Live Text camera, and barcode + text recognition on photos)
+const nativeVin=r=>{const x=extractVin(r.vin);return x||{vin:String(r.vin),ok:!!r.checkOk};};
 async function scanPhoto(file){
   if(!file||!SCAN)return;scanMsg("Reading the photo…");
+  if(NATIVE&&capPlugin("VinScanner")){try{const r=await capPlugin("VinScanner").readImage({data:await blobB64(file)});
+      if(r&&r.vin){scanFill(nativeVin(r));return;}
+      scanMsg("No VIN found in that photo. Get closer so the VIN fills more of the picture, or type it.");toast("No VIN found in that photo");return;}catch(e){}}
   try{const img=await createImageBitmap(file);const res=await decodeSource(img,img.width,img.height);
     if(res){scanFill(res);return;}
-    scanMsg("No VIN barcode found in that photo. Get closer to the barcode on the door jamb, or type the VIN.");}
+    scanMsg("No VIN barcode found in that photo. Get closer to the barcode on the door jamb, or type the VIN.");toast("No VIN barcode found in that photo");}
   catch(e){scanMsg("Couldn't read that photo. Try again, or type the VIN.");}
 }
 async function openScanner(targetId){
   if(SCAN)scanClose();
+  if(NATIVE&&capPlugin("VinScanner")){
+    try{const r=await capPlugin("VinScanner").scan();
+      if(r&&r.vin){vinFillInto(targetId,nativeVin(r));return;}
+      if(r&&r.cancelled)return;
+      if(r&&r.denied){toast("Camera is off for Honestech. Turn it on in iPhone Settings → Honestech → Camera.");return;}
+    }catch(e){}
+    // older iPhones without Live Text: the scanner below (with Take a photo, read by Apple's recognition)
+  }
   const el=document.createElement("div");el.className="scan-ov";el.setAttribute("role","dialog");el.setAttribute("aria-label","Scan VIN");
   el.innerHTML=`<video class="scan-video" playsinline muted autoplay></video>
     <div class="scan-frame" aria-hidden="true"></div>

@@ -73,12 +73,10 @@ jobs:
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/check.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/check.log" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$RUNNER_TEMP/check.log"; exit 1; }
           tail -20 "$RUNNER_TEMP/check.log"
-      - name: Archive, sign and upload to App Store Connect
+      - name: App Store certificate and profile
         if: steps.mode.outputs.upload == 'true'
         run: |
           set -o pipefail
-          # put Xcode's error lines on the run's summary page, so they can be read without the full log
-          show_errors() { grep -E "error:|Error|failed|No profiles|No signing|requires a provisioning|not registered|Provisioning" "$1" | grep -v "warning:" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$1"; }
           KEYDIR="$RUNNER_TEMP/keys"; mkdir -p "$KEYDIR"
           KEY="$KEYDIR/AuthKey_${ASC_KEY_ID}.p8"
           # rebuild the key file from its text, whatever happened to the line breaks when it was pasted
@@ -88,13 +86,30 @@ jobs:
             echo "::error::The ASC_KEY_P8 secret isn't a complete Apple key (${#body} key characters found; a full key has about 200). Open the AuthKey .p8 file for the GitHub key, copy ALL of it, and paste it into the ASC_KEY_P8 secret again."
             exit 1
           fi
-          echo "Key file OK (${#body} characters)"
-          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$KEY" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          echo "ASC_KEY_PATH=$KEY" >> "$GITHUB_ENV"
+          ASC_KEY_PATH="$KEY" BUNDLE_ID=com.honestechmobileapp.app python3 ios/ci/signing.py
+      - name: Archive, sign and upload to App Store Connect
+        if: steps.mode.outputs.upload == 'true'
+        run: |
+          set -o pipefail
+          # put Xcode's error lines on the run's summary page, so they can be read without the full log
+          show_errors() { grep -E "error:|Error|failed|No profiles|No signing|requires a provisioning|not registered|Provisioning" "$1" | grep -v "warning:" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$1"; }
+          # the app target signs with the App Store certificate and profile made in the step above
+          python3 - <<'PY'
+          import os, re
+          p = "ios/App/App.xcodeproj/project.pbxproj"; s = open(p).read()
+          team, prof = os.environ["APPLE_TEAM_ID"], os.environ["PROFILE_NAME"]
+          blocks = re.findall(r"buildSettings = \{[^{}]*CODE_SIGN_ENTITLEMENTS[^{}]*\}", s)
+          assert len(blocks) == 2, len(blocks)
+          for b in blocks:
+              s = s.replace(b, b.replace("CODE_SIGN_STYLE = Automatic;", f'CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = {team};\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{prof}";'))
+          open(p, "w").write(s)
+          PY
           BUILD=$((100 + ${{ github.run_number }}))
           echo "Version $APP_VERSION ($BUILD)"
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
             -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            "${AUTH[@]}" DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CODE_SIGN_IDENTITY="Apple Distribution" \
+            OTHER_CODE_SIGN_FLAGS="--keychain $SIGN_KEYCHAIN" \
             MARKETING_VERSION="$APP_VERSION" CURRENT_PROJECT_VERSION="$BUILD" archive > "$RUNNER_TEMP/archive.log" 2>&1 || { show_errors "$RUNNER_TEMP/archive.log"; exit 1; }
           tail -30 "$RUNNER_TEMP/archive.log"
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
@@ -104,15 +119,21 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>upload</string>
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key><dict><key>com.honestechmobileapp.app</key><string>${PROFILE_NAME}</string></dict>
             <key>uploadSymbols</key><true/>
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/out" "${AUTH[@]}" > "$RUNNER_TEMP/export.log" 2>&1 || { show_errors "$RUNNER_TEMP/export.log"; exit 1; }
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" -exportPath "$RUNNER_TEMP/out" \
+            -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            > "$RUNNER_TEMP/export.log" 2>&1 || { show_errors "$RUNNER_TEMP/export.log"; exit 1; }
           tail -30 "$RUNNER_TEMP/export.log"
           echo "::notice::Uploaded version $APP_VERSION ($BUILD). It appears in App Store Connect → TestFlight after Apple finishes processing (usually 5-20 minutes)."
-      - name: Clean up the key
+      - name: Clean up the keys
         if: always()
-        run: rm -rf "$RUNNER_TEMP/keys"
+        run: |
+          rm -rf "$RUNNER_TEMP/keys" "$RUNNER_TEMP/signing"
+          [ -n "$SIGN_KEYCHAIN" ] && security delete-keychain "$SIGN_KEYCHAIN" 2>/dev/null || true

@@ -3328,9 +3328,9 @@ function syncCustomers(){
       put("name",i.customer.trim());put("phone",i.phone);if(i.email&&!c.email)c.email=i.email;if(i.lang&&i.lang!==(c.lang||"en"))c.lang=i.lang==="es"?"es":"";put("location",i.location);put("dist",i.dist);c.last=i.date||c.last;
     }
     if(i.make||i.model||i.vin){
-      const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",vin:i.vin||"",miles:i.miles||"",color:i.color||"",unit:i.unit||"",plate:i.plate||""},k=vehKey(v);
+      const v={year:i.year||"",make:i.make||"",model:i.model||"",trim:i.trim||"",engine:i.engine||"",vin:i.vin||"",miles:i.miles||"",color:i.color||"",unit:i.unit||"",plate:i.plate||""},k=vehKey(v);
       let ex=c.vehicles.find(x=>x.key===k||(x.alias||[]).includes(k)||(v.unit&&x.unit&&normName(x.unit)===normName(v.unit)))||(v.vin&&c.vehicles.find(x=>!x.vin&&x.key===vehKey({...v,vin:""})));
-      if(ex){if(!ex.manual){for(const f of ["year","make","model","trim","vin","color"])if(v[f])ex[f]=v[f];const ok=ex.key;ex.key=vehKey(ex);if(ok!==ex.key)ex.alias=[...new Set([...(ex.alias||[]),ok])];}
+      if(ex){if(!ex.manual){for(const f of ["year","make","model","trim","engine","vin","color"])if(v[f])ex[f]=v[f];const ok=ex.key;ex.key=vehKey(ex);if(ok!==ex.key)ex.alias=[...new Set([...(ex.alias||[]),ok])];}
         for(const f of ["unit","plate"])if(v[f]&&!ex[f])ex[f]=v[f];
         if(v.miles&&num(v.miles)>=num(ex.miles))ex.miles=v.miles;}
       else if(!(c.vehHidden||[]).includes(k))c.vehicles.push({...v,key:k});
@@ -3371,7 +3371,7 @@ function sugHTML(target,q){
 }
 function fillFromCustomer(obj,c,v,withVehicle=true){
   Object.assign(obj,{customer:c.name,phone:c.phone||"",location:c.location||"",dist:c.dist||"",lang:c.lang||""});
-  if(withVehicle){const e={year:"",make:"",model:"",trim:"",vin:"",miles:"",color:"",unit:"",plate:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,color:v.color,unit:v.unit||"",plate:v.plate||"",miles:v.miles||""}:{});}
+  if(withVehicle){const e={year:"",make:"",model:"",trim:"",engine:"",vin:"",miles:"",color:"",unit:"",plate:""};Object.assign(obj,e,v?{year:v.year,make:v.make,model:v.model,trim:v.trim,engine:v.engine||"",vin:v.vin,color:v.color,unit:v.unit||"",plate:v.plate||"",miles:v.miles||""}:{});}
 }
 let CUST_OPEN=null,CUST_DEL=null,CUST_EDIT=null,CUST_NEW=null;
 const HAS_PICKER=typeof navigator!=="undefined"&&"contacts" in navigator&&typeof window.ContactsManager!=="undefined";
@@ -3447,6 +3447,7 @@ function vehFormHTML(c,v){
     <label class="full">VIN<span class="vin-in"><input id="ve-vin" class="mono" maxlength="17" autocapitalize="characters" autocomplete="off" value="${val("vin")}"><button class="vin-cam" type="button" data-scanvin="ve-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="help">17 characters. Tap Look up to fill in the vehicle.</span></label>
     <div class="full acts" style="margin-top:-4px"><button class="mini" type="button" data-vdecode="1">Look up VIN</button><span class="help" id="veDec"></span></div>
     ${f("year","Year",'inputmode="numeric" maxlength="4"')}${f("make","Make")}${f("model","Model")}${f("trim","Trim")}
+    ${f("engine","Engine",'placeholder="e.g. 4.6L V8"')}
     ${f("miles","Mileage",'inputmode="numeric"')}${f("color","Color")}
     <label class="full">Notes<textarea id="ve-notes" rows="2" placeholder="Oil type, tire size, known issues">${val("notes")}</textarea></label>
     <div class="formacts full"><button class="btn primary" type="button" data-vsave="${c.id}|${v?v.key:""}">${v?"Save vehicle":"Add vehicle"}</button><button class="btn" type="button" data-vcancel="1">Cancel</button></div>
@@ -3463,7 +3464,7 @@ function garageHTML(c){
     return `<div class="veh-card${open?" open":""}">
       <button type="button" class="veh-top" data-vopen="${v.key}" aria-expanded="${open}">
         <span class="veh-name">${v.unit?`<span class="unit-tag">Unit ${esc(v.unit)}</span>`:""}<strong>${esc(vehName(v)||"Vehicle")}</strong></span>
-        <span class="meta">${[v.plate&&"Plate "+v.plate,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")||"&nbsp;"}</span>
+        <span class="meta">${[v.engine,v.plate&&"Plate "+v.plate,v.miles&&num(v.miles).toLocaleString()+" mi",v.color].filter(Boolean).map(esc).join(" · ")||"&nbsp;"}</span>
         <span class="meta">${hist.length?`${hist.length} job${hist.length===1?"":"s"} · last ${esc(fmtDate(last.info.date,{month:"short",day:"numeric",year:"numeric"}))}`:"No jobs yet"}</span>
       </button>
       ${open?`<div class="veh-body">
@@ -6756,16 +6757,16 @@ document.addEventListener("click",e=>{
     if(!vinReady(vin)){if(msg)msg.textContent="Enter all 17 characters of the VIN.";return;}
     if(msg)msg.textContent="Looking up…";
     decodeVin(vin).then(x=>{if(!x){if(msg)msg.textContent="Couldn't find that VIN. Fill it in by hand.";return;}
-      for(const k of ["year","make","model","trim"]){const el=document.getElementById("ve-"+k);if(el&&x[k])el.value=x[k];}
-      if(msg)msg.textContent="Filled in: "+[x.year,x.make,x.model,x.trim].filter(Boolean).join(" ");})
+      for(const k of ["year","make","model","trim","engine"]){const el=document.getElementById("ve-"+k);if(el&&x[k])el.value=x[k];}
+      if(msg)msg.textContent="Filled in: "+[x.year,x.make,x.model,x.trim].filter(Boolean).join(" ")+(x.engine?" · "+x.engine:"")+(x.drive?" · "+x.drive:"");})
       .catch(()=>{if(msg)msg.textContent="No connection. Fill it in by hand.";});return;}
   if(d.vsave){const [cid,key]=split2(d.vsave);const c=APP.customers.find(x=>x.id===cid);if(!c)return;
     const g=k=>(document.getElementById("ve-"+k)?.value||"").trim();
-    const nv={unit:g("unit"),plate:g("plate").toUpperCase(),vin:g("vin").toUpperCase(),year:g("year"),make:g("make"),model:g("model"),trim:g("trim"),miles:g("miles"),color:g("color"),notes:document.getElementById("ve-notes")?.value||""};
+    const nv={unit:g("unit"),plate:g("plate").toUpperCase(),vin:g("vin").toUpperCase(),year:g("year"),make:g("make"),model:g("model"),trim:g("trim"),engine:g("engine"),miles:g("miles"),color:g("color"),notes:document.getElementById("ve-notes")?.value||""};
     if(!nv.make&&!nv.model&&!nv.vin&&!nv.unit){toast("Add a make and model, a VIN or a unit number");return;}
     let v=key?c.vehicles.find(x=>x.key===key):null;
     if(v){const oldInfo={...v};Object.assign(v,nv);v.manual=true;const nk=vehKey(v);if(nk!==v.key){v.alias=[...new Set([...(v.alias||[]),v.key])];v.key=nk;}
-      for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j)&&vehMatch(oldInfo,j.info))Object.assign(j.info,{year:v.year,make:v.make,model:v.model,trim:v.trim,vin:v.vin,unit:v.unit,plate:v.plate,color:v.color});
+      for(const j of APP.jobs)if(j.custId===c.id&&isOpenJob(j)&&vehMatch(oldInfo,j.info))Object.assign(j.info,{year:v.year,make:v.make,model:v.model,trim:v.trim,engine:v.engine||"",vin:v.vin,unit:v.unit,plate:v.plate,color:v.color});
       if(VEH_OPEN===key)VEH_OPEN=v.key;}
     else{v={...nv,manual:true};v.key=vehKey(v);if(c.vehicles.some(x=>x.key===v.key))v.key+="#"+uid();c.vehicles.push(v);c.vehHidden=(c.vehHidden||[]).filter(k=>k!==v.key);}
     VEH_EDIT=null;save();relist();toast(key?"Vehicle saved":"Vehicle added");return;}

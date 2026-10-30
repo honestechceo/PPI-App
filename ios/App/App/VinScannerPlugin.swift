@@ -67,7 +67,7 @@ enum VinPhotoReader {
             for (s, src) in found {
                 guard let m = VinMatch.find(in: s, source: src) else { continue }
                 if m.checkOk && (best == nil || !best!.checkOk || (src == "barcode" && best!.source != "barcode")) { best = m }
-                else if best == nil && src == "barcode" { best = m }
+                else if best == nil && (src == "barcode" || m.labeled) { best = m }
             }
             DispatchQueue.main.async { done(best) }
         }
@@ -79,6 +79,15 @@ struct VinMatch {
     let vin: String
     let checkOk: Bool
     let source: String
+    var labeled = false   // printed right after "VIN" on the label
+
+    // Shape every real VIN has: the last 3 characters are digits, the 10th (model year) is never U, Z or 0,
+    // and it has several digits. Rules out runs of label words like "MFDBYHONDADEMEXICO".
+    static func plausible(_ w: [Character]) -> Bool {
+        guard w[14...16].allSatisfy({ $0.isNumber }) else { return false }
+        guard !["U", "Z", "0"].contains(w[9]) else { return false }
+        return w.filter({ $0.isNumber }).count >= 5 && w.filter({ $0.isLetter }).count >= 2
+    }
 
     static let weights = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2]
     static func value(_ c: Character) -> Int? {
@@ -94,17 +103,44 @@ struct VinMatch {
         return v[8] == (r == 10 ? "X" : Character(String(r)))
     }
     static func find(in raw: String, source: String) -> VinMatch? {
-        let up = raw.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) }
-        let chars = Array(up)
+        source == "barcode" ? fromBarcode(raw) : fromText(raw)
+    }
+
+    // VINs never use I, O or Q: they're read-alikes of 1 and 0
+    static func fix(_ c: Character) -> Character { c == "O" || c == "Q" ? "0" : (c == "I" ? "1" : c) }
+
+    // A barcode holds just the VIN (sometimes with a leading "I" for imports): slide over it.
+    static func fromBarcode(_ raw: String) -> VinMatch? {
+        let chars = Array(raw.uppercased().filter { $0.isASCII && ($0.isLetter || $0.isNumber) })
         guard chars.count >= 17 else { return nil }
         var fallback: VinMatch? = nil
         for i in 0...(chars.count - 17) {
-            // VINs never use I, O or Q: they're read-alikes of 1 and 0
-            let w = chars[i..<(i + 17)].map { c -> Character in c == "O" || c == "Q" ? "0" : (c == "I" ? "1" : c) }
-            guard w.allSatisfy({ value($0) != nil }) else { continue }
-            guard w[0...10].contains(where: { $0.isLetter }) else { continue }   // must look like a VIN, not a long number
-            if checkDigitOk(w) { return VinMatch(vin: String(w), checkOk: true, source: source) }
-            if fallback == nil { fallback = VinMatch(vin: String(w), checkOk: false, source: source) }
+            let w = chars[i..<(i + 17)].map(fix)
+            guard w.allSatisfy({ value($0) != nil }), plausible(w) else { continue }
+            if checkDigitOk(w) { return VinMatch(vin: String(w), checkOk: true, source: "barcode") }
+            if fallback == nil { fallback = VinMatch(vin: String(w), checkOk: false, source: "barcode") }
+        }
+        return fallback
+    }
+
+    // Printed text: a VIN is always one solid block of 17. Only whole words count (or two words that
+    // together make 17, in case the reader split it), never pieces of label text run together.
+    static func fromText(_ raw: String) -> VinMatch? {
+        let words = raw.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "(" || $0 == ")" || $0 == "," })
+            .map { String($0.filter { $0.isASCII && ($0.isLetter || $0.isNumber) }) }.filter { !$0.isEmpty }
+        var cands: [(String, Bool)] = []   // (17 characters, printed right after "VIN")
+        for (n, w) in words.enumerated() {
+            let afterLabel = n > 0 && ["VIN", "VINNO", "VINNUMBER"].contains(words[n - 1])
+            if w.count == 17 { cands.append((w, afterLabel)) }
+            for lab in ["VIN", "VINNO"] where w.hasPrefix(lab) && w.count == 17 + lab.count { cands.append((String(w.dropFirst(lab.count)), true)) }
+            if n + 1 < words.count, w.count + words[n + 1].count == 17, w.count >= 5, words[n + 1].count >= 5 { cands.append((w + words[n + 1], afterLabel)) }
+        }
+        var fallback: VinMatch? = nil
+        for (c, labeled) in cands {
+            let w = Array(c).map(fix)
+            guard w.allSatisfy({ value($0) != nil }), plausible(w) else { continue }
+            if checkDigitOk(w) { return VinMatch(vin: String(w), checkOk: true, source: "text", labeled: labeled) }
+            if labeled && fallback == nil { fallback = VinMatch(vin: String(w), checkOk: false, source: "text", labeled: true) }
         }
         return fallback
     }
@@ -361,8 +397,11 @@ final class VinCameraViewController: UIViewController, UIImagePickerControllerDe
     private func consider(_ m: VinMatch) {
         guard !finished else { return }
         if m.checkOk { win(m); return }
+        // No valid check digit (e.g. European VINs): only from the barcode or text printed right after "VIN",
+        // and only once it reads the same 3 times
+        guard m.source == "barcode" || m.labeled else { return }
         seen[m.vin, default: 0] += 1
-        if seen[m.vin]! >= 3 { win(m) }   // e.g. European VINs, which have no check digit
+        if seen[m.vin]! >= 3 { win(m) }
     }
 
     private func win(_ m: VinMatch) {

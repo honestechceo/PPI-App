@@ -6229,7 +6229,9 @@ function extractVin(raw){
   if(!t)return null;
   const fix=x=>x.replace(/O/g,"0").replace(/[IQ]/g,m=>m==="I"?"1":"0");
   const cands=[];
-  for(let i=0;i+17<=t.length;i++){const w=fix(t.slice(i,i+17));if(vinReady(w))cands.push(w);}
+  // real VINs end in 3 digits, never have U, Z or 0 as the 10th (model year) character, and have several digits
+  const shape=w=>/^\d{3}$/.test(w.slice(14))&&!/[UZ0]/.test(w[9])&&(w.match(/\d/g)||[]).length>=5;
+  for(let i=0;i+17<=t.length;i++){const w=fix(t.slice(i,i+17));if(vinReady(w)&&shape(w))cands.push(w);}
   if(!cands.length)return null;
   const good=cands.find(w=>vinCheck(w).cls==="ok");
   return good?{vin:good,ok:true}:{vin:cands[cands.length===1?0:(t.length===18&&t[0]==="I"?1:0)],ok:false};

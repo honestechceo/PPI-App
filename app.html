@@ -1076,6 +1076,13 @@ async function nativeShareFiles(files,text){const FS=capPlugin("Filesystem"),SH=
 if(NATIVE)setTimeout(()=>{try{const C=window.Capacitor;
   console.log("HT-DIAG "+JSON.stringify({registerPlugin:typeof C.registerPlugin,headers:(C.PluginHeaders||[]).map(h=>h.name),vin:!!capPlugin("VinScanner")}));
   const V=capPlugin("VinScanner");if(V)V.isAvailable().then(r=>console.log("HT-DIAG vin.isAvailable "+JSON.stringify(r))).catch(e=>console.log("HT-DIAG vin.error "+(e&&e.message)));}catch(e){console.log("HT-DIAG error "+e.message);}},2500);
+// Picking a photo or file: if the screen redraws while the phone's picker is open (coming back from it starts
+// a sync, which can redraw), the button that opened the picker is no longer on the page, so the picked file
+// never reached the app and it had to be picked again. Hand it to the app anyway.
+document.addEventListener("click",e=>{const t=e.target;if(!t||t.tagName!=="INPUT"||t.type!=="file"||t._relay)return;t._relay=1;
+  t.addEventListener("change",()=>{if(t.isConnected||!t.files||!t.files.length)return;
+    let box=document.getElementById("fileRelay");if(!box){box=document.createElement("div");box.id="fileRelay";box.hidden=true;document.body.appendChild(box);}
+    box.appendChild(t);try{t.dispatchEvent(new Event("change",{bubbles:true}));}finally{setTimeout(()=>t.remove(),0);}});},true);
 function nativeHaptic(kind){if(!NATIVE)return;const H=capPlugin("Haptics");if(!H)return;
   (kind==="success"?H.notification({type:"SUCCESS"}):H.impact({style:"LIGHT"})).catch(()=>{});}
 function nativeStatusBar(){if(!NATIVE)return;const SB=capPlugin("StatusBar");if(!SB)return;

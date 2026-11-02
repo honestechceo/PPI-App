@@ -12,9 +12,11 @@ jobs:
       - name: Recall lookups
         run: |
           for u in \
+            "https://api.nhtsa.gov/products/vehicle/models?modelYear=2011&make=Honda&issueType=r" \
+            "https://api.nhtsa.gov/products/vehicle/models?modelYear=2023&make=Lexus&issueType=r" \
             "https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake?recalls=1&year=2011&make=Honda&model=Crv" \
             "https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake?recalls=1&year=2011&make=Honda&model=CR-V" \
             "https://api.nhtsa.gov/recalls/recallsByVehicle?make=Honda&model=CR-V&modelYear=2011"; do
-            code=$(curl -s -o /tmp/out -w '%{http_code}' -H 'User-Agent: Mozilla/5.0' "$u"); echo "::notice::$code $(head -c 300 /tmp/out | tr '\n' ' ') <- ${u:0:90}"
+            code=$(curl -s -o /tmp/out -w '%{http_code}' -H 'User-Agent: Mozilla/5.0' "$u"); echo "::notice::$code $(head -c 700 /tmp/out | tr '\n' ' ') <- ${u:0:90}"
           done
           code=$(curl -s -o /tmp/out -w '%{http_code}' "https://api.nhtsa.gov/recalls/recallsByVehicle?make=Honda&model=CR-V&modelYear=2011"); echo "::notice::no-UA $code $(head -c 120 /tmp/out)"

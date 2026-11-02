@@ -151,7 +151,7 @@ async function mfaBlocked(token: string, uid: string) {
 }
 
 // ---------- online estimate approval (honestechmobileapp.com/e/?CODE) ----------
-type Slot = { d: string; t?: string };
+type Slot = { d: string; t?: string; e?: string };
 type Link = { path?: string; exp?: number; shop?: string; job?: string; est?: Record<string, unknown>; pay?: Record<string, unknown> };
 async function readLink(code: string): Promise<Link | null> {
   code = code.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
@@ -162,8 +162,9 @@ async function readLink(code: string): Promise<Link | null> {
 }
 function slotsOf(j: Record<string, any>): Slot[] {
   const info = j.info || {};
-  const list: Slot[] = Array.isArray(j.slots) ? j.slots : info.date ? [{ d: info.date, t: info.time || "" }] : [];
-  return list.filter((x) => x && typeof x.d === "string" && x.d).map((x) => ({ d: x.d, t: x.t || "" }))
+  const list: Slot[] = Array.isArray(j.slots) ? j.slots : info.date ? [{ d: info.date, t: info.time || "", e: info.timeEnd || "" }] : [];
+  return list.filter((x) => x && typeof x.d === "string" && x.d)
+    .map((x) => (x.t && typeof x.e === "string" && /^\d\d:\d\d$/.test(x.e) && x.e > x.t ? { d: x.d, t: x.t, e: x.e } : { d: x.d, t: x.t || "" }))
     .sort((a, b) => (a.d + (a.t || "99")) < (b.d + (b.t || "99")) ? -1 : 1);
 }
 async function loadJob(m: Link) {
@@ -227,7 +228,8 @@ async function estApprove(req: Request) {
     const ask = clip(body.ask, 300).trim();
     if (body.slot && typeof body.slot === "object") {
       const want = body.slot as Slot;
-      pick = slotsOf(j).find((x) => x.d === want.d && (x.t || "") === (want.t || "")) || null;
+      const same = (x: Slot) => x.d === want.d && (x.t || "") === (want.t || "");
+      pick = slotsOf(j).find((x) => same(x) && (x.e || "") === (want.e || "")) || slotsOf(j).find(same) || null;
       if (!pick) return out({ error: "That time isn't available anymore. Pick another one." }, 409);
     }
     const now = Date.now(), total = Number((m.est as any).total) || 0;
@@ -235,7 +237,7 @@ async function estApprove(req: Request) {
     Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total } });
     j.sig = j.sig || {};
     j.sig.est = { data: sig, name, at: now, online: true };
-    if (pick && j.pending) { j.info = j.info || {}; j.info.date = pick.d; j.info.time = pick.t || ""; j.pending = false; j.bookedAt = now; }
+    if (pick && j.pending) { j.info = j.info || {}; j.info.date = pick.d; j.info.time = pick.t || ""; j.info.timeEnd = pick.e || ""; j.pending = false; j.bookedAt = now; }
     (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "approved online", at: now, by: name });
     const { error } = await db.from("records").update({ data: j }).eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job);
     if (error) throw error;
@@ -509,8 +511,11 @@ async function shopBrand(shop: string, s0?: Record<string, any>) {
 function fmtSlot(x: Slot) {
   const d = new Date(x.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   if (!x.t) return d;
-  const [h, mi] = x.t.split(":").map(Number);
-  return `${d} at ${((h + 11) % 12) + 1}:${String(mi || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+  const tm = (t: string) => { const [h, mi] = t.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(mi || 0).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`; };
+  const a = tm(x.t);
+  if (!x.e || x.e <= x.t) return `${d} at ${a}`;
+  const b = tm(x.e);
+  return `${d} between ${a.slice(-2) === b.slice(-2) ? a.slice(0, -3) : a} and ${b}`;
 }
 
 Deno.serve(async (req) => {

@@ -57,7 +57,7 @@ function T(en,es){return ES?es:en;}
 function money(n){return "$"+(Number(n)||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmtD(d){try{return new Date(d+"T12:00:00").toLocaleDateString(ES?"es-US":"en-US",{weekday:"short",month:"short",day:"numeric"});}catch(e){return d;}}
 function fmtT(t){if(!t)return "";var p=t.split(":"),h=+p[0],m=+p[1]||0;return ((h+11)%12+1)+":"+(m<10?"0":"")+m+" "+(h<12?"AM":"PM");}
-function slot(x){return fmtD(x.d)+(x.t?(ES?" a las ":" at ")+fmtT(x.t):"");}
+function slot(x){if(!x.t)return fmtD(x.d);var a=fmtT(x.t);if(!x.e||x.e<=x.t)return fmtD(x.d)+(ES?" a las ":" at ")+a;var b=fmtT(x.e);return fmtD(x.d)+(ES?" entre las ":" between ")+(a.slice(-2)===b.slice(-2)?a.slice(0,-3):a)+(ES?" y las ":" and ")+b;}
 function smsHref(n,b){return "sms:"+String(n||"").replace(/[^\d+]/g,"")+(/iPhone|iPad|iPod/.test(navigator.userAgent)?"&":"?")+"body="+encodeURIComponent(b||"");}
 function head(){return '<div class="top">'+(E.logo?'<img class="logo" src="'+esc(E.logo)+'" alt="">':'')+'<div class="biz">'+esc(E.biz||"")+'</div><div class="sub">'+esc(T("Estimate","Presupuesto"))+(E.num?" "+esc(E.num):"")+(E.veh?" · "+esc(E.veh):"")+'</div></div>';}
 function ask(){return E.phone?'<a class="btn" href="'+esc(smsHref(E.phone,""))+'">💬 '+esc(T("Text ","Escribir a ")+(E.biz||T("the shop","el taller")))+'</a>':"";}

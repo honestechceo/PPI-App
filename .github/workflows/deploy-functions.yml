@@ -23,12 +23,12 @@ jobs:
           out=$(supabase projects list 2>&1) || { echo "$out" | tail -5 | sed 's/^/::error::/'; exit 1; }
       - name: Deploy billing
         run: |
-          out=$(supabase functions deploy billing --project-ref "$PROJECT" --no-verify-jwt --use-api 2>&1) || { echo "$out" | tail -8 | sed 's/^/::error::/'; exit 1; }
+          out=$(supabase functions deploy billing --project-ref "$PROJECT" --no-verify-jwt --use-api --yes 2>&1) || { echo "$out" | tail -8 | sed 's/^/::error::/'; exit 1; }
       - name: Deploy stripe-webhook
-        run: supabase functions deploy stripe-webhook --project-ref "$PROJECT" --no-verify-jwt --use-api
+        run: supabase functions deploy stripe-webhook --project-ref "$PROJECT" --no-verify-jwt --use-api --yes
       - name: Deploy notify
-        run: supabase functions deploy notify --project-ref "$PROJECT" --no-verify-jwt --use-api
+        run: supabase functions deploy notify --project-ref "$PROJECT" --no-verify-jwt --use-api --yes
       - name: Deploy intake
-        run: supabase functions deploy intake --project-ref "$PROJECT" --no-verify-jwt --use-api
+        run: supabase functions deploy intake --project-ref "$PROJECT" --no-verify-jwt --use-api --yes
       - name: Deploy assist
-        run: supabase functions deploy assist --project-ref "$PROJECT" --no-verify-jwt --use-api
+        run: supabase functions deploy assist --project-ref "$PROJECT" --no-verify-jwt --use-api --yes

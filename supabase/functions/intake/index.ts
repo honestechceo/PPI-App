@@ -198,12 +198,13 @@ async function estGet(code: string, sess = "") {
   const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
   const state = estState(j);
+  const canPay = dep > 0 && !depPaid && !j.invoice?.paid ? await payAcct(m.shop!) : null;
   return out({
     ...m.est, ...(await shopBrand(m.shop!)), state, pdf: sg?.signedUrl || "",
     slots: j.pending ? slotsOf(j).filter((x) => x.d >= today) : [],
     booked: !j.pending && j.info?.date ? { d: j.info.date, t: j.info.time || "" } : null,
     approved: state === "approved" ? { name: j.est?.online?.name || j.sig?.est?.name || "", at: j.est?.online?.at || 0, ask: j.est?.online?.ask || "" } : null,
-    deposit: dep, depositPaid: depPaid, canPay: dep > 0 && !depPaid && !j.invoice?.paid && !!(await payAcct(m.shop!)),
+    deposit: dep, depositPaid: depPaid, canPay: !!canPay, later: !!canPay && dep >= 50 && await payLater(canPay),
   });
 }
 async function estApprove(req: Request) {
@@ -251,6 +252,35 @@ async function estApprove(req: Request) {
 }
 // ---------- pay an invoice by card (honestechmobileapp.com/p/?CODE) ----------
 const nyDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+const RECALLS = new Map<string, { at: number; list: unknown[] }>();
+async function recalls(sp: URLSearchParams) {
+  const year = String(sp.get("year") || "").replace(/\D/g, "").slice(0, 4), make = clip(sp.get("make"), 40).trim(), model = clip(sp.get("model"), 60).trim();
+  if (!/^(19|20)\d\d$/.test(year) || !make || !model) return out({ error: "Need year, make and model" }, 400);
+  const k = [year, make, model].join("|").toLowerCase();
+  const hit = RECALLS.get(k);
+  if (hit && Date.now() - hit.at < 12 * 3600e3) return out({ list: hit.list });
+  try {
+    const r = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${year}`);
+    if (!r.ok) return out({ error: "Recall lookup is busy. Try again later." }, 502);
+    const j = await r.json().catch(() => ({}));
+    const g = (o: Record<string, unknown>, ...ks: string[]) => { for (const x of ks) { const v = o[x] ?? o[x.charAt(0).toLowerCase() + x.slice(1)]; if (v != null && v !== "") return v; } return ""; };
+    const list = ((j.results || j.Results || []) as Record<string, unknown>[]).slice(0, 40).map((o) => ({
+      id: clip(g(o, "NHTSACampaignNumber"), 20), date: clip(g(o, "ReportReceivedDate"), 20), component: clip(g(o, "Component"), 160),
+      summary: clip(g(o, "Summary"), 900), risk: clip(g(o, "Consequence"), 600), fix: clip(g(o, "Remedy"), 600),
+      park: !!g(o, "parkIt") || !!g(o, "ParkIt"), outside: !!g(o, "parkOutSide") || !!g(o, "ParkOutSide"),
+    }));
+    RECALLS.set(k, { at: Date.now(), list });
+    if (RECALLS.size > 500) RECALLS.delete(RECALLS.keys().next().value!);
+    return out({ list });
+  } catch (_) { return out({ error: "Recall lookup is busy. Try again later." }, 502); }
+}
+
+// whether the shop's Stripe account offers pay over time (Affirm or Klarna) at checkout
+async function payLater(acct: string | null): Promise<boolean> {
+  if (!acct) return false;
+  try { const a = await stripe.accounts.retrieve(acct); const c = (a.capabilities || {}) as Record<string, string>; return c.affirm_payments === "active" || c.klarna_payments === "active"; }
+  catch (_) { return false; }
+}
 async function payAcct(shop: string): Promise<string | null> {
   const { data: f } = await db.storage.from("media").download(`_pay/${shop}.json`);
   if (!f) return null;
@@ -301,7 +331,7 @@ async function payGet(code: string, sess: string) {
   }
   const { data: sg } = await db.storage.from("media").createSignedUrl(m.path!, 60 * 60);
   const paid = !!j.invoice?.paid;
-  return out({ ...m.pay, ...(await shopBrand(m.shop!)), pdf: sg?.signedUrl || "", state: paid ? "paid" : acct ? "open" : "nopay", paidAmount: j.invoice?.online?.amount || 0, paidVia: j.invoice?.paidVia || "" });
+  return out({ ...m.pay, ...(await shopBrand(m.shop!)), pdf: sg?.signedUrl || "", state: paid ? "paid" : acct ? "open" : "nopay", paidAmount: j.invoice?.online?.amount || 0, paidVia: j.invoice?.paidVia || "", later: !paid && await payLater(acct) });
 }
 async function payStart(req: Request) {
   try {
@@ -501,6 +531,8 @@ Deno.serve(async (req) => {
   if (req.method === "GET" && new URL(req.url).searchParams.get("p")) return await payGet(new URL(req.url).searchParams.get("p") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "pay") return await payStart(req);
   if (req.method === "GET") {
+    // Safety recalls for a year / make / model (NHTSA). Public data, cached here for 12 hours.
+    if (new URL(req.url).searchParams.get("recalls")) return await recalls(new URL(req.url).searchParams);
     // "Add to calendar" from the iPhone app: hand Safari the calendar file so it offers Add to Calendar. Nothing is stored.
     const ics = new URL(req.url).searchParams.get("ics") || "";
     if (ics) {

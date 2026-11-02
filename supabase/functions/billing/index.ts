@@ -47,7 +47,10 @@ async function payStatus(shop: string) {
   if (!acct) return { connected: false, ready: false };
   try {
     const a = await stripe.accounts.retrieve(acct);
-    return { connected: true, ready: !!a.charges_enabled, submitted: !!a.details_submitted, name: a.business_profile?.name || a.settings?.dashboard?.display_name || "", due: (a.requirements?.currently_due || []).length };
+    // pay over time: the shop turns Affirm / Klarna on in its own Stripe dashboard (Settings → Payment methods)
+    const cap = (a.capabilities || {}) as Record<string, string>;
+    return { connected: true, ready: !!a.charges_enabled, submitted: !!a.details_submitted, name: a.business_profile?.name || a.settings?.dashboard?.display_name || "", due: (a.requirements?.currently_due || []).length,
+      affirm: cap.affirm_payments || "inactive", klarna: cap.klarna_payments || "inactive" };
   } catch (e) { return { connected: false, ready: false, error: (e as Error).message }; }
 }
 async function paySetup(shop: string, email: string | undefined, ret: string) {

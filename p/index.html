@@ -43,6 +43,7 @@ label.l{display:block;font-weight:700;margin:14px 0 6px}
   .opt:has(input:checked){background:#16263d;background:color-mix(in srgb,var(--accent) 18%,var(--card))}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
 .paybtn{font-size:18px}
 .cards{display:flex;justify-content:center;gap:8px;margin-top:10px;color:var(--mute);font-size:13px}
+.later{margin:10px 0 0;text-align:center;font-size:14px;font-weight:600}
 </style>
 </head><body>
 <main id="app"><p class="mute" style="text-align:center;margin-top:40px">Loading your invoice…</p></main>
@@ -71,6 +72,7 @@ function render(){if(!P)return;document.documentElement.lang=ES?"es":"en";docume
   if(P.state!=="open"){app.innerHTML=head()+sum+'<div class="card"><p style="margin:0">'+esc(T("To pay this invoice, text us and we'll tell you the ways to pay.","Para pagar esta factura, escríbanos y le decimos cómo pagar."))+'</p></div>'+pdf()+ask()+foot();return;}
   app.innerHTML=head()+sum+'<div class="card"><button class="btn primary paybtn" type="button" id="go"'+(BUSY?" disabled":"")+'>'+esc(BUSY?T("Opening…","Abriendo…"):T("💳 Pay ","💳 Pagar ")+money(P.total))+'</button>'
     +'<div class="cards">'+esc(T("Card · Apple Pay · Google Pay","Tarjeta · Apple Pay · Google Pay"))+'</div>'
+    +(P.later&&P.total>=50?'<p class="later">'+esc(T("Or pay over time: choose Affirm or Klarna at checkout to split it into smaller payments.","O pague a plazos: elija Affirm o Klarna al pagar para dividirlo en pagos más pequeños."))+'</p>':'')
     +'<p class="fine" style="text-align:center;margin-bottom:0">'+esc(T("Secure checkout by Stripe. ","Pago seguro con Stripe. ")+(P.biz||"")+T(" never sees your card number."," nunca ve el número de su tarjeta."))+'</p>'
     +(ERR?'<p class="err">'+esc(ERR)+'</p>':"")+'</div>'+pdf()+ask()+foot();
   document.getElementById("go").addEventListener("click",pay);}

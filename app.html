@@ -3677,22 +3677,25 @@ async function decodeVin(vin){
 const vinReady=v=>{v=String(v||"").toUpperCase().replace(/\s/g,"");return v.length===17&&!/[IOQ]/.test(v)&&/^[A-Z0-9]+$/.test(v);};
 /* ---- safety recalls (NHTSA) for the vehicle's year, make and model; cached a week on this phone ---- */
 const RECALLS={};
-const recallKey=i=>[i.year,i.make,i.model].map(x=>String(x||"").trim()).join("|").toUpperCase();
-function recallsFor(i){const k=recallKey(i);if(!/^(19|20)\d\d\|[^|]+\|[^|]+$/.test(k))return null;
+const recallKey=i=>[i.year,i.make,i.model,i.trim].map(x=>String(x||"").trim()).join("|").toUpperCase();
+function recallsFor(i){const k=recallKey(i);if(!/^(19|20)\d\d\|[^|]+\|[^|]+\|/.test(k))return null;
   if(RECALLS[k])return RECALLS[k];
   try{const c=JSON.parse(localStorage.getItem("ht-rc:"+k)||"null");if(c&&Array.isArray(c.list)&&Date.now()-c.at<7*864e5)return (RECALLS[k]=c);}catch(e){}
   RECALLS[k]={loading:true};
-  if(typeof SUPA_URL==="string"&&SUPA_URL)fetch(`${SUPA_URL}/functions/v1/intake?recalls=1&year=${encodeURIComponent(i.year)}&make=${encodeURIComponent(String(i.make).trim())}&model=${encodeURIComponent(String(i.model).trim())}`)
-    .then(r=>r.json()).then(d=>{if(!Array.isArray(d.list))throw 0;const v={at:Date.now(),list:d.list};RECALLS[k]=v;try{localStorage.setItem("ht-rc:"+k,JSON.stringify(v));}catch(e){}refreshRecalls();})
+  if(typeof SUPA_URL==="string"&&SUPA_URL)fetch(`${SUPA_URL}/functions/v1/intake?recalls=1&year=${encodeURIComponent(i.year)}&make=${encodeURIComponent(String(i.make).trim())}&model=${encodeURIComponent(String(i.model).trim())}&trim=${encodeURIComponent(String(i.trim||"").trim())}`)
+    .then(r=>r.json()).then(d=>{if(!Array.isArray(d.list))throw 0;const v={at:Date.now(),list:d.list,model:d.model||"",unmatched:!!d.unmatched};RECALLS[k]=v;try{localStorage.setItem("ht-rc:"+k,JSON.stringify(v));}catch(e){}refreshRecalls();})
     .catch(()=>{RECALLS[k]={err:1,at:Date.now()};refreshRecalls();});
   else RECALLS[k]={err:1};
   return RECALLS[k];}
 function refreshRecalls(){document.querySelectorAll("[data-recall]").forEach(el=>{const j=APP.jobs.find(x=>String(x.id)===el.dataset.recall);if(j)el.innerHTML=recallHTML(j.info);});}
+// "ACCORD CROSSTOUR" → "Accord Crosstour"; short codes stay as they are ("CR-V", "GX 460")
+const rcName=m=>String(m).split(" / ").map(x=>x.split(" ").map(w=>/^[A-Z]{4,}$/.test(w)?w[0]+w.slice(1).toLowerCase():w).join(" ")).join(" / ");
 const rcDate=d=>{const m=/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(d||"");return m?fmtDate(`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`,{month:"short",year:"numeric"}):d||"";};
-function recallHTML(i){const r=recallsFor(i);if(!r)return "";const veh=[i.year,i.make,i.model].filter(Boolean).join(" ");
+function recallHTML(i){const r=recallsFor(i);if(!r)return "";const veh=[i.year,i.make,r.model?rcName(r.model):i.model].filter(Boolean).join(" ");
   if(r.loading)return `<span class="help">Checking safety recalls…</span>`;
   if(r.err)return `<span class="help">Couldn't check safety recalls right now (needs internet). <button class="mini" type="button" data-recallretry="${esc(recallKey(i))}">Try again</button></span>`;
   const vin=String(i.vin||"").toUpperCase(),chk=`https://www.nhtsa.gov/recalls${vinReady(vin)?"?vin="+vin:""}`;
+  if(r.unmatched)return `<span class="help">Couldn't find a ${esc([i.year,i.make].join(" "))} "${esc(i.model)}" in the government recall list. Check the model spelling (for example CR-V, F-150) or look up the VIN.</span>`;
   if(!r.list.length)return `<span class="help rc-ok">✓ No safety recalls on file for the ${esc(veh)}.</span>`;
   const park=r.list.some(x=>x.park);
   return `<details class="rc"><summary><span class="rc-n">⚠ ${r.list.length} safety recall${r.list.length===1?"":"s"}</span> for the ${esc(veh)}${park?` <span class="rc-park">Includes a do-not-drive recall</span>`:""}</summary>

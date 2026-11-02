@@ -252,27 +252,67 @@ async function estApprove(req: Request) {
 }
 // ---------- pay an invoice by card (honestechmobileapp.com/p/?CODE) ----------
 const nyDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
-const RECALLS = new Map<string, { at: number; list: unknown[] }>();
-async function recalls(sp: URLSearchParams) {
-  const year = String(sp.get("year") || "").replace(/\D/g, "").slice(0, 4), make = clip(sp.get("make"), 40).trim(), model = clip(sp.get("model"), 60).trim();
-  if (!/^(19|20)\d\d$/.test(year) || !make || !model) return out({ error: "Need year, make and model" }, 400);
-  const k = [year, make, model].join("|").toLowerCase();
-  const hit = RECALLS.get(k);
-  if (hit && Date.now() - hit.at < 12 * 3600e3) return out({ list: hit.list });
+const RECALLS = new Map<string, { at: number; list: unknown[]; model: string }>();
+const MODELS = new Map<string, { at: number; list: string[] }>();
+const nm = (x: string) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// the recall database's own model names for a year + make (cached a day)
+async function nhtsaModels(year: string, make: string): Promise<string[]> {
+  const k = year + "|" + make.toLowerCase(), hit = MODELS.get(k);
+  if (hit && Date.now() - hit.at < 24 * 3600e3) return hit.list;
   try {
-    const r = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(model)}&modelYear=${year}`);
-    if (!r.ok) return out({ error: "Recall lookup is busy. Try again later." }, 502);
-    const j = await r.json().catch(() => ({}));
-    const g = (o: Record<string, unknown>, ...ks: string[]) => { for (const x of ks) { const v = o[x] ?? o[x.charAt(0).toLowerCase() + x.slice(1)]; if (v != null && v !== "") return v; } return ""; };
-    const list = ((j.results || j.Results || []) as Record<string, unknown>[]).slice(0, 40).map((o) => ({
-      id: clip(g(o, "NHTSACampaignNumber"), 20), date: clip(g(o, "ReportReceivedDate"), 20), component: clip(g(o, "Component"), 160),
-      summary: clip(g(o, "Summary"), 900), risk: clip(g(o, "Consequence"), 600), fix: clip(g(o, "Remedy"), 600),
-      park: !!g(o, "parkIt") || !!g(o, "ParkIt"), outside: !!g(o, "parkOutSide") || !!g(o, "ParkOutSide"),
-    }));
-    RECALLS.set(k, { at: Date.now(), list });
-    if (RECALLS.size > 500) RECALLS.delete(RECALLS.keys().next().value!);
-    return out({ list });
-  } catch (_) { return out({ error: "Recall lookup is busy. Try again later." }, 502); }
+    const r = await fetch(`https://api.nhtsa.gov/products/vehicle/models?modelYear=${year}&make=${encodeURIComponent(make)}&issueType=r`);
+    const j = r.ok ? await r.json().catch(() => ({})) : {};
+    const list = [...new Set(((j.results || j.Results || []) as Record<string, string>[]).map((o) => String(o.model || o.Model || "").trim()).filter(Boolean))];
+    MODELS.set(k, { at: Date.now(), list });
+    return list;
+  } catch (_) { return []; }
+}
+// match what the mechanic typed ("Crv", "GX" + trim "460 Premium") to the database's names ("CR-V", "GX 460")
+function matchModels(models: string[], model: string, trim: string): string[] {
+  const m = nm(model), t1 = nm(String(trim || "").split(/\s+/)[0] || "");
+  if (!m) return [];
+  const exact = models.filter((x) => nm(x) === m);
+  if (exact.length) return exact.slice(0, 1);
+  if (t1) { const withTrim = models.filter((x) => nm(x) === m + t1); if (withTrim.length) return withTrim.slice(0, 1); }
+  const pre = models.filter((x) => nm(x).startsWith(m));
+  if (pre.length) {
+    if (t1) { const narrowed = pre.filter((x) => nm(x).startsWith(m + t1)); if (narrowed.length) return narrowed.slice(0, 3); }
+    return pre.slice(0, 4);
+  }
+  const inside = models.filter((x) => m.length >= 3 && (nm(x).includes(m) || m.includes(nm(x))));
+  return inside.slice(0, 2);
+}
+async function recalls(sp: URLSearchParams) {
+  const year = String(sp.get("year") || "").replace(/\D/g, "").slice(0, 4), make = clip(sp.get("make"), 40).trim(), model = clip(sp.get("model"), 60).trim(), trim = clip(sp.get("trim"), 60).trim();
+  if (!/^(19|20)\d\d$/.test(year) || !make || !model) return out({ error: "Need year, make and model" }, 400);
+  const k = [year, make, model, trim].join("|").toLowerCase();
+  const hit = RECALLS.get(k);
+  if (hit && Date.now() - hit.at < 12 * 3600e3) return out({ list: hit.list, model: hit.model });
+  const g = (o: Record<string, unknown>, ...ks: string[]) => { for (const x of ks) { const v = o[x] ?? o[x.charAt(0).toLowerCase() + x.slice(1)]; if (v != null && v !== "") return v; } return ""; };
+  const names = matchModels(await nhtsaModels(year, make), model, trim);
+  if (!names.length) return out({ list: [], unmatched: true });
+  const seen = new Set<string>(), list: Record<string, unknown>[] = [];
+  let ok = 0;
+  for (const name of names) {
+    try {
+      const r = await fetch(`https://api.nhtsa.gov/recalls/recallsByVehicle?make=${encodeURIComponent(make)}&model=${encodeURIComponent(name)}&modelYear=${year}`);
+      if (!r.ok) continue;
+      ok++;
+      const j = await r.json().catch(() => ({}));
+      for (const o of ((j.results || j.Results || []) as Record<string, unknown>[])) {
+        const id = clip(g(o, "NHTSACampaignNumber"), 20);
+        if (!id || seen.has(id) || list.length >= 40) continue;
+        seen.add(id);
+        list.push({ id, date: clip(g(o, "ReportReceivedDate"), 20), component: clip(g(o, "Component"), 160), summary: clip(g(o, "Summary"), 900), risk: clip(g(o, "Consequence"), 600), fix: clip(g(o, "Remedy"), 600),
+          park: !!g(o, "parkIt"), outside: !!g(o, "parkOutSide") });
+      }
+    } catch (_) { /* try the next name */ }
+  }
+  if (!ok) return out({ error: "Recall lookup is busy. Try again later." }, 502);
+  const label = names.join(" / ");
+  RECALLS.set(k, { at: Date.now(), list, model: label });
+  if (RECALLS.size > 500) RECALLS.delete(RECALLS.keys().next().value!);
+  return out({ list, model: label });
 }
 
 // whether the shop's Stripe account offers pay over time (Affirm or Klarna) at checkout

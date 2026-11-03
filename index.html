@@ -1729,6 +1729,8 @@ function scheduleSync(){if(!AUTH||APP.sample)return;clearTimeout(SYNC.timer);SYN
 const BASE={get:k=>MDB.get("b:"+k).then(v=>v?JSON.parse(v):undefined).catch(()=>undefined),
   put:(k,d)=>{let t;try{t=JSON.stringify(d);}catch(e){return;}MDB.put("b:"+k,t).catch(()=>{});},del:k=>MDB.del("b:"+k).catch(()=>{})};
 function stab(v){return JSON.stringify(v,(k,x)=>x&&typeof x==="object"&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}):x);}
+// record fingerprint that ignores field order (the server hands back JSON with its keys re-ordered)
+const hd=d=>h32(stab(d));
 const isObj=v=>!!v&&typeof v==="object"&&!Array.isArray(v);
 const idArr=a=>Array.isArray(a)&&a.every(x=>isObj(x)&&x.id!=null&&x.id!=="")&&new Set(a.map(x=>String(x.id))).size===a.length;
 function merge3(b,l,r,localWins){
@@ -1748,24 +1750,27 @@ async function syncNow(full){
   SYNC.busy=true;SYNC.state="syncing";syncLabel();
   try{
     if(!AUTH.shop_id){const shop=await supa("/rest/v1/rpc/my_shop",{method:"POST",body:{}});AUTH.shop_id=typeof shop==="string"?shop:shop;saveAuth();}
-    const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{},t:{},lh:{},based:1};}
+    const shopId=AUTH.shop_id;if(SMETA.shop!==shopId){SMETA={shop:shopId,cursor:"",h:{},t:{},lh:{},based:1,hv:2};}
     SMETA.h=SMETA.h||{};
+    if(SMETA.hv!==2){const old=d=>h32(JSON.stringify(d));for(const r of localRecords()){const k=r.kind+":"+r.id;if(SMETA.h[k]&&SMETA.h[k]===old(r.data))SMETA.h[k]=hd(r.data);if(SMETA.lh&&SMETA.lh[k]===old(r.data))SMETA.lh[k]=hd(r.data);}SMETA.hv=2;saveMeta();}
     const first=!SMETA.cursor;
     // local fingerprints: what's changed here since the last sync ("dirty"), and when it last changed
-    const loc=localRecords(),lh={},t0=Date.now();loc.forEach(r=>{lh[r.kind+":"+r.id]=h32(JSON.stringify(r.data));});
+    const loc=localRecords(),lh={},t0=Date.now();loc.forEach(r=>{lh[r.kind+":"+r.id]=hd(r.data);});
     const dirty=k=>k in lh&&SMETA.h[k]!==lh[k];
     SMETA.t=SMETA.t||{};SMETA.lh=SMETA.lh||{};
     for(const k in lh){if(dirty(k)){if(SMETA.lh[k]!==lh[k]){SMETA.lh[k]=lh[k];SMETA.t[k]=t0;}}else{delete SMETA.t[k];delete SMETA.lh[k];}}
     if(!SMETA.based){for(const r of loc){const k=r.kind+":"+r.id;if(!dirty(k)&&SMETA.h[k])BASE.put(k,r.data);}SMETA.based=1;}
     const locBy={};loc.forEach(r=>{locBy[r.kind+":"+r.id]=r;});
     // 1) pull what changed elsewhere. Unsent local edits win; on a device's first sync, the account's settings win.
+    // ("first" only counts if this phone has never sent or received the settings: a brand-new account sends its settings,
+    //  then reads them back with the fields in a different order, and that copy must not wipe what was typed since.)
     let changed=0;
     for(let guard=0;guard<40;guard++){
       const q=`/rest/v1/records?select=kind,id,data,deleted,updated_at&shop_id=eq.${shopId}${SMETA.cursor?`&updated_at=gt.${encodeURIComponent(SMETA.cursor)}`:""}&order=updated_at.asc&limit=500`;
       const rows=await supa(q);if(!rows||!rows.length)break;
       for(const r of rows){const k=r.kind+":"+r.id;SMETA.cursor=r.updated_at;
         if(!(k in lh)&&k in SMETA.h&&!r.deleted)continue;             // I deleted it here; the delete gets pushed below
-        if(dirty(k)&&!(first&&r.kind==="settings")&&r.kind!=="techcfg"){
+        if(dirty(k)&&!(first&&r.kind==="settings"&&!(k in SMETA.h))&&r.kind!=="techcfg"){
           if(r.deleted)continue;                                       // deleted elsewhere but changed here: keep mine
           // both phones changed it: merge field by field; where both changed the same field, the newer change wins
           const base=await BASE.get(k),lt=SMETA.t[k]||0,rt=Date.parse(r.updated_at)||0;
@@ -1773,8 +1778,8 @@ async function syncNow(full){
           const mine=locBy[k]?JSON.parse(JSON.stringify(locBy[k].data)):{};
           const merged=merge3(base,mine,r.data,localWins);
           changed+=applyRemote({...r,data:merged});
-          const rh=h32(JSON.stringify(r.data));SMETA.h[k]=rh;BASE.put(k,r.data);
-          const cur=localRecords().find(x=>x.kind+":"+x.id===k);lh[k]=cur?h32(JSON.stringify(cur.data)):rh;
+          const rh=hd(r.data);SMETA.h[k]=rh;BASE.put(k,r.data);
+          const cur=localRecords().find(x=>x.kind+":"+x.id===k);lh[k]=cur?hd(cur.data):rh;
           if(lh[k]===rh){delete SMETA.t[k];delete SMETA.lh[k];}else{SMETA.lh[k]=lh[k];}
           continue;}
         const c=applyRemote(r);changed+=c;if(r.deleted)BASE.del(k);else BASE.put(k,r.data);if(k in lh||r.deleted)delete lh[k];}
@@ -1782,7 +1787,7 @@ async function syncNow(full){
     if(!isTech()){if((APP.settings.techs||[]).length&&(!TEAM.at||Date.now()-TEAM.at>120000))await loadTeam(true);stampTechUsers();if(lockInvoices())changed++;if(parseIncoming())changed++;}
     // 2) push what changed here (and deletions)
     const now=localRecords(),seen=new Set(),push=[];
-    now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
+    now.forEach(r=>{const k=r.kind+":"+r.id;seen.add(k);const hh=hd(r.data);if(SMETA.h[k]!==hh)push.push({row:{shop_id:shopId,kind:r.kind,id:r.id,data:r.data,deleted:false},k,hh});});
     if(isTech()){ // jobs taken off my list disappear from this phone
       const vis=await supa(`/rest/v1/records?select=id&kind=eq.job&deleted=eq.false&shop_id=eq.${shopId}`);const ids=new Set((vis||[]).map(x=>String(x.id)));
       const before=APP.jobs.length;APP.jobs=APP.jobs.filter(j=>ids.has(String(j.id))||!(SMETA.h["job:"+j.id]));
@@ -1799,15 +1804,15 @@ async function syncNow(full){
 }
 function applyRemote(r){
   if(r.kind==="techinfo"){if(r.deleted)return 0;
-    if(isTech()){if(AUTH&&r.id===AUTH.user_id){APP.myTax=r.data;SMETA.h["techinfo:"+r.id]=h32(JSON.stringify(r.data));return 1;}return 0;}
-    APP.techInfo=APP.techInfo||{};const same=JSON.stringify(APP.techInfo[r.id]||null)===JSON.stringify(r.data);APP.techInfo[r.id]=r.data;return same?0:1;}
-  if(r.kind==="techcfg"){if(!isTech()||r.deleted)return 0;const k="techcfg:main",hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;
+    if(isTech()){if(AUTH&&r.id===AUTH.user_id){APP.myTax=r.data;SMETA.h["techinfo:"+r.id]=hd(r.data);return 1;}return 0;}
+    APP.techInfo=APP.techInfo||{};const same=stab(APP.techInfo[r.id]||null)===stab(r.data);APP.techInfo[r.id]=r.data;return same?0:1;}
+  if(r.kind==="techcfg"){if(!isTech()||r.deleted)return 0;const k="techcfg:main",hh=hd(r.data);if(SMETA.h[k]===hh)return 0;
     const keep={theme:APP.settings.theme,themeMode:APP.settings.themeMode,themeBg:APP.settings.themeBg,bgImg:APP.settings.bgImg,bgDim:APP.settings.bgDim,bgBlur:APP.settings.bgBlur,cardStyle:APP.settings.cardStyle,cardColor:APP.settings.cardColor,cardOpacity:APP.settings.cardOpacity,cardRadius:APP.settings.cardRadius,cardBorder:APP.settings.cardBorder,textIn:APP.settings.textIn,textOut:APP.settings.textOut,textShadow:APP.settings.textShadow,barStyle:APP.settings.barStyle,barColor:APP.settings.barColor,barOpacity:APP.settings.barOpacity,barTex:APP.settings.barTex,barImg:APP.settings.barImg,barInk:APP.settings.barInk,barBorder:APP.settings.barBorder,themeStyle:APP.settings.themeStyle};Object.assign(APP.settings,r.data,keep);SMETA.h[k]=hh;return 1;}
   const k=r.kind+":"+r.id,mapK={job:"jobs",customer:"customers",expense:"expenses",trip:"trips",request:"requests"}[r.kind];
-  if(r.kind==="settings"){if(r.deleted)return 0;const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
+  if(r.kind==="settings"){if(r.deleted)return 0;const hh=hd(r.data);if(SMETA.h[k]===hh)return 0;const ns={...defaultSettings(),...r.data};Object.keys(APP.settings).forEach(x=>{if(!(x in ns))delete APP.settings[x];});Object.assign(APP.settings,ns);SMETA.h[k]=hh;return 1;}
   if(!mapK)return 0;const arr=APP[mapK]||(APP[mapK]=[]);const i=arr.findIndex(x=>String(x.id)===String(r.id));
   if(r.deleted){if(i>-1){arr.splice(i,1);if(APP.active===r.id&&APP.view==="job"){APP.view="jobs";}}delete SMETA.h[k];return i>-1?1:0;}
-  const hh=h32(JSON.stringify(r.data));if(SMETA.h[k]===hh&&i>-1)return 0;
+  const hh=hd(r.data);if(SMETA.h[k]===hh&&i>-1)return 0;
   if(r.kind==="job"&&i>-1&&!isTech()&&r.data.invoice&&r.data.invoice.deposit&&!(arr[i].invoice&&arr[i].invoice.deposit))setTimeout(()=>toast(`💳 ${(r.data.info&&r.data.info.customer)||"Customer"} paid a ${money(r.data.invoice.deposit.amount||0)} deposit`),600);
   if(r.kind==="job"&&i>-1&&!isTech()&&r.data.invoice&&r.data.invoice.online&&r.data.invoice.paid&&!(arr[i].invoice&&arr[i].invoice.paid))setTimeout(()=>toast(`💳 ${(r.data.info&&r.data.info.customer)||"Customer"} paid ${money(r.data.invoice.online.amount||0)} by card`),300);
   if(r.kind==="job"&&i>-1&&!isTech()){const was=arr[i].est,now=r.data.est;if(now&&now.online&&now.status==="approved"&&!(was&&was.status==="approved"))setTimeout(()=>toast(`✓ ${(r.data.info&&r.data.info.customer)||"Customer"} approved the estimate${r.data.pending?"":" and booked "+slotTxt({d:r.data.info.date,t:r.data.info.time})}`),300);}

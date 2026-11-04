@@ -2927,13 +2927,16 @@ function aiRender(){let ov=document.getElementById("aiOv");if(!AIW){ov&&ov.remov
 /* ---- talk instead of type: say what you did, the AI fills in the work and the invoice lines ---- */
 let VOICE=null; // {id, from, said, busy, err, res, rec}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-// the iPhone app uses the keyboard's own mic (the app doesn't ask for microphone access itself)
-const VOICE_LIVE=!!SR&&!NATIVE;
+// iPhones and iPads use the keyboard's own 🎤 key: Safari's live listening can freeze the page on iOS after
+// "Allow", and the iPhone app doesn't ask for microphone access itself. Live listening is for computers and Android.
+// Android Chrome repeats words in continuous mode, so there it listens one phrase at a time (tap Listen again to add more)
+const VOICE_DROID=/Android/i.test(navigator.userAgent);
+const VOICE_LIVE=!!SR&&!NATIVE&&!(/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1));
 function voiceOpen(from){if(!S)return;VOICE={id:S.id,from,said:"",busy:false,err:"",res:null};voiceRender();setTimeout(()=>{const t=document.getElementById("vcSaid");if(t)t.focus();if(VOICE_LIVE)voiceListen(true);},120);}
 function voiceClose(){if(VOICE&&VOICE.rec){try{VOICE.rec.stop();}catch(e){}}VOICE=null;voiceRender();}
 function voiceListen(on){const V=VOICE;if(!V||!VOICE_LIVE)return;
   if(!on){if(V.rec){try{V.rec.stop();}catch(e){}}V.rec=null;voiceRender();return;}
-  const r=new SR();r.lang=isEs()?"es-US":"en-US";r.continuous=true;r.interimResults=true;const base=(document.getElementById("vcSaid")?.value||V.said||"").trim();
+  const r=new SR();r.lang=isEs()?"es-US":"en-US";r.continuous=!VOICE_DROID;r.interimResults=true;const base=(document.getElementById("vcSaid")?.value||V.said||"").trim();
   r.onresult=ev=>{let fin="",tmp="";for(let k=0;k<ev.results.length;k++){const x=ev.results[k];(x.isFinal?(fin+=x[0].transcript):(tmp+=x[0].transcript));}
     V.said=(base?base+" ":"")+fin+(tmp?" "+tmp:"");const t=document.getElementById("vcSaid");if(t)t.value=V.said;};
   r.onerror=ev=>{V.err=ev.error==="not-allowed"?"Microphone is blocked. Type it, or tap the mic on your keyboard.":"";V.rec=null;voiceRender();};
@@ -2948,7 +2951,7 @@ function voiceRender(){let ov=document.getElementById("vcOv");if(!VOICE){ov&&ov.
     <p class="help" style="margin:0 0 8px">Say what you did, like: <em>“Replaced front pads and rotors, two hours. Pads were 68 dollars, rotors 142. Rear pads are getting low.”</em></p>
     <label class="full">What you did<textarea id="vcSaid" rows="5" placeholder="${VOICE_LIVE?"Listening… or type here":"Tap the 🎤 on your keyboard and talk, or type"}">${esc(V.said)}</textarea></label>
     <div class="acts">${VOICE_LIVE?`<button class="btn${V.rec?" vc-on":""}" type="button" data-vc="${V.rec?"stop":"listen"}">${V.rec?"■ Stop listening":"🎤 Listen"}</button>`:""}<button class="btn primary" type="button" data-vc="go" ${V.busy?"disabled":""}>${V.busy?"Working…":r?"✨ Do it again":"✨ Fill it in"}</button></div>
-    ${!VOICE_LIVE?`<p class="help" style="margin:6px 0 0">Tip: the 🎤 key is next to the space bar on your keyboard.</p>`:""}
+    ${!VOICE_LIVE?`<p class="help" style="margin:6px 0 0">Tip: the 🎤 key is next to the space bar on your keyboard.</p>`:VOICE_DROID?`<p class="help" style="margin:6px 0 0">${esc(L_("It stops when you pause. Tap Listen again to add more, or use the 🎤 on your keyboard."))}</p>`:""}
     ${V.err?`<p class="help" style="color:var(--bad);margin:6px 0 0">${esc(V.err)}</p>`:""}
     ${r?`<div class="vc-res"><p class="formh" style="margin:12px 0 6px">This goes on the job</p>
       ${r.performed?`<p class="vc-k">Work performed</p><p class="vc-v">${esc(r.performed)}</p>`:""}

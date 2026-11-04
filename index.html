@@ -2927,8 +2927,9 @@ function aiRender(){let ov=document.getElementById("aiOv");if(!AIW){ov&&ov.remov
 /* ---- talk instead of type: say what you did, the AI fills in the work and the invoice lines ---- */
 let VOICE=null; // {id, from, said, busy, err, res, rec}
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-// the iPhone app uses the keyboard's own mic (the app doesn't ask for microphone access itself)
-const VOICE_LIVE=!!SR&&!NATIVE;
+// iPhones and iPads use the keyboard's own 🎤 key: Safari's live listening can freeze the page on iOS after
+// "Allow", and the iPhone app doesn't ask for microphone access itself. Live listening is for computers and Android.
+const VOICE_LIVE=!!SR&&!NATIVE&&!(/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1));
 function voiceOpen(from){if(!S)return;VOICE={id:S.id,from,said:"",busy:false,err:"",res:null};voiceRender();setTimeout(()=>{const t=document.getElementById("vcSaid");if(t)t.focus();if(VOICE_LIVE)voiceListen(true);},120);}
 function voiceClose(){if(VOICE&&VOICE.rec){try{VOICE.rec.stop();}catch(e){}}VOICE=null;voiceRender();}
 function voiceListen(on){const V=VOICE;if(!V||!VOICE_LIVE)return;

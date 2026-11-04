@@ -53,6 +53,62 @@ async function payStatus(shop: string) {
       affirm: cap.affirm_payments || "inactive", klarna: cap.klarna_payments || "inactive" };
   } catch (e) { return { connected: false, ready: false, error: (e as Error).message }; }
 }
+// ---------- Tap to Pay on iPhone (Stripe Terminal, on the shop's own Stripe account) ----------
+// The iPhone app reads the card itself; the server only hands out a short-lived Terminal connection token, the shop's
+// Terminal location, and the card-present payment for an invoice. Techs can take payments too (Apple allows employees);
+// accepting Apple's Tap to Pay terms is limited to the owner inside the app.
+async function payMeta(shop: string): Promise<Record<string, unknown>> {
+  const { data: f } = await db.storage.from("media").download(`_pay/${shop}.json`);
+  if (!f) return {};
+  try { return JSON.parse(await f.text()) || {}; } catch (_) { return {}; }
+}
+async function ttpReady(shop: string) {
+  const acct = await payAcct(shop);
+  if (!acct) return { acct: null, err: "Set up card payments first (Settings → Invoices → Card payments)." };
+  const a = await stripe.accounts.retrieve(acct);
+  if (!a.charges_enabled) return { acct: null, err: "Stripe hasn't finished approving card payments for this shop yet." };
+  return { acct, a, err: "" };
+}
+// one Terminal location per shop, made from the business address the shop gave Stripe (not the private home base)
+async function ttpLocation(shop: string): Promise<{ id?: string; error?: string }> {
+  const r = await ttpReady(shop);
+  if (!r.acct) return { error: r.err };
+  const meta = await payMeta(shop);
+  if (typeof meta.loc === "string" && meta.loc) {
+    try { const l = await stripe.terminal.locations.retrieve(meta.loc, { stripeAccount: r.acct }); if (!(l as any).deleted) return { id: l.id }; } catch (_) { /* make a new one */ }
+  }
+  const a = r.a as Stripe.Account;
+  const ad = (a.company?.address?.line1 ? a.company.address : a.individual?.address?.line1 ? a.individual.address : a.business_profile?.support_address) || null;
+  if (!ad || !ad.line1 || !ad.city || !ad.postal_code) return { error: "Stripe doesn't have a business address for this shop yet. Add one in your Stripe dashboard (Settings → Business details)." };
+  const l = await stripe.terminal.locations.create({
+    display_name: String(a.business_profile?.name || a.settings?.dashboard?.display_name || "Mobile service").slice(0, 100),
+    address: { line1: ad.line1, line2: ad.line2 || undefined, city: ad.city, state: ad.state || undefined, postal_code: ad.postal_code, country: ad.country || "US" },
+  } as any, { stripeAccount: r.acct });
+  const { error } = await db.storage.from("media").upload(`_pay/${shop}.json`, new Blob([JSON.stringify({ ...meta, acct: r.acct, loc: l.id })], { type: "application/json" }), { upsert: true, contentType: "application/json" });
+  if (error) throw error;
+  return { id: l.id };
+}
+async function ttpToken(shop: string) {
+  const r = await ttpReady(shop);
+  if (!r.acct) return { error: r.err };
+  const t = await stripe.terminal.connectionTokens.create({}, { stripeAccount: r.acct });
+  return { secret: t.secret };
+}
+// a card-present payment for one invoice; the app taps the card and confirms it
+async function ttpIntent(shop: string, body: Record<string, unknown>, uid: string) {
+  const r = await ttpReady(shop);
+  if (!r.acct) return { error: r.err };
+  const cents = Math.round(Number(body.amount) * 100);
+  if (!Number.isFinite(cents) || cents < 50 || cents > 5_000_000) return { error: "Enter an amount between $0.50 and $50,000." };
+  const job = String(body.job || "").slice(0, 80), num = String(body.num || "").slice(0, 40), cust = String(body.cust || "").slice(0, 80);
+  const pi = await stripe.paymentIntents.create({
+    amount: cents, currency: "usd", payment_method_types: ["card_present"], capture_method: "automatic",
+    description: `${num ? "Invoice " + num : "Payment"}${cust ? " · " + cust : ""} (Tap to Pay on iPhone)`,
+    metadata: { kind: "ttp", shop, job, num, by: uid },
+  }, { stripeAccount: r.acct, idempotencyKey: body.key ? `ttp-${shop}-${String(body.key).slice(0, 60)}` : undefined });
+  return { id: pi.id, client_secret: pi.client_secret, amount: cents / 100 };
+}
+
 async function paySetup(shop: string, email: string | undefined, ret: string) {
   let acct = await payAcct(shop);
   if (!acct) {
@@ -123,6 +179,10 @@ Deno.serve(async (req) => {
     if (body.action === "delete_account") return await deleteAccount(user.id, mem);
     if (!mem) return out({ error: "No shop found for this account" }, 400);
     if (body.action === "pay_status") return out(await payStatus(mem.shop_id));
+    // Tap to Pay on iPhone: any member of the shop can take a payment
+    if (body.action === "ttp_token") return out(await ttpToken(mem.shop_id));
+    if (body.action === "ttp_location") return out(await ttpLocation(mem.shop_id));
+    if (body.action === "ttp_intent") return out(await ttpIntent(mem.shop_id, body, user.id));
     if (mem.role !== "owner") return out({ error: "Only the shop owner can manage the plan" }, 403);
     const shopId = mem.shop_id;
     const { data: sub } = await db.from("subscriptions").select("status, stripe_customer").eq("shop_id", shopId).maybeSingle();

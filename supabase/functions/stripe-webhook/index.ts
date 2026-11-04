@@ -74,6 +74,45 @@ async function invoicePaid(s: Stripe.Checkout.Session) {
   } catch (e) { console.error("notify", e); }
 }
 
+// Tap to Pay on iPhone: the app marks the invoice paid itself; this is the backup if the app was closed first,
+// and the alert when a tap payment fails after the app was closed (Apple requirement 5.12).
+// The "Connected accounts" webhook needs payment_intent.succeeded and payment_intent.payment_failed for this.
+async function ttpEvent(pi: Stripe.PaymentIntent, ok: boolean) {
+  const shop = pi.metadata?.shop, job = pi.metadata?.job;
+  if (!shop || !UUID.test(shop)) return;
+  const amt = (pi.amount || 0) / 100;
+  let who = "A customer";
+  if (job) {
+    const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", shop).eq("kind", "job").eq("id", job).maybeSingle();
+    if (row && !row.deleted) {
+      const j = row.data as Record<string, any>;
+      who = j.info?.customer || who;
+      if (ok) {
+        j.invoice = j.invoice || {};
+        if (j.invoice.ttp?.pi === pi.id) return;                  // the app already recorded it
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+        j.invoice.paid = true; j.invoice.paidVia = "Card"; j.invoice.paidDate = day;
+        j.invoice.ttp = { pi: pi.id, amount: amt, at: Date.now() };
+        (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "paid with Tap to Pay on iPhone", at: Date.now(), by: "Card" });
+        const { error } = await db.from("records").update({ data: j }).eq("shop_id", shop).eq("kind", "job").eq("id", job);
+        if (error) throw error;
+        return;
+      }
+    }
+  }
+  if (ok) return;
+  try {
+    const { data: k } = await db.from("push_keys").select("public_key, private_key").eq("id", 1).maybeSingle();
+    const { data: members } = await db.from("shop_members").select("user_id, role").eq("shop_id", shop);
+    const ids = new Set((members || []).filter((m) => m.role === "owner" || m.role === "admin").map((m) => m.user_id));
+    if (pi.metadata?.by) ids.add(pi.metadata.by);
+    if (!ids.size) return;
+    const { data: subs } = await db.from("push_subs").select("endpoint, p256dh, auth").in("user_id", [...ids]);
+    const why = pi.last_payment_error?.message || "The card was declined.";
+    await pushTo(db, subs || [], k || null, { title: `Card payment not approved: $${amt.toFixed(2)}`, body: `${who}. ${why} Ask for another card or payment method.`, url: job ? "./?job=" + encodeURIComponent(job) : "./", tag: "ttp-" + pi.id });
+  } catch (e) { console.error("notify", e); }
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("ok");
   const sig = req.headers.get("stripe-signature") || "";
@@ -86,6 +125,9 @@ Deno.serve(async (req) => {
     if (event.account && (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded")) {
       const s = event.data.object as Stripe.Checkout.Session;
       if (s.metadata?.kind === "invoice" || s.metadata?.kind === "deposit") await invoicePaid(s);
+    } else if (event.account && (event.type === "payment_intent.succeeded" || event.type === "payment_intent.payment_failed")) {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      if (pi.metadata?.kind === "ttp") await ttpEvent(pi, event.type === "payment_intent.succeeded");
     } else if (event.type === "checkout.session.completed") {
       const s = event.data.object as Stripe.Checkout.Session;
       const shopId = s.client_reference_id;

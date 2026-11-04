@@ -508,6 +508,54 @@ async function shopBrand(shop: string, s0?: Record<string, any>) {
   return { logo, accent };
 }
 
+// ---------- calendar feed: booked jobs as a subscribable .ics (honestechmobileapp.com → Settings → Calendar) ----------
+// The link holds a long random key the owner made in Settings (settings.calKey); making a new link stops the old one.
+const icsTxt = (t: unknown) => String(t ?? "").replace(/\\/g, "\\\\").replace(/\r?\n/g, "\\n").replace(/([,;])/g, "\\$1");
+const icsFold = (l: string) => { const o: string[] = []; let x = l; while (new TextEncoder().encode(x).length > 74) { let n = 74; while (new TextEncoder().encode(x.slice(0, n)).length > 74) n--; o.push(x.slice(0, n)); x = " " + x.slice(n); } o.push(x); return o.join("\r\n"); };
+const icsUTC = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+function nyTime(date: string, time: string): Date {   // a New York wall-clock time → the real moment
+  const guess = new Date(`${date}T${time}:00Z`);
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(guess).map((x) => [x.type, x.value]));
+  const asNY = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute);
+  return new Date(guess.getTime() + (guess.getTime() - asNY));
+}
+async function calFeed(key: string) {
+  key = key.replace(/[^A-Za-z0-9]/g, "").slice(0, 64);
+  const none = () => new Response("Not found", { status: 404, headers: CORS });
+  if (key.length < 24) return none();
+  const { data: st } = await db.from("records").select("shop_id, data").eq("kind", "settings").eq("id", "main").eq("data->>calKey", key).limit(1).maybeSingle();
+  if (!st) return none();
+  const s = (st.data || {}) as Record<string, any>, shop = st.shop_id as string;
+  const nyDay = (o: number) => new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(Date.now() + o * 864e5));
+  const from = nyDay(-30), to = nyDay(370);
+  const { data: rows } = await db.from("records").select("id, data").eq("shop_id", shop).eq("kind", "job").eq("deleted", false)
+    .gte("data->info->>date", from).lte("data->info->>date", to).limit(2000);
+  const biz = String(s.biz || "Honestech").slice(0, 80), now = icsUTC(new Date());
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Honestech Mobile Mechanic App//Jobs//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsTxt(biz + " jobs")}`, "X-WR-TIMEZONE:America/New_York", "REFRESH-INTERVAL;VALUE=DURATION:PT30M", "X-PUBLISHED-TTL:PT30M"];
+  const addDay = (d: string) => { const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10).replace(/-/g, ""); };
+  for (const r of rows || []) {
+    const j = r.data as Record<string, any>, i = j.info || {};
+    if (!i.date || !/^\d{4}-\d\d-\d\d$/.test(i.date) || j.status === "canceled" || j.declined || j.pending) continue;
+    const svc = j.type === "service", what = svc ? (i.work || "Service") : "Pre-purchase inspection";
+    const veh = [i.year, i.make, i.model].filter(Boolean).join(" ");
+    L.push("BEGIN:VEVENT", `UID:job-${r.id}@honestechmobileapp.com`, `DTSTAMP:${now}`);
+    if (/^\d\d:\d\d$/.test(i.time || "")) {
+      const st0 = nyTime(i.date, i.time), mins = svc ? 120 : 90;
+      const endBase = /^\d\d:\d\d$/.test(i.timeEnd || "") && i.timeEnd > i.time ? nyTime(i.date, i.timeEnd) : st0;
+      L.push(`DTSTART:${icsUTC(st0)}`, `DTEND:${icsUTC(new Date(endBase.getTime() + mins * 60000))}`);
+    } else L.push(`DTSTART;VALUE=DATE:${i.date.replace(/-/g, "")}`, `DTEND;VALUE=DATE:${addDay(i.date)}`);
+    const t12 = (t: string) => { const [h, m] = t.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")}${h < 12 ? " AM" : " PM"}`; };
+    const win = i.timeEnd && i.time && i.timeEnd > i.time ? ` (arrive ${t12(i.time).replace(/ (AM|PM)$/, (x) => t12(i.timeEnd).endsWith(x.trim()) ? "" : x)}–${t12(i.timeEnd)})` : "";
+    L.push(`SUMMARY:${icsTxt(`${j.status === "done" ? "✓ " : ""}${what} · ${i.customer || "Customer"}${win}`)}`);
+    if (i.location) L.push(`LOCATION:${icsTxt(i.location)}`);
+    L.push(`DESCRIPTION:${icsTxt([veh, i.phone && "Phone: " + i.phone, svc && i.work && "Work: " + i.work, i.tech && "Tech: " + i.tech, i.notes, "Open in the app: https://honestechmobileapp.com/?job=" + encodeURIComponent(r.id)].filter(Boolean).join("\n"))}`);
+    L.push(`URL:https://honestechmobileapp.com/?job=${encodeURIComponent(r.id)}`, "END:VEVENT");
+  }
+  L.push("END:VCALENDAR");
+  return new Response(L.map(icsFold).join("\r\n") + "\r\n", { headers: { ...CORS, "Content-Type": "text/calendar; charset=utf-8", "Cache-Control": "private, max-age=300", "Content-Disposition": 'inline; filename="jobs.ics"' } });
+}
+
 function fmtSlot(x: Slot) {
   const d = new Date(x.d + "T12:00:00Z").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
   if (!x.t) return d;
@@ -578,6 +626,9 @@ Deno.serve(async (req) => {
   if (req.method === "GET") {
     // Safety recalls for a year / make / model (NHTSA). Public data, cached here for 12 hours.
     if (new URL(req.url).searchParams.get("recalls")) return await recalls(new URL(req.url).searchParams);
+    // the shop's private calendar feed (iPhone / Google Calendar subscribe to it and refresh on their own)
+    const calK = new URL(req.url).searchParams.get("cal") || "";
+    if (calK) return await calFeed(calK);
     // "Add to calendar" from the iPhone app: hand Safari the calendar file so it offers Add to Calendar. Nothing is stored.
     const ics = new URL(req.url).searchParams.get("ics") || "";
     if (ics) {

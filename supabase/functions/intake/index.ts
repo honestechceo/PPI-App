@@ -566,6 +566,34 @@ function fmtSlot(x: Slot) {
   return `${d} between ${a.slice(-2) === b.slice(-2) ? a.slice(0, -3) : a} and ${b}`;
 }
 
+// ---------- "Get my device ID" (honestechmobileapp.com/udid.html) ----------
+// Apple's standard Profile Service: the iPhone downloads a tiny profile, the owner approves it in Settings, and the
+// phone sends its device ID here once. Nothing is installed and nothing is stored: the ID is handed straight back to
+// the page so the owner can register the phone for test builds (Tap to Pay testing).
+const UDID_CFG = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadContent</key><dict>
+<key>URL</key><string>${Deno.env.get("SUPABASE_URL")}/functions/v1/intake?udid=1</string>
+<key>DeviceAttributes</key><array><string>UDID</string><string>PRODUCT</string><string>VERSION</string></array>
+</dict>
+<key>PayloadOrganization</key><string>Honestech Mobile Mechanic App</string>
+<key>PayloadDisplayName</key><string>Honestech: get my device ID</string>
+<key>PayloadDescription</key><string>Reads this iPhone's device ID once so it can be registered for test versions of the app. Nothing stays installed.</string>
+<key>PayloadVersion</key><integer>1</integer>
+<key>PayloadUUID</key><string>6F4E2B1A-3C5D-4E7F-9A0B-1C2D3E4F5A6B</string>
+<key>PayloadIdentifier</key><string>com.honestechmobileapp.udid</string>
+<key>PayloadType</key><string>Profile Service</string>
+</dict></plist>`;
+async function udidBack(req: Request) {
+  const raw = new Uint8Array(await req.arrayBuffer()).slice(0, 200_000);
+  const txt = new TextDecoder("latin1").decode(raw), xml = (txt.match(/<\?xml[\s\S]*?<\/plist>/) || [""])[0];
+  const get = (k: string) => (xml.match(new RegExp(`<key>${k}</key>\\s*<string>([^<]{1,80})</string>`)) || [])[1] || "";
+  const u = get("UDID").replace(/[^A-Fa-f0-9-]/g, ""), pr = get("PRODUCT").replace(/[^A-Za-z0-9,]/g, ""), v = get("VERSION").replace(/[^A-Za-z0-9.]/g, "");
+  const to = `https://honestechmobileapp.com/udid.html?${u ? "u=" + u + "&p=" + encodeURIComponent(pr) + "&v=" + encodeURIComponent(v) : "err=1"}`;
+  return new Response(null, { status: 301, headers: { Location: to } });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method === "GET" && new URL(req.url).searchParams.get("d")) {
@@ -623,6 +651,8 @@ Deno.serve(async (req) => {
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "book") return await bookPost(req);
   if (req.method === "GET" && new URL(req.url).searchParams.get("p")) return await payGet(new URL(req.url).searchParams.get("p") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "pay") return await payStart(req);
+  if (new URL(req.url).searchParams.get("udid")) return await udidBack(req);
+  if (req.method === "GET" && new URL(req.url).searchParams.get("udidcfg")) return new Response(UDID_CFG, { headers: { "Content-Type": "application/x-apple-aspen-config", "Content-Disposition": 'attachment; filename="honestech-device-id.mobileconfig"' } });
   if (req.method === "GET") {
     // Safety recalls for a year / make / model (NHTSA). Public data, cached here for 12 hours.
     if (new URL(req.url).searchParams.get("recalls")) return await recalls(new URL(req.url).searchParams);

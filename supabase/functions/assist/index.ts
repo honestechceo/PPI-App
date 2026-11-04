@@ -28,7 +28,8 @@ function overLimit(shop: string) {
 
 const MODELS = () => [Deno.env.get("GEMINI_MODEL"), "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3-flash-preview"].filter(Boolean) as string[];
 
-async function gemini(system: string, prompt: string): Promise<string> {
+type Opt = { json?: boolean; image?: { mime: string; data: string }; max?: number; temp?: number };
+async function gemini(system: string, prompt: string, o: Opt = {}): Promise<string> {
   const key = Deno.env.get("GEMINI_API_KEY");
   if (!key) throw { msg: "AI writing isn't set up yet (the shop owner adds a Google AI key).", code: 503 };
   let last = "";
@@ -37,8 +38,8 @@ async function gemini(system: string, prompt: string): Promise<string> {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.6, maxOutputTokens: 600 },
+        contents: [{ role: "user", parts: [...(o.image ? [{ inlineData: { mimeType: o.image.mime, data: o.image.data } }] : []), { text: prompt }] }],
+        generationConfig: { temperature: o.temp ?? 0.6, maxOutputTokens: o.max ?? 600, ...(o.json ? { responseMimeType: "application/json" } : {}) },
       }),
     });
     if (r.status === 404 || r.status === 400) { last = await r.text().catch(() => ""); continue; }   // model name retired: try the next
@@ -51,6 +52,64 @@ async function gemini(system: string, prompt: string): Promise<string> {
   }
   console.error("gemini: no model worked", last.slice(0, 300));
   throw { msg: "Couldn't write a draft right now. Try again.", code: 502 };
+}
+
+// ---------- job tools that return data instead of a message ----------
+const num = (v: unknown) => { const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, "")); return Number.isFinite(n) ? n : null; };
+function parseJSON(t: string) { try { return JSON.parse(t.replace(/^```(?:json)?\s*|\s*```$/g, "")); } catch (_) { const m = t.match(/\{[\s\S]*\}/); if (m) { try { return JSON.parse(m[0]); } catch (_) { /* fall through */ } } return null; } }
+const KINDS = new Set(["labor", "part", "flat", "fee"]);
+function cleanLines(a: unknown) {
+  return (Array.isArray(a) ? a : []).slice(0, 25).map((x: any) => ({
+    k: KINDS.has(String(x?.k)) ? String(x.k) : "part", d: clip(x?.d, 120).trim(), q: num(x?.q), p: num(x?.p),
+  })).filter((x) => x.d);
+}
+async function tool(b: Record<string, any>) {
+  const veh = clip(b.vehicle, 120) || "the vehicle";
+  // talk instead of type: what the mechanic said → work performed + invoice lines
+  if (b.kind === "worklog") {
+    const said = clip(b.said, 3000).trim();
+    if (!said) return { error: "Say or type what you did first." };
+    const system = [
+      "You turn a mobile mechanic's spoken notes into a work record and invoice lines. Reply with JSON only.",
+      'Shape: {"performed": string, "recs": string, "lines": [{"k": "labor"|"part"|"flat"|"fee", "d": string, "q": number|null, "p": number|null}]}',
+      "performed: what was done, in clear past-tense sentences a customer can read, keeping torque specs, part numbers and readings that were said. recs: anything they said still needs doing (empty if none).",
+      "lines: labor as k=labor with q = hours; parts as k=part with q = quantity and p = price each; a fixed-price job as k=flat. Only use prices and hours the mechanic actually said; otherwise null. Never invent parts that weren't mentioned.",
+      `Write performed and recs in ${b.lang === "es" ? "Spanish" : "English"}. Keep line descriptions short (under 60 characters).`,
+    ].join("\n");
+    const r = parseJSON(await gemini(system, `Vehicle: ${veh}\nWork requested: ${clip(b.work, 300) || "(not given)"}\n\nWhat the mechanic said:\n"""\n${said}\n"""`, { json: true, temp: 0.2, max: 1200 }));
+    if (!r) return { error: "Couldn't understand that. Try again or type it in." };
+    return { performed: clip(r.performed, 2000), recs: clip(r.recs, 800), lines: cleanLines(r.lines) };
+  }
+  // typical labor time for a repair on a vehicle
+  if (b.kind === "labor") {
+    const job = clip(b.job, 200).trim();
+    if (!job) return { error: "Say what the repair is first." };
+    const system = [
+      "You estimate typical labor time for auto repairs, like a labor guide, for a mobile mechanic. Reply with JSON only.",
+      'Shape: {"hours": number, "low": number, "high": number, "notes": string, "parts": [string]}',
+      "hours: typical book time in hours (decimal, to 0.1). low/high: realistic range working in a driveway. notes: one or two short sentences on what drives the time (rusted hardware, both sides, engine layout). parts: the usual parts list, short names, no prices.",
+      "If the vehicle is unknown, give a typical range for a common car. Be honest when it's a rough guess.",
+    ].join("\n");
+    const r = parseJSON(await gemini(system, `Vehicle: ${veh}${b.engine ? " " + clip(b.engine, 60) : ""}\nRepair: ${job}`, { json: true, temp: 0.2, max: 500 }));
+    const h = num(r?.hours);
+    if (!r || h === null || h <= 0 || h > 60) return { error: "Couldn't estimate that one. Try describing the repair differently." };
+    return { hours: Math.round(h * 10) / 10, low: num(r.low), high: num(r.high), notes: clip(r.notes, 300), parts: (Array.isArray(r.parts) ? r.parts : []).slice(0, 12).map((x: unknown) => clip(x, 60)) };
+  }
+  // a photo of a parts receipt → the parts and what they cost
+  if (b.kind === "receipt") {
+    const img = String(b.image || ""), m = img.match(/^data:(image\/(?:jpeg|png|webp|heic));base64,([A-Za-z0-9+/=]+)$/);
+    if (!m || m[2].length > 6_000_000) return { error: "Couldn't read that photo. Try a clearer, closer picture." };
+    const system = [
+      "You read auto parts store receipts. Reply with JSON only.",
+      'Shape: {"store": string, "date": "YYYY-MM-DD" or "", "items": [{"d": string, "pn": string, "q": number, "cost": number}], "tax": number|null, "total": number|null}',
+      "items: each part line: short description, part number if printed, quantity, and the price paid for that line (after any line discount). Skip core charges unless they were paid, and skip non-part lines like bags or rewards. Use only what's printed; never guess numbers.",
+    ].join("\n");
+    const r = parseJSON(await gemini(system, "Read this receipt.", { json: true, temp: 0, max: 1500, image: { mime: m[1], data: m[2] } }));
+    if (!r || !Array.isArray(r.items) || !r.items.length) return { error: "Couldn't find any parts on that receipt. Try a clearer picture." };
+    return { store: clip(r.store, 60), date: /^\d{4}-\d\d-\d\d$/.test(String(r.date)) ? r.date : "", tax: num(r.tax), total: num(r.total),
+      items: r.items.slice(0, 30).map((x: any) => ({ d: clip(x?.d, 100), pn: clip(x?.pn, 40), q: num(x?.q) || 1, cost: num(x?.cost) })).filter((x: any) => x.d) };
+  }
+  return { error: "Unknown request" };
 }
 
 Deno.serve(async (req) => {
@@ -67,6 +126,7 @@ Deno.serve(async (req) => {
     if (overLimit(mem.shop_id)) return out({ error: "That's a lot of drafts this hour. Try again a bit later." }, 429);
 
     const b = await req.json().catch(() => ({}));
+    if (b.kind === "worklog" || b.kind === "labor" || b.kind === "receipt") return out(await tool(b));
     const lang = b.lang === "es" ? "Spanish" : "English";
     const biz = clip(b.biz, 80) || "our shop", owner = clip(b.owner, 60);
     const system = [

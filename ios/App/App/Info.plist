@@ -8,6 +8,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Honestech uses the camera to take job and inspection photos and to scan VIN barcodes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Honestech uses Face ID to unlock the app so only you can see your jobs and customers.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Honestech uses the microphone when you record a video of a vehicle for a job.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

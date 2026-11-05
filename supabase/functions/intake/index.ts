@@ -217,6 +217,9 @@ async function estApprove(req: Request) {
     const sig = String(body.sig || "");
     if (name.length < 2) return out({ error: "Type your name" }, 400);
     if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(sig) || sig.length > 250000) return out({ error: "Sign in the box" }, 400);
+    // the shop's terms exactly as this customer saw them on the page; agreeing is required when there are any
+    const dsc = (m.est as any).disc, terms = dsc && dsc.x ? { t: clip(dsc.t, 80), x: clip(dsc.x, 1500) } : null;
+    if (terms && body.agree !== true) return out({ error: "Check the box to agree to the terms." }, 400);
     const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job).maybeSingle();
     if (!row || row.deleted) return out({ error: "This estimate is no longer available." }, 404);
     const j = row.data as Record<string, any>;
@@ -234,9 +237,9 @@ async function estApprove(req: Request) {
     }
     const now = Date.now(), total = Number((m.est as any).total) || 0;
     j.est = j.est || { num: (m.est as any).num || "", date: today };
-    Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total } });
+    Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total, ...(terms ? { agreed: { at: now, ...terms } } : {}) } });
     j.sig = j.sig || {};
-    j.sig.est = { data: sig, name, at: now, online: true };
+    j.sig.est = { data: sig, name, at: now, online: true, ...(terms ? { agreed: true, terms } : {}) };
     if (pick && j.pending) { j.info = j.info || {}; j.info.date = pick.d; j.info.time = pick.t || ""; j.info.timeEnd = pick.e || ""; j.pending = false; j.bookedAt = now; }
     (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "approved online", at: now, by: name });
     const { error } = await db.from("records").update({ data: j }).eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job);

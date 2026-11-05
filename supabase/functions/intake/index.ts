@@ -185,6 +185,16 @@ async function estGet(code: string, sess = "") {
   if (!m || !m.est) return out({ error: "This link has expired. Ask the shop to send it again." }, 404);
   let j = await loadJob(m);
   if (!j) return out({ error: "This estimate is no longer available. Ask the shop to send it again." }, 404);
+  // note when the customer opens the estimate (first time, and the latest at most every 10 minutes) so the shop can see it
+  if (estState(j) === "open" && !sess) {
+    const now = Date.now(), e = (j.est = j.est || {});
+    if (!e.viewedAt || !e.lastViewAt || now - e.lastViewAt > 600e3) {
+      if (!e.viewedAt) e.viewedAt = now;
+      e.lastViewAt = now; e.views = (Number(e.views) || 0) + 1;
+      const { error } = await db.from("records").update({ data: j }).eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job);
+      if (error) console.error("view note", error);
+    }
+  }
   // coming back from paying the deposit: confirm it right away
   if (sess && /^cs_[A-Za-z0-9_]+$/.test(sess) && !j.invoice?.deposit) {
     const acct = await payAcct(m.shop!);

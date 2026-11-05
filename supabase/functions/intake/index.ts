@@ -208,6 +208,7 @@ async function estGet(code: string, sess = "") {
     deposit: dep, depositPaid: depPaid, canPay: !!canPay, later: !!canPay && dep >= 50 && await payLater(canPay),
   });
 }
+const TRIES = new Map<string, number[]>();
 async function estApprove(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -218,7 +219,7 @@ async function estApprove(req: Request) {
     if (name.length < 2) return out({ error: "Type your name" }, 400);
     if (!/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/.test(sig) || sig.length > 250000) return out({ error: "Sign in the box" }, 400);
     // the shop's terms exactly as this customer saw them on the page; agreeing is required when there are any
-    const dsc = (m.est as any).disc, terms = dsc && dsc.x ? { t: clip(dsc.t, 80), x: clip(dsc.x, 1500) } : null;
+    const dsc = (m.est as any).disc, terms = dsc && dsc.x ? { t: clip(dsc.t, 80), x: clip(dsc.x, 8000) } : null;
     if (terms && body.agree !== true) return out({ error: "Check the box to agree to the terms." }, 400);
     const { data: row } = await db.from("records").select("data, deleted").eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job).maybeSingle();
     if (!row || row.deleted) return out({ error: "This estimate is no longer available." }, 404);
@@ -226,6 +227,18 @@ async function estApprove(req: Request) {
     const state = estState(j);
     if (state === "approved") return out({ ok: true, already: true });
     if (state !== "open") return out({ error: "This estimate is closed. Text the shop if you have questions." }, 409);
+    // optional check the shop turns on: the last 4 digits of the phone number the estimate is for
+    if ((m.est as any).verify) {
+      const ph = String(j.info?.phone || "").replace(/\D/g, "");
+      if (ph.length >= 4) {
+        const k = "v:" + String(body.code || ""), tries = (TRIES.get(k) || []).filter((t) => Date.now() - t < 3600e3);
+        if (tries.length >= 6) return out({ error: "Too many tries. Text the shop to get a new link." }, 429);
+        if (String(body.last4 || "").replace(/\D/g, "").slice(-4) !== ph.slice(-4)) { tries.push(Date.now()); TRIES.set(k, tries); return out({ error: "Those digits don't match the phone number on this estimate.", field: "last4" }, 400); }
+      }
+    }
+    // a record of where the approval came from, kept with the signature
+    const ipAddr = clip((req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || "", 60);
+    const ua = clip(req.headers.get("user-agent") || "", 300);
     const today = new Date(Date.now() - 5 * 3600_000).toISOString().slice(0, 10);
     let pick: Slot | null = null;
     const ask = clip(body.ask, 300).trim();
@@ -237,9 +250,9 @@ async function estApprove(req: Request) {
     }
     const now = Date.now(), total = Number((m.est as any).total) || 0;
     j.est = j.est || { num: (m.est as any).num || "", date: today };
-    Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total, ...(terms ? { agreed: { at: now, ...terms } } : {}) } });
+    Object.assign(j.est, { status: "approved", approvedDate: today, total, online: { at: now, name, ask: pick ? "" : ask, total, ip: ipAddr, ua, ...((m.est as any).verify ? { verified: "phone last 4" } : {}), ...(terms ? { agreed: { at: now, ...terms } } : {}) } });
     j.sig = j.sig || {};
-    j.sig.est = { data: sig, name, at: now, online: true, ...(terms ? { agreed: true, terms } : {}) };
+    j.sig.est = { data: sig, name, at: now, online: true, ip: ipAddr, ua, ...(terms ? { agreed: true, terms } : {}) };
     if (pick && j.pending) { j.info = j.info || {}; j.info.date = pick.d; j.info.time = pick.t || ""; j.info.timeEnd = pick.e || ""; j.pending = false; j.bookedAt = now; }
     (j.log = Array.isArray(j.log) ? j.log : []).push({ ev: "approved online", at: now, by: name });
     const { error } = await db.from("records").update({ data: j }).eq("shop_id", m.shop).eq("kind", "job").eq("id", m.job);

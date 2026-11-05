@@ -37,7 +37,7 @@ label.l{display:block;font-weight:700;margin:14px 0 6px}
 .done{text-align:center;padding:26px 16px}
 .done .big{font-size:52px;line-height:1}
 .done h2{font-size:22px;margin:10px 0 6px}
-.fine{font-size:13px;color:var(--mute);margin:12px 0}.disc{border:1px solid var(--line,#d7dde4);border-radius:12px;padding:10px 12px;margin:12px 0 4px;font-size:14px}.disc p{margin:4px 0 0;white-space:pre-wrap}
+.fine{font-size:13px;color:var(--mute);margin:12px 0}.disc{border:1px solid var(--line,#d7dde4);border-radius:12px;padding:10px 12px;margin:12px 0 4px;font-size:14px}.disc p{margin:4px 0 0;white-space:pre-wrap}.agree{display:flex;gap:10px;align-items:flex-start;margin:10px 0 0;font-weight:600;font-size:15px;cursor:pointer}.agree input{width:22px;height:22px;flex:none;margin:1px 0 0}
 .foot{text-align:center;color:var(--mute);font-size:12px;margin-top:22px}
 @media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}
   .opt:has(input:checked){background:#16263d;background:color-mix(in srgb,var(--accent) 18%,var(--card))}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
@@ -81,7 +81,7 @@ function render(){
     :'<label class="l">'+esc(T("What day and time works for you?","¿Qué día y hora le queda?"))+'</label><textarea id="ask" placeholder="'+esc(T("For example: Saturday morning","Por ejemplo: el sábado en la mañana"))+'"></textarea>';
   app.innerHTML=head()+summary()+'<div class="card"><h2>'+esc(T("Approve and book","Aprobar y agendar"))+'</h2>'+times
     +'<label class="l" for="nm">'+esc(T("Your name","Su nombre"))+'</label><input type="text" id="nm" autocomplete="name" value="'+esc(E.custFull||"")+'">'
-    +(E.disc&&E.disc.x?'<div class="disc"><strong>'+esc(E.disc.t||T("Warranty & terms","Garantía y términos"))+'</strong><p>'+esc(E.disc.x)+'</p><p class="mute" style="margin:6px 0 0;font-size:13px">'+esc(T("Signing below means you agree to these terms too.","Al firmar abajo, también acepta estos términos."))+'</p></div>':"")
+    +(E.disc&&E.disc.x?'<div class="disc"><strong>'+esc(E.disc.t||T("Warranty & terms","Garantía y términos"))+'</strong><p>'+esc(E.disc.x)+'</p><label class="agree"><input type="checkbox" id="agree"'+(AGREE?" checked":"")+'> <span>'+esc(T("I have read and agree to the warranty & terms above.","He leído y acepto la garantía y los términos de arriba."))+'</span></label></div>':"")
     +'<label class="l">'+esc(T("Sign with your finger","Firme con el dedo"))+'</label><div class="pad"><canvas id="cv"></canvas><div class="ph">'+esc(T("Sign here","Firme aquí"))+'</div></div>'
     +'<button class="clr" type="button" id="clr">'+esc(T("Clear","Borrar"))+'</button>'
     +(E.deposit>0&&E.canPay?'<p class="fine" style="margin-bottom:0"><strong>'+esc(T("Deposit: ","Depósito: "))+money(E.deposit)+'</strong> '+esc(T("by card after you approve. It comes off your final invoice.","con tarjeta después de aprobar. Se descuenta de su factura final."))+'</p>':"")
@@ -116,14 +116,16 @@ function pad(){var c=document.getElementById("cv"),r=c.getBoundingClientRect(),d
   c.addEventListener("pointermove",function(e){if(!down)return;var q=p(e);x.beginPath();x.moveTo(lx,ly);x.lineTo(q[0],q[1]);x.stroke();lx=q[0];ly=q[1];e.preventDefault();});
   ["pointerup","pointercancel","pointerleave"].forEach(function(t){c.addEventListener(t,function(){down=false;});});}
 function sigData(){var c=document.getElementById("cv"),o=document.createElement("canvas"),w=600,h=Math.round(600*c.height/c.width);o.width=w;o.height=h;var x=o.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,w,h);x.drawImage(c,0,0,w,h);return o.toDataURL("image/jpeg",0.7);}
+var AGREE=false;document.addEventListener("change",function(e){if(e.target&&e.target.id==="agree")AGREE=e.target.checked;});
 function approve(){if(BUSY)return;var sl=E.slots||[],nm=(document.getElementById("nm").value||"").trim(),a=document.getElementById("ask"),askv=a?(a.value||"").trim():"";ERR="";
   var keep=keepVals();
   if(sl.length&&PICK==null&&!OTHER)ERR=T("Pick a time that works for you.","Escoja un horario.");
   else if((OTHER||!sl.length)&&!askv)ERR=T("Tell us a day and time that works for you.","Díganos qué día y hora le queda.");
   else if(nm.length<2)ERR=T("Type your name.","Escriba su nombre.");
   else if(!inked)ERR=T("Sign in the box with your finger.","Firme en el recuadro con el dedo.");
+  else if(E.disc&&E.disc.x&&!AGREE)ERR=T("Check the box to agree to the terms.","Marque la casilla para aceptar los términos.");
   if(ERR){render();restore(keep);return;}
-  var body={code:code,name:nm,sig:sigData(),slot:!OTHER&&PICK!=null?sl[PICK]:null,ask:askv};
+  var body={code:code,name:nm,sig:sigData(),slot:!OTHER&&PICK!=null?sl[PICK]:null,ask:askv,agree:!!AGREE};
   BUSY=true;render();restore(keep);
   fetch(API+"?act=approve",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}).then(function(r){return r.json().then(function(d){return [r.ok,d];});})
     .then(function(x){BUSY=false;if(!x[0]||!x[1].ok){ERR=(x[1]&&x[1].error)||T("Something went wrong. Try again.","Algo salió mal. Intente de nuevo.");if(/isn't available anymore/.test(ERR))return load();render();restore(keep);return;}

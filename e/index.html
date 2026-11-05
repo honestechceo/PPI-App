@@ -37,7 +37,7 @@ label.l{display:block;font-weight:700;margin:14px 0 6px}
 .done{text-align:center;padding:26px 16px}
 .done .big{font-size:52px;line-height:1}
 .done h2{font-size:22px;margin:10px 0 6px}
-.fine{font-size:13px;color:var(--mute);margin:12px 0}
+.fine{font-size:13px;color:var(--mute);margin:12px 0}.disc{border:1px solid var(--line,#d7dde4);border-radius:12px;padding:10px 12px;margin:12px 0 4px;font-size:14px}.disc p{margin:4px 0 0;white-space:pre-wrap}
 .foot{text-align:center;color:var(--mute);font-size:12px;margin-top:22px}
 @media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}
   .opt:has(input:checked){background:#16263d;background:color-mix(in srgb,var(--accent) 18%,var(--card))}.tot{border-color:var(--ink)}input[type=text],textarea{background:#0f141a}}
@@ -81,6 +81,7 @@ function render(){
     :'<label class="l">'+esc(T("What day and time works for you?","¿Qué día y hora le queda?"))+'</label><textarea id="ask" placeholder="'+esc(T("For example: Saturday morning","Por ejemplo: el sábado en la mañana"))+'"></textarea>';
   app.innerHTML=head()+summary()+'<div class="card"><h2>'+esc(T("Approve and book","Aprobar y agendar"))+'</h2>'+times
     +'<label class="l" for="nm">'+esc(T("Your name","Su nombre"))+'</label><input type="text" id="nm" autocomplete="name" value="'+esc(E.custFull||"")+'">'
+    +(E.disc&&E.disc.x?'<div class="disc"><strong>'+esc(E.disc.t||T("Warranty & terms","Garantía y términos"))+'</strong><p>'+esc(E.disc.x)+'</p><p class="mute" style="margin:6px 0 0;font-size:13px">'+esc(T("Signing below means you agree to these terms too.","Al firmar abajo, también acepta estos términos."))+'</p></div>':"")
     +'<label class="l">'+esc(T("Sign with your finger","Firme con el dedo"))+'</label><div class="pad"><canvas id="cv"></canvas><div class="ph">'+esc(T("Sign here","Firme aquí"))+'</div></div>'
     +'<button class="clr" type="button" id="clr">'+esc(T("Clear","Borrar"))+'</button>'
     +(E.deposit>0&&E.canPay?'<p class="fine" style="margin-bottom:0"><strong>'+esc(T("Deposit: ","Depósito: "))+money(E.deposit)+'</strong> '+esc(T("by card after you approve. It comes off your final invoice.","con tarjeta después de aprobar. Se descuenta de su factura final."))+'</p>':"")

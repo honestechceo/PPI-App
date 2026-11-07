@@ -4742,8 +4742,16 @@ function applyText(st){const root=document.documentElement,tin=st.textIn||"",tou
   if(tout){root.style.setProperty("--ink",tout);root.style.setProperty("--muted",mut(tout));}
   root.classList.add("txt-x");}
 // top and bottom bars: color, glass, how solid, texture, picture, text/icon color
+// carbon fiber: a 2x2 twill weave, each strand bundle with its own sheen, drawn as a small repeating picture
+const CARBON_TEX=(()=>{const rows=["HHVV","VHHV","VVHH","HVVH"];let r="";
+  rows.forEach((row,y)=>[...row].forEach((c,x)=>{r+=`<rect x="${x+.05}" y="${y+.05}" width=".9" height=".9" rx=".08" fill="url(#${c})"/>`;}));
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 4"><defs>`+
+    `<linearGradient id="H" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".02"/><stop offset=".5" stop-color="#fff" stop-opacity=".26"/><stop offset="1" stop-color="#fff" stop-opacity=".02"/></linearGradient>`+
+    `<linearGradient id="V" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".3"/><stop offset=".5" stop-color="#fff" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>`+
+    `</defs>${r}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0/18px 18px repeat`;})();
 const BAR_TEX={"":["None",""],
- carbon:["Carbon fiber","linear-gradient(27deg,rgba(0,0,0,.38) 5px,transparent 5px) 0 5px/20px 20px,linear-gradient(207deg,rgba(0,0,0,.38) 5px,transparent 5px) 10px 0/20px 20px,linear-gradient(27deg,rgba(255,255,255,.07) 5px,transparent 5px) 0 10px/20px 20px,linear-gradient(207deg,rgba(255,255,255,.07) 5px,transparent 5px) 10px 5px/20px 20px,linear-gradient(90deg,rgba(0,0,0,.22) 10px,transparent 10px) 0 0/20px 20px"],
+ carbon:["Carbon fiber",CARBON_TEX],
  brushed:["Brushed metal","repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 2px,rgba(0,0,0,.07) 2px 3px,transparent 3px 5px),linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,0) 45%,rgba(0,0,0,.18))"],
  tread:["Tread plate","repeating-linear-gradient(45deg,transparent 0 8px,rgba(255,255,255,.16) 8px 10px,rgba(0,0,0,.22) 10px 11px,transparent 11px 19px),repeating-linear-gradient(-45deg,transparent 0 8px,rgba(255,255,255,.1) 8px 10px,rgba(0,0,0,.18) 10px 11px,transparent 11px 19px)"],
  mesh:["Grille mesh","radial-gradient(circle,rgba(0,0,0,.42) 1.7px,transparent 2.2px) 0 0/7px 7px,radial-gradient(circle,rgba(255,255,255,.1) 1.7px,transparent 2.2px) 3.5px 3.5px/7px 7px"],
@@ -4755,7 +4763,9 @@ const BAR_INK=[["","Auto"],["#ffffff","White"],["#000000","Black"]];
 function barOn(st){return !!(st.barStyle||st.barColor||st.barTex||st.barImg||st.barInk||st.barBorder===false||(st.barOpacity!=null&&st.barOpacity!==""));}
 function barOp(st){return st.barOpacity!=null&&st.barOpacity!==""?num(st.barOpacity):(st.barStyle==="glass"?62:st.barImg?35:100);}
 function applyBars(st){const root=document.documentElement,on=barOn(st);root.classList.toggle("bars-x",on);root.classList.toggle("bars-noline",on&&st.barBorder===false);if(!on)return;
-  const cs=getComputedStyle(root),base=hex2rgb(st.barColor||rgb2hex(hex2rgb(cs.getPropertyValue("--surface").trim())||[255,255,255]))||[255,255,255];
+  const cs=getComputedStyle(root);let base=hex2rgb(st.barColor||rgb2hex(hex2rgb(cs.getPropertyValue("--surface").trim())||[255,255,255]))||[255,255,255];
+  // carbon fiber is a dark material: on a light bar color it would just look like gray stripes
+  if(st.barTex==="carbon"&&(0.2126*base[0]+0.7152*base[1]+0.0722*base[2])/255>0.3)base=[24,26,29];
   const op=Math.max(0,Math.min(100,barOp(st)))/100,L=(0.2126*base[0]+0.7152*base[1]+0.0722*base[2])/255;
   // with a picture showing through, auto text goes white (pictures are mostly mid/dark once tinted)
   const light=st.barImg&&op<0.6?false:L>0.55;
@@ -4781,7 +4791,7 @@ function barSettingsHTML(){const s=APP.settings,style=s.barStyle||"solid",col=(s
       <label class="acc-sw acc-custom" aria-pressed="${!pre}" title="Pick any color" style="--c:${col||"#888888"}"><input type="color" data-barcustom="1" value="${col||"#888888"}" aria-label="Pick any color"><span>＋</span></label></div>
     <span class="lbl" style="margin-top:10px">How solid: <span id="barOpV">${op}%</span></span><input type="range" min="0" max="100" step="5" value="${op}" data-barop="1" aria-label="How solid the bars are" style="width:100%">
     <span class="lbl" style="margin-top:10px">Texture</span>
-    <div class="bar-tex" role="group" aria-label="Texture">${Object.entries(BAR_TEX).map(([k,[n,css]])=>`<button type="button" class="mini" data-bartex="${k}" aria-pressed="${tex===k}"><i style="background:${(css||"linear-gradient(transparent,transparent)").replace(/"/g,"'")},linear-gradient(${bc},${bc})"></i>${n}</button>`).join("")}</div>
+    <div class="bar-tex" role="group" aria-label="Texture">${Object.entries(BAR_TEX).map(([k,[n,css]])=>`<button type="button" class="mini" data-bartex="${k}" aria-pressed="${tex===k}"><i style="background:${(css||"linear-gradient(transparent,transparent)").replace(/"/g,"'")},linear-gradient(${k==="carbon"?"#181a1d":bc},${k==="carbon"?"#181a1d":bc})"></i>${n}</button>`).join("")}</div>
     <span class="lbl" style="margin-top:10px">Bar picture</span>
     <div class="formacts" style="margin:0"><label class="mini go" for="s-barimg">${s.barImg?"Change picture":"Upload a picture"}<input type="file" id="s-barimg" accept="image/*" data-barimg="1" hidden></label>${s.barImg?`<button class="mini" type="button" data-act="barimgrm">Remove picture</button>`:""}</div>
     <span class="help">${s.barImg?"Lower \"How solid\" to show more of the picture.":"Your logo, a truck, a texture photo — it fills both bars."}</span>

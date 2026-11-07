@@ -14,6 +14,8 @@ KEY_ID, ISSUER, KEY_PATH = os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"]
 BUNDLE = os.environ.get("BUNDLE_ID", "com.honestechmobileapp.app")
 TMP = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "signing"
 PROFILE_NAME = "Honestech App Store (GitHub)"
+WIDGET_BUNDLE = BUNDLE + ".widget"            # the Home Screen widget, shipped inside the app
+WIDGET_PROFILE_NAME = "Honestech Widget App Store (GitHub)"
 OPENSSL = "/usr/bin/openssl" if os.path.exists("/usr/bin/openssl") else "openssl"  # macOS LibreSSL makes .p12 files the keychain accepts
 
 
@@ -135,6 +137,31 @@ def signing_key_pem(secret: bytes) -> tuple[str, int]:
     return pem, n
 
 
+def widget_bundle_id() -> str:
+    """The widget's app ID. Registered automatically the first time (no trip to developer.apple.com)."""
+    ids = api("GET", f"/bundleIds?filter[identifier]={WIDGET_BUNDLE}&limit=5")["data"]
+    ids = [d for d in ids if d["attributes"]["identifier"] == WIDGET_BUNDLE]
+    if ids:
+        return ids[0]["id"]
+    made = api("POST", "/bundleIds", {"data": {"type": "bundleIds", "attributes": {"identifier": WIDGET_BUNDLE, "name": "Honestech Widget", "platform": "IOS"}}})["data"]
+    print(f"::notice::Signing: registered the widget's app ID {WIDGET_BUNDLE}")
+    return made["id"]
+
+
+def make_profile(bundle_id: str, name: str, cert_id: str) -> str:
+    for p in api("GET", f"/profiles?filter[name]={urllib.parse.quote(name)}&limit=50")["data"]:
+        api("DELETE", f"/profiles/{p['id']}")
+    prof = api("POST", "/profiles", {"data": {"type": "profiles", "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
+                                              "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
+                                                                "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
+    uid = prof["attributes"]["uuid"]
+    content = base64.b64decode(prof["attributes"]["profileContent"])
+    for d in [pathlib.Path.home() / "Library/MobileDevice/Provisioning Profiles", pathlib.Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"]:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{uid}.mobileprovision").write_bytes(content)
+    return uid
+
+
 def main():
     TMP.mkdir(parents=True, exist_ok=True)
     # 1. the app's ID
@@ -180,17 +207,9 @@ def main():
     p12pw = uuid.uuid4().hex
     subprocess.run([OPENSSL, "pkcs12", "-export", "-inkey", str(key), "-in", str(pem), "-out", str(p12), "-passout", f"pass:{p12pw}"], check=True, capture_output=True)
 
-    # 3. a fresh App Store profile for the app with that certificate (replaces the last one)
-    for p in api("GET", f"/profiles?filter[name]={urllib.parse.quote(PROFILE_NAME)}&limit=50")["data"]:
-        api("DELETE", f"/profiles/{p['id']}")
-    prof = api("POST", "/profiles", {"data": {"type": "profiles", "attributes": {"name": PROFILE_NAME, "profileType": "IOS_APP_STORE"},
-                                              "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
-                                                                "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
-    uid = prof["attributes"]["uuid"]
-    content = base64.b64decode(prof["attributes"]["profileContent"])
-    for d in [pathlib.Path.home() / "Library/MobileDevice/Provisioning Profiles", pathlib.Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"]:
-        d.mkdir(parents=True, exist_ok=True)
-        (d / f"{uid}.mobileprovision").write_bytes(content)
+    # 3. fresh App Store profiles for the app and its widget with that certificate (replace the last ones)
+    uid = make_profile(bundle_id, PROFILE_NAME, cert_id)
+    wuid = make_profile(widget_bundle_id(), WIDGET_PROFILE_NAME, cert_id)
 
     # 4. a private keychain on the build Mac holding the certificate
     kc = str(TMP / "build.keychain-db")
@@ -211,6 +230,7 @@ def main():
 
     with open(os.environ["GITHUB_ENV"], "a") as f:
         f.write(f"PROFILE_NAME={PROFILE_NAME}\nPROFILE_UUID={uid}\nSIGN_KEYCHAIN={kc}\n")
+        f.write(f"WIDGET_PROFILE_NAME={WIDGET_PROFILE_NAME}\nWIDGET_BUNDLE_ID={WIDGET_BUNDLE}\n")
     print(f"Signing ready: certificate {cert_id}, profile {PROFILE_NAME} ({uid})")
 
 

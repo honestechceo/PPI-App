@@ -27,6 +27,19 @@
 		<string>en</string>
 		<string>es</string>
 	</array>
+	<key>HTKeychainGroup</key>
+	<string>$(AppIdentifierPrefix)com.honestechmobileapp.shared</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.honestechmobileapp.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>honestech</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>Honestech</string>
 	<key>CFBundleExecutable</key>

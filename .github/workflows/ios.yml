@@ -108,14 +108,17 @@ jobs:
           set -o pipefail
           # put Xcode's error lines on the run's summary page, so they can be read without the full log
           show_errors() { grep -E "error:|Error|failed|No profiles|No signing|requires a provisioning|not registered|Provisioning" "$1" | grep -v "warning:" | sort -u | tail -25 | while IFS= read -r l; do echo "::error::${l:0:900}"; done; tail -60 "$1"; }
-          # the app target signs with the App Store certificate and profile made in the step above
+          # the app and widget targets sign with the App Store certificate and profiles made in the step above
           python3 - <<'PY'
           import os, re
           p = "ios/App/App.xcodeproj/project.pbxproj"; s = open(p).read()
-          team, prof = os.environ["APPLE_TEAM_ID"], os.environ["PROFILE_NAME"]
+          team = os.environ["APPLE_TEAM_ID"]
+          profs = {"com.honestechmobileapp.app": os.environ["PROFILE_NAME"], os.environ["WIDGET_BUNDLE_ID"]: os.environ["WIDGET_PROFILE_NAME"]}
           blocks = re.findall(r"buildSettings = \{[^{}]*CODE_SIGN_ENTITLEMENTS[^{}]*\}", s)
-          assert len(blocks) == 2, len(blocks)
+          assert len(blocks) == 4, len(blocks)
           for b in blocks:
+              bid = re.search(r"PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);", b).group(1).strip('"')
+              prof = profs[bid]
               s = s.replace(b, b.replace("CODE_SIGN_STYLE = Automatic;", f'CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = {team};\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Distribution";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{prof}";'))
           open(p, "w").write(s)
           PY
@@ -135,7 +138,7 @@ jobs:
             <key>teamID</key><string>${APPLE_TEAM_ID}</string>
             <key>signingStyle</key><string>manual</string>
             <key>signingCertificate</key><string>Apple Distribution</string>
-            <key>provisioningProfiles</key><dict><key>com.honestechmobileapp.app</key><string>${PROFILE_NAME}</string></dict>
+            <key>provisioningProfiles</key><dict><key>com.honestechmobileapp.app</key><string>${PROFILE_NAME}</string><key>${WIDGET_BUNDLE_ID}</key><string>${WIDGET_PROFILE_NAME}</string></dict>
             <key>uploadSymbols</key><true/>
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>

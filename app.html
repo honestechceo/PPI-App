@@ -1423,6 +1423,7 @@ function save(){
   try{ localStorage.setItem(KEY,JSON.stringify(APP)); markSaved(true); }
   catch(e){ markSaved(false); if(!saveWarned){ toast("Phone storage is full. Remove some photos from older jobs."); saveWarned=true; } }
   try{scheduleSync();}catch(e){}
+  try{widgetSoon();}catch(e){}
 }
 
 /* ================= cloud sync (Supabase) ================= */
@@ -1515,6 +1516,41 @@ function bioLockHide(){document.getElementById("bioLock")?.remove();}
 async function bioUnlock(){const P=capPlugin("BioLock");if(!P){bioLockHide();return;}if(BIO.busy)return;BIO.busy=true;NATIVE_MODAL=true;
   try{const r=await P.unlock({reason:L_("Unlock your jobs and customers")});if(r&&r.ok)bioLockHide();}catch(e){}
   finally{BIO.busy=false;setTimeout(()=>{NATIVE_MODAL=false;},1500);}}
+/* ---- iPhone Home Screen / Lock Screen widget: the app hands it the coming week's jobs ---- */
+let WIDGET_T=null,WIDGET_LAST="";
+const widgetSoon=()=>{if(!NATIVE)return;clearTimeout(WIDGET_T);WIDGET_T=setTimeout(widgetPush,1500);};
+const widgetMs=(d,t)=>{const x=new Date(d+"T"+(t||"00:00")+":00");return isNaN(x)?null:x.getTime();};
+function widgetSnap(){
+  const out={v:1,signedIn:!!AUTH,shop:(APP.settings&&APP.settings.biz)||"",jobs:[]};
+  if(!AUTH)return out;
+  const until=addDays(TODAY,7),owner=!isTech();
+  const js=(APP.jobs||[]).filter(j=>isBooked(j)&&j.info&&((j.info.date&&j.info.date>=TODAY&&j.info.date<=until)||j.status==="active"))
+    .map(j=>{const i=j.info,d=i.date||TODAY,s=widgetMs(d,i.time);if(s==null)return null;
+      const o={id:j.id,s,n:i.customer||"No name"};const car=vehOf(i);if(car)o.c=car;
+      const w=isSvc(j)?i.work:"Inspection";if(w)o.w=String(w).slice(0,80);if(i.address)o.a=String(i.address).slice(0,120);
+      if(i.time&&i.timeEnd&&i.timeEnd>i.time)o.e=widgetMs(d,i.timeEnd);if(!i.time)o.nt=true;if(j.status==="active")o.on=true;
+      if(owner&&estHeld(j))o.h=true;return o;})
+    .filter(Boolean).sort((a,b)=>a.s-b.s).slice(0,20);
+  out.jobs=js;
+  if(owner){out.wait=(APP.jobs||[]).filter(isPend).length;
+    out.req=(APP.requests||[]).filter(r=>r.status==="new"&&reqLive(r)).length;
+    out.owed=(APP.jobs||[]).filter(j=>j.status==="done"&&j.invoice&&!j.invoice.paid&&jobTotal(j)>0).length;}
+  return out;}
+async function widgetPush(){WIDGET_T=null;const P=capPlugin("WidgetBridge");if(!P)return;
+  let snap;try{snap=widgetSnap();}catch(e){console.log("HT-DIAG widget.snap "+e.message);return;}
+  const key=JSON.stringify(snap);if(key===WIDGET_LAST)return;
+  snap.at=Date.now();
+  try{await P.update({data:JSON.stringify(snap)});WIDGET_LAST=key;}catch(e){console.log("HT-DIAG widget.error "+(e&&e.message));}}
+// tapping the widget opens that job
+function widgetOpen(id){if(!id)return;const j=(APP.jobs||[]).find(x=>x.id===id);if(j&&AUTH)openJob(id);}
+function widgetInit(){const P=capPlugin("WidgetBridge");if(!P)return;
+  try{P.addListener("open",e=>widgetOpen(e&&e.id));}catch(e){}
+  P.takeLink().then(r=>{if(r&&r.id)setTimeout(()=>widgetOpen(r.id),300);}).catch(()=>{});
+  widgetSoon();
+  // the day rolls over and synced changes arrive without a save, so look again now and then
+  setInterval(()=>{if(document.visibilityState==="visible")widgetSoon();},5*60e3);
+  document.addEventListener("visibilitychange",()=>{if(document.hidden)widgetPush();});}
+if(NATIVE)setTimeout(()=>{try{widgetInit();}catch(e){console.log("HT-DIAG widget.init "+e.message);}},1200);
 function bioLockNow(){if(!NATIVE||!AUTH||!bioOn())return;bioCheck();bioLockShow();setTimeout(bioUnlock,350);}
 document.addEventListener("visibilitychange",()=>{if(!NATIVE||!bioOn()||BIO.busy)return;
   if(document.visibilityState==="hidden"){BIO.hiddenAt=Date.now();return;}

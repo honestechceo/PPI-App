@@ -4,5 +4,10 @@
 <dict>
 	<key>aps-environment</key>
 	<string>production</string>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.honestechmobileapp.app</string>
+		<string>$(AppIdentifierPrefix)com.honestechmobileapp.shared</string>
+	</array>
 </dict>
 </plist>

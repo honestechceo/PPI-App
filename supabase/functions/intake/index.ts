@@ -592,6 +592,159 @@ function fmtSlot(x: Slot) {
   return `${d} between ${a.slice(-2) === b.slice(-2) ? a.slice(0, -3) : a} and ${b}`;
 }
 
+// ---------- live tracking: "On my way" link (honestechmobileapp.com/t/?CODE) and the owner's team map ----------
+// A trip lives at media/_trk/CODE.json while the tech drives to a job. The customer's page reads it.
+// The tech's latest spot also goes to media/_loc/SHOP/USER.json for the owner's map. Only during trips:
+// it's written when the tech is on the way, kept as "at the job" on arrival, and removed when the job is finished.
+type Trip = { shop: string; job: string; by: string; key: string; tech: string; cust?: string; dest?: { lat: number; lng: number } | null;
+  state: "ready" | "driving" | "arrived" | "stopped"; made: number; exp: number; at?: number; lat?: number; lng?: number; acc?: number; hdg?: number | null; spd?: number | null; eta?: number | null };
+const TRK_ABC = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const num6 = (x: unknown) => { const n = Number(x); return Number.isFinite(n) ? Math.round(n * 1e6) / 1e6 : NaN; };
+const okLL = (lat: number, lng: number) => Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+async function readJson<T>(path: string): Promise<T | null> {
+  const { data: f } = await db.storage.from("media").download(path);
+  if (!f) return null;
+  try { return JSON.parse(await f.text()) as T; } catch (_) { return null; }
+}
+const writeJson = (path: string, o: unknown) => db.storage.from("media").upload(path, new Blob([JSON.stringify(o)], { type: "application/json" }), { upsert: true, contentType: "application/json" });
+function milesBetween(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+  const R = 3958.8, r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLng = (b.lng - a.lng) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+// rough drive time: roads run ~1.3x the straight line; 25 mph average near town, 40 mph farther out
+function etaMins(from: { lat: number; lng: number }, to?: { lat: number; lng: number } | null) {
+  if (!to) return null;
+  const mi = milesBetween(from, to) * 1.3;
+  return Math.max(1, Math.round(mi / (mi < 5 ? 25 : 40) * 60));
+}
+async function trkMember(req: Request) {
+  const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
+  const { data: ud } = await db.auth.getUser(token);
+  const me = ud?.user;
+  if (!me) return null;
+  if (await mfaBlocked(token, me.id)) return null;
+  const { data: mem } = await db.from("shop_members").select("shop_id, role").eq("user_id", me.id);
+  return { me, mems: (mem || []) as { shop_id: string; role: string }[] };
+}
+async function trkPost(req: Request) {
+  try {
+    const who = await trkMember(req);
+    if (!who) return out({ error: "Please sign in again" }, 401);
+    const body = await req.json().catch(() => ({}));
+    const op = String(body.op || "");
+    if (op === "start") {
+      const shop = clip(body.shop, 80), job = clip(body.job, 80);
+      if (!who.mems.some((m) => m.shop_id === shop)) return out({ error: "Not your shop" }, 403);
+      const { data: jr } = await db.from("records").select("data").eq("shop_id", shop).eq("kind", "job").eq("id", job).eq("deleted", false).maybeSingle();
+      if (!jr) return out({ error: "Job not found" }, 404);
+      const jd = jr.data as Record<string, any>;
+      const role = who.mems.find((m) => m.shop_id === shop)?.role;
+      if (role === "tech" && jd.techUser && jd.techUser !== who.me.id) return out({ error: "Not your job" }, 403);
+      const dl = num6(body.dest?.lat), dg = num6(body.dest?.lng);
+      const rnd = crypto.getRandomValues(new Uint8Array(10));
+      const code = Array.from(rnd, (b) => TRK_ABC[b % TRK_ABC.length]).join("");
+      const kb = crypto.getRandomValues(new Uint8Array(18));
+      const key = Array.from(kb, (b) => TRK_ABC[b % TRK_ABC.length]).join("");
+      const t: Trip = { shop, job, by: who.me.id, key, tech: clip(body.tech, 40) || "Your technician", cust: clip(String(jd.info?.customer || "").split(/\s+/)[0], 40),
+        dest: okLL(dl, dg) ? { lat: dl, lng: dg } : null, state: "ready", made: Date.now(), exp: Date.now() + 6 * 3600e3 };
+      const { error } = await db.storage.from("media").upload(`_trk/${code}.json`, new Blob([JSON.stringify(t)], { type: "application/json" }), { upsert: false, contentType: "application/json" });
+      if (error) return out({ error: error.message }, 500);
+      return out({ code, key });
+    }
+    return out({ error: "Unknown" }, 400);
+  } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
+}
+// location updates and stop: signed with the trip's own key (not the sign-in), so the iPhone can keep sending
+// from the background for as long as the drive takes
+async function trkUpdate(req: Request) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const op = String(body.op || "");
+    const code = String(body.code || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+    if (code.length < 8) return out({ error: "Bad trip" }, 400);
+    const t = await readJson<Trip>(`_trk/${code}.json`);
+    if (!t || !t.key || String(body.key || "") !== t.key) return out({ error: "Trip not found" }, 404);
+    const uid = t.by, locPath = `_loc/${t.shop}/${uid}.json`;
+    if (op === "loc") {
+      if (t.state === "stopped" || t.state === "arrived" || Date.now() > t.exp) return out({ ok: false, state: t.state === "arrived" ? "arrived" : "stopped" });
+      const lat = num6(body.lat), lng = num6(body.lng);
+      if (!okLL(lat, lng)) return out({ error: "Bad location" }, 400);
+      t.state = "driving"; t.at = Date.now(); t.lat = lat; t.lng = lng;
+      t.acc = Math.min(5000, Math.max(0, Math.round(Number(body.acc) || 0)));
+      t.hdg = Number.isFinite(Number(body.hdg)) && body.hdg !== null ? Math.round(Number(body.hdg)) : null;
+      t.spd = Number.isFinite(Number(body.spd)) && body.spd !== null ? Math.round(Number(body.spd) * 10) / 10 : null;
+      t.eta = etaMins({ lat, lng }, t.dest);
+      // close enough to call it arrived (the app also says so when the tech taps Arrived or starts the job)
+      const near = t.dest ? milesBetween({ lat, lng }, t.dest) < 0.08 : false;
+      if (near) t.state = "arrived";
+      await writeJson(`_trk/${code}.json`, t);
+      await writeJson(locPath, { uid, name: t.tech, job: t.job, cust: t.cust, state: t.state, lat, lng, at: t.at, hdg: t.hdg, eta: t.eta, code });
+      return out({ ok: true, state: t.state, eta: t.eta });
+    }
+    if (op === "stop") {
+      const arrived = body.state === "arrived";
+      t.state = arrived ? "arrived" : "stopped";
+      if (!arrived) { delete t.lat; delete t.lng; }
+      t.at = Date.now();
+      await writeJson(`_trk/${code}.json`, t);
+      if (arrived) {
+        const last = await readJson<Record<string, unknown>>(locPath);
+        const lat = t.dest?.lat ?? t.lat, lng = t.dest?.lng ?? t.lng;
+        if (lat != null && lng != null) await writeJson(locPath, { ...(last || {}), uid, name: t.tech, job: t.job, cust: t.cust, state: "arrived", lat, lng, at: Date.now(), eta: 0, code });
+      } else await db.storage.from("media").remove([locPath]);
+      return out({ ok: true });
+    }
+    return out({ error: "Unknown" }, 400);
+  } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
+}
+// the job is finished: the tech drops off the owner's map
+async function trkDone(req: Request) {
+  const who = await trkMember(req);
+  if (!who) return out({ error: "Please sign in again" }, 401);
+  const body = await req.json().catch(() => ({}));
+  const shop = clip(body.shop, 80);
+  if (!who.mems.some((m) => m.shop_id === shop)) return out({ error: "Not your shop" }, 403);
+  await db.storage.from("media").remove([`_loc/${shop}/${who.me.id}.json`]);
+  return out({ ok: true });
+}
+// customer's tracking page
+async function trkGet(code: string) {
+  code = code.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+  const gone = () => out({ state: "gone" }, 404);
+  if (code.length < 8) return gone();
+  const t = await readJson<Trip>(`_trk/${code}.json`);
+  if (!t) return gone();
+  const { data: st } = await db.from("records").select("data").eq("shop_id", t.shop).eq("kind", "settings").eq("id", "main").maybeSingle();
+  const s = (st?.data || {}) as Record<string, any>;
+  const shop = { biz: clip(s.biz, 80), phone: clip(s.phone, 30), ...(await shopBrand(t.shop, s)) };
+  const expired = Date.now() > t.exp || t.state === "stopped";
+  // no fresh position for 15 minutes while driving: show it as paused instead of a stale dot
+  const stale = t.state === "driving" && t.at ? Date.now() - t.at > 15 * 60e3 : false;
+  const show = !expired && t.state === "driving" && !stale && t.lat != null;
+  return new Response(JSON.stringify({
+    state: expired ? "ended" : stale ? "paused" : t.state, tech: t.tech, cust: t.cust || "", shop,
+    dest: t.dest || null, loc: show ? { lat: t.lat, lng: t.lng, hdg: t.hdg ?? null, at: t.at } : null, eta: show ? t.eta ?? null : null, at: t.at || t.made,
+  }), { headers: { ...CORS, "Content-Type": "application/json", "Cache-Control": "no-store" } });
+}
+// owner's team map: where each tech on a trip is right now
+async function trkTeam(req: Request, shop: string) {
+  const who = await trkMember(req);
+  if (!who) return out({ error: "Please sign in again" }, 401);
+  const role = who.mems.find((m) => m.shop_id === shop)?.role;
+  if (role !== "owner" && role !== "admin") return out({ error: "Only the shop owner can see the team map" }, 403);
+  const { data: files } = await db.storage.from("media").list(`_loc/${shop}`, { limit: 100 });
+  const list: Record<string, unknown>[] = [];
+  for (const f of files || []) {
+    if (!f.name.endsWith(".json")) continue;
+    const o = await readJson<Record<string, any>>(`_loc/${shop}/${f.name}`);
+    if (!o || !o.at) continue;
+    if (Date.now() - Number(o.at) > 12 * 3600e3) { await db.storage.from("media").remove([`_loc/${shop}/${f.name}`]); continue; }
+    list.push(o);
+  }
+  return out({ techs: list });
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method === "GET" && new URL(req.url).searchParams.get("d")) {
@@ -643,6 +796,11 @@ Deno.serve(async (req) => {
       return out({ code });
     } catch (e) { return out({ error: String((e as Error)?.message || e) }, 500); }
   }
+  if (req.method === "GET" && new URL(req.url).searchParams.get("trk")) return await trkGet(new URL(req.url).searchParams.get("trk") || "");
+  if (req.method === "GET" && new URL(req.url).searchParams.get("team")) return await trkTeam(req, new URL(req.url).searchParams.get("team") || "");
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "trk") return await trkPost(req);
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "trkup") return await trkUpdate(req);
+  if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "trkdone") return await trkDone(req);
   if (req.method === "GET" && new URL(req.url).searchParams.get("e")) return await estGet(new URL(req.url).searchParams.get("e") || "", new URL(req.url).searchParams.get("s") || "");
   if (req.method === "POST" && new URL(req.url).searchParams.get("act") === "approve") return await estApprove(req);
   if (req.method === "GET" && new URL(req.url).searchParams.get("bk")) return await bookGet(new URL(req.url).searchParams.get("bk") || "");

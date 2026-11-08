@@ -7,5 +7,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(VinScannerPlugin())
         bridge?.registerPluginInstance(BioLockPlugin())
         bridge?.registerPluginInstance(WidgetBridgePlugin())
+        bridge?.registerPluginInstance(LiveLocationPlugin())
     }
 }

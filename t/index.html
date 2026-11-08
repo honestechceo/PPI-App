@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Your technician is on the way</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f141a">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#14202b;--mute:#5d6b78;--line:#dfe5eb;--accent:#1f6feb;--ok:#1a7f37}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-text-size-adjust:100%;display:flex;flex-direction:column}
+.top{display:flex;align-items:center;gap:12px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;background:var(--card);border-bottom:1px solid var(--line)}
+.top img{width:44px;height:44px;object-fit:contain;border-radius:10px;border:1px solid var(--line);background:#fff;padding:2px;flex:none}
+.top .biz{font-weight:800;font-size:17px;line-height:1.2}
+.top .sub{color:var(--mute);font-size:13px}
+#map{flex:1;min-height:260px;background:#e5e9ee}
+.sheet{background:var(--card);border-top:1px solid var(--line);padding:16px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,.06)}
+.st{font-size:22px;font-weight:800;margin:0}
+.eta{font-size:15px;color:var(--mute);margin:4px 0 0}
+.eta b{color:var(--ink);font-size:18px}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin:12px 0 2px}
+.bar i{display:block;height:100%;width:30%;background:var(--accent);border-radius:3px;animation:go 1.6s ease-in-out infinite}
+@keyframes go{0%{transform:translateX(-100%)}100%{transform:translateX(340%)}}
+.acts{display:flex;gap:10px;margin-top:14px}
+.btn{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:700;text-decoration:none}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.mute{color:var(--mute);font-size:13px;margin:10px 0 0}
+.done{font-size:44px;line-height:1;margin-bottom:6px}
+.car{width:38px;height:38px;border-radius:50%;background:var(--accent);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center}
+.car svg{width:20px;height:20px;transition:transform .6s}
+.home{width:30px;height:30px;border-radius:50% 50% 50% 0;background:#14202b;transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.pulse{position:absolute;inset:-10px;border-radius:50%;background:var(--accent);opacity:.25;animation:pl 2s ease-out infinite}
+@keyframes pl{0%{transform:scale(.6);opacity:.35}100%{transform:scale(1.6);opacity:0}}
+.leaflet-container{font:inherit}
+@media (prefers-color-scheme:dark){:root{--bg:#0f141a;--card:#18212b;--ink:#e9edf2;--mute:#9aa8b5;--line:#2a3542;--accent:#3b82f6}.home{background:#e9edf2;border-color:#18212b}}
+</style>
+</head><body>
+<header class="top" id="top"><div><div class="biz">Live tracking</div><div class="sub">Loading…</div></div></header>
+<div id="map"></div>
+<section class="sheet" id="sheet"><p class="st">Loading…</p></section>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+(function(){
+var API="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake";
+var raw=location.search.slice(1).split("&")[0],qs=new URLSearchParams(location.search);
+var code=(qs.get("c")||(/=/.test(raw)?"":raw)||location.hash.slice(1)).replace(/[^A-Za-z0-9]/g,"");
+var ES=/^es\b/i.test(navigator.language||"");
+function T(en,es){return ES?es:en;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function brand(o){if(!o||!/^#[0-9a-f]{6}$/i.test(o.accent||""))return;var c=o.accent,r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16),L=(0.2126*r+0.7152*g+0.0722*b)/255;
+  if(L>0.55){var k=0.55/L;r=Math.round(r*k);g=Math.round(g*k);b=Math.round(b*k);}document.documentElement.style.setProperty("--accent","rgb("+r+","+g+","+b+")");}
+function tm(ms){return new Date(ms).toLocaleTimeString(ES?"es-US":"en-US",{hour:"numeric",minute:"2-digit"});}
+function ago(ms){var m=Math.round((Date.now()-ms)/60000);return m<1?T("just now","ahora mismo"):m===1?T("1 min ago","hace 1 min"):T(m+" min ago","hace "+m+" min");}
+var map=null,car=null,home=null,fitted=false,timer=null,last=null,branded=false;
+var CAR='<svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2 19 21 12 17 5 21z"/></svg>';
+function ensureMap(){if(map||!window.L)return;
+  map=L.map("map",{zoomControl:false,attributionControl:true}).setView([40.3,-74.3],10);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+  map.on("dragstart",function(){fitted=true;});}
+function draw(d){ensureMap();if(!map)return;
+  if(d.dest){var dl=[d.dest.lat,d.dest.lng];if(!home)home=L.marker(dl,{icon:L.divIcon({className:"",html:'<div class="home"></div>',iconSize:[30,30],iconAnchor:[15,30]}),title:T("Your place","Su ubicación")}).addTo(map);}
+  if(d.loc){var ll=[d.loc.lat,d.loc.lng];
+    if(!car)car=L.marker(ll,{icon:L.divIcon({className:"",html:'<div style="position:relative"><span class="pulse"></span><div class="car">'+CAR+'</div></div>',iconSize:[38,38],iconAnchor:[19,19]}),zIndexOffset:1000}).addTo(map);
+    else car.setLatLng(ll);
+    var svg=car.getElement()&&car.getElement().querySelector("svg");if(svg)svg.style.transform=d.loc.hdg!=null?"rotate("+d.loc.hdg+"deg)":"";
+  }else if(car){map.removeLayer(car);car=null;}
+  if(!fitted){var pts=[];if(car)pts.push(car.getLatLng());if(home)pts.push(home.getLatLng());
+    if(pts.length===2){map.fitBounds(L.latLngBounds(pts),{padding:[50,50],maxZoom:16});}else if(pts.length===1)map.setView(pts[0],15);}
+}
+function header(d){var s=d.shop||{};if(!branded){brand(s);branded=true;}
+  document.getElementById("top").innerHTML=(s.logo?'<img src="'+esc(s.logo)+'" alt="">':"")+'<div><div class="biz">'+esc(s.biz||T("Your technician","Su técnico"))+'</div><div class="sub">'+T("Live tracking","Ubicación en vivo")+'</div></div>';
+  if(s.biz)document.title=T(d.tech+" is on the way",d.tech+" va en camino");}
+function callBtn(d){var p=(d.shop&&d.shop.phone||"").replace(/[^\d+]/g,"");return p?'<div class="acts"><a class="btn primary" href="tel:'+esc(p)+'">📞 '+T("Call","Llamar")+'</a><a class="btn" href="sms:'+esc(p)+'">💬 '+T("Text","Mensaje")+'</a></div>':"";}
+function sheet(d){var el=document.getElementById("sheet"),who=esc(d.tech||T("Your technician","Su técnico")),h="";
+  if(d.state==="driving"){
+    h='<p class="st">'+T(who+" is on the way",who+" va en camino")+'</p>'+
+      (d.eta!=null?'<p class="eta">'+T("Arriving in about","Llega en unos")+' <b>'+d.eta+' min</b> · '+tm(Date.now()+d.eta*60000)+'</p>':'<p class="eta">'+T("Heading to you now","Va hacia usted ahora")+'</p>')+
+      '<div class="bar"><i></i></div><p class="mute">'+T("Updated","Actualizado")+' '+ago(d.loc&&d.loc.at||d.at)+'. '+T("Arrival time is an estimate.","La hora de llegada es aproximada.")+'</p>';
+  }else if(d.state==="ready"){
+    h='<p class="st">'+T(who+" is about to head your way",who+" está por salir hacia usted")+'</p><p class="eta">'+T("You'll see them on the map once they're driving.","Lo verá en el mapa cuando vaya en camino.")+'</p>';
+  }else if(d.state==="paused"){
+    h='<p class="st">'+T(who+" is on the way",who+" va en camino")+'</p><p class="eta">'+T("Live location is paused for now. Last update","La ubicación está en pausa. Última actualización")+' '+ago(d.at)+'.</p>';
+  }else if(d.state==="arrived"){
+    h='<div class="done">👋</div><p class="st">'+T(who+" has arrived",who+" ha llegado")+'</p><p class="eta">'+T("Live tracking has ended.","La ubicación en vivo terminó.")+'</p>';
+  }else{
+    h='<p class="st">'+T("Tracking has ended","El seguimiento terminó")+'</p><p class="eta">'+T("This link isn't active anymore.","Este enlace ya no está activo.")+'</p>';
+  }
+  el.innerHTML=h+(d.state!=="gone"?callBtn(d):"");
+}
+function load(){
+  if(code.length<8){sheet({state:"gone"});return;}
+  fetch(API+"?trk="+encodeURIComponent(code),{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    last=d;if(d.state==="gone"){document.getElementById("map").style.display="none";sheet(d);return;}
+    header(d);sheet(d);
+    if(d.state==="arrived"||d.state==="ended"){draw({dest:d.dest});return;}
+    draw(d);timer=setTimeout(load,d.state==="driving"?10000:20000);
+  }).catch(function(){timer=setTimeout(load,15000);});
+}
+document.addEventListener("visibilitychange",function(){if(!document.hidden&&last&&(last.state==="driving"||last.state==="ready"||last.state==="paused")){clearTimeout(timer);load();}});
+load();
+})();
+</script>
+</body></html>

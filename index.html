@@ -2066,6 +2066,204 @@ function partsLinksHTML(part,i){const veh=[i&&i.year,i&&i.make,i&&i.model,i&&i.e
   return `<div class="parts-links"><span class="help">${esc(part||"Parts")}${veh?" for "+esc(veh):""}:</span><div class="pl-row">${PART_STORES.map(([n,u])=>`<a class="mini" href="${esc(u(q))}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join("")}<a class="mini" href="${esc(rockAutoURL(i))}" target="_blank" rel="noopener" title="RockAuto opens this vehicle's catalog">RockAuto ↗</a></div></div>`;}
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-findpart]");if(!b||!S)return;e.stopPropagation();const k=+b.dataset.findpart,x=S.invoice.lines[k],box=document.getElementById("ln-parts-"+k);if(!x||!box)return;
   if(box.innerHTML){box.innerHTML="";return;}if(!String(x.d||"").trim()){toast("Type the part name first");document.getElementById("ln-d-"+k)?.focus();return;}box.innerHTML=partsLinksHTML(String(x.d).trim(),S.info);},true);
+/* ---------- Sound tools: speaker test, rattle finder, RPM to Hz, high tones ---------- */
+const SND={tab:"speaker",f:100,ch:"both",flip:false,src:"tone",vol:.35,on:false,sw:null,held:false,hearing:false,rpm:2000,cyl:4,hearTop:0,found:[]};
+let SNDA=null,SND_RAF=0,SND_ZK="";
+const SND_TABS=[["speaker","Speakers"],["rattle","Rattles"],["rpm","RPM → Hz"],["high","High tones"]];
+const SND_SPK=[["Subwoofer",40,"20–120 Hz"],["Woofer",100,"50 Hz–3 kHz"],["Midrange",1000,"250 Hz–5 kHz"],["Tweeter",10000,"3–20 kHz"]];
+const SND_ZONES=[[20,40,"License plate, trunk lid, rear deck, subwoofer box"],[40,80,"Door panels, seatbacks, trunk trim"],[80,200,"Dash panels, glovebox, console, door pockets"],[200,1000,"Loose clips, a harness tapping a panel, mirror, sunglass holder, belt buckles"],[1000,20001,"Small hard parts: trim edges, loose screws, vent fins"]];
+const SND_PETS=[["Adult humans","20 Hz – 15 to 20 kHz"],["Dogs","67 Hz – 45 kHz"],["Cats","48 Hz – 85 kHz"],["Horses","55 Hz – 33.5 kHz"],["Rats","200 Hz – 76 kHz"],["Mice","1 kHz – 91 kHz"],["Bats","up to about 200 kHz"]];
+const sndR1=v=>Math.round(v*10)/10;
+const sndHz=f=>f>=1000?(Math.round(f/10)/100).toLocaleString("en-US",{maximumFractionDigits:2})+" kHz":(f<100?sndR1(f):Math.round(f))+" Hz";
+const sndZone=f=>(SND_ZONES.find(z=>f>=z[0]&&f<z[1])||SND_ZONES[0])[2];
+const sndFire=()=>SND.rpm/60*SND.cyl/2;
+const sndPos=f=>Math.round(1000*Math.log(Math.max(20,f)/20)/Math.log(1000));
+(function(){const s=document.createElement("style");s.textContent=`
+.snd-tabs{grid-template-columns:repeat(4,minmax(0,1fr))!important;margin:0 0 12px}
+.snd-tabs button{font-size:13.5px;padding:8px 4px}
+.snd-card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.snd-now{border:1.5px solid var(--accent)}
+.snd-read{display:flex;align-items:baseline;justify-content:space-between;gap:4px 12px;flex-wrap:wrap}
+.snd-read b{font-family:var(--f-brand);font-size:48px;line-height:1;font-variant-numeric:tabular-nums;letter-spacing:.01em}
+.snd-read span{color:var(--muted);font-size:13.5px;font-weight:600}
+.snd-bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}.snd-bar i{display:block;height:100%;width:0;background:var(--accent)}
+.snd-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.snd-row .btn{flex:1 1 0;min-width:120px}
+.snd-row .mini{flex:1 1 0;justify-content:center}
+.btn.snd-play.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.snd-vol{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);font-weight:600}
+.snd-vol input{flex:1;min-width:0;accent-color:var(--accent)}
+.snd-vol span{width:38px;text-align:right;font-variant-numeric:tabular-nums}
+.snd-card input[type=range]{width:100%;accent-color:var(--accent)}
+.seg.snd-seg3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.seg.snd-cyl{grid-template-columns:repeat(7,minmax(0,1fr))}.seg.snd-cyl button{padding:8px 0}
+.snd-h{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin:0}
+.snd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.snd-pick{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:10px 12px;min-height:64px;min-width:0}
+.snd-pick b{font-size:15px}.snd-pick span{font-size:12.5px;color:var(--muted)}
+.snd-pick[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft)}
+.snd-zone{background:var(--mon-soft);border:1px solid var(--mon);border-radius:10px;padding:10px 12px;font-size:14px}
+.snd-zone strong{color:var(--mon)}
+.snd-li{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}.snd-li:first-child{border-top:0}
+.snd-li span:first-child{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}.snd-li span:last-child{color:var(--muted);text-align:right}
+.snd-tips{margin:0;padding-left:18px;font-size:14px;display:flex;flex-direction:column;gap:8px}
+.snd-big{font-family:var(--f-brand);font-size:44px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.snd-in{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;font-size:20px;width:100%;font-variant-numeric:tabular-nums;color:var(--ink)}
+.snd-note{font-size:13.5px;color:var(--muted);margin:0}
+.snd-warn{font-size:13.5px;color:var(--bad);margin:0}
+.snd-card .mini[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.snd-hold{min-height:56px;font-size:17px}
+.snd-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.snd-g3 .mini{justify-content:center}
+@media (max-width:420px){.snd-tabs button{font-size:12.5px}.snd-read b{font-size:42px}}`;document.head.appendChild(s);})();
+
+function sndEngine(){
+  if(SNDA)return SNDA;
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return null;
+  try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}
+  const ac=new AC(),out=ac.createGain(),mg=ac.createChannelMerger(2),mix=ac.createGain(),gL=ac.createGain(),gR=ac.createGain(),tg=ac.createGain(),ng=ac.createGain(),o=ac.createOscillator();
+  out.gain.value=0;tg.gain.value=0;ng.gain.value=0;o.type="sine";o.frequency.value=SND.f;
+  const sr=ac.sampleRate,L=sr*4,buf=ac.createBuffer(1,L,sr),d=buf.getChannelData(0);
+  let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for(let i=0;i<L;i++){const w=Math.random()*2-1;b0=.99886*b0+w*.0555179;b1=.99332*b1+w*.0750759;b2=.969*b2+w*.153852;b3=.8665*b3+w*.3104856;b4=.55*b4+w*.5329522;b5=-.7616*b5-w*.016898;d[i]=(b0+b1+b2+b3+b4+b5+b6+w*.5362)*.11;b6=w*.115926;}
+  const F=Math.floor(sr*.1);for(let i=0;i<F;i++){const k=i/F;d[i]=d[i]*k+d[L-F+i]*(1-k);}
+  const n=ac.createBufferSource();n.buffer=buf;n.loop=true;n.loopEnd=(L-F)/sr;
+  o.connect(tg);n.connect(ng);tg.connect(mix);ng.connect(mix);mix.connect(gL);mix.connect(gR);gL.connect(mg,0,0);gR.connect(mg,0,1);mg.connect(out);out.connect(ac.destination);
+  o.start();n.start();
+  SNDA={ac,out,gL,gR,tg,ng,o};return SNDA;}
+function sndRoute(){const A=SNDA;if(!A)return;const t=A.ac.currentTime,k=.015;
+  A.gL.gain.setTargetAtTime(SND.ch==="right"?0:1,t,k);
+  A.gR.gain.setTargetAtTime(SND.ch==="left"?0:(SND.flip?-1:1),t,k);
+  A.tg.gain.setTargetAtTime(SND.src==="tone"?.8:0,t,k);
+  A.ng.gain.setTargetAtTime(SND.src==="pink"?1:0,t,k);
+  A.out.gain.setTargetAtTime(SND.on?SND.vol*SND.vol:0,t,.03);}
+function sndStart(){const A=sndEngine();if(!A){toast("Sound isn't available on this device");return null;}
+  try{A.ac.resume();}catch(e){}SND.on=true;sndRoute();sndLoop();return A;}
+function sndStop(){SND.on=false;SND.sw=null;SND.held=false;SND.hearing=false;cancelAnimationFrame(SND_RAF);SND_RAF=0;
+  if(SNDA){sndRoute();const A=SNDA;setTimeout(()=>{if(!SND.on)try{A.ac.suspend();}catch(e){}},300);}}
+function sndSetF(f){f=Math.min(20000,Math.max(20,f));SND.f=f;const A=SNDA;if(!A)return;const t=A.ac.currentTime;
+  A.o.frequency.cancelScheduledValues(t);A.o.frequency.setTargetAtTime(f,t,.01);}
+function sndTone(f,keep){if(!sndStart())return;SND.src="tone";
+  if(keep&&SND.sw)SND.held=true;else{SND.sw=null;SND.held=false;SND.hearing=false;}
+  sndSetF(f);sndRoute();render();}
+function sndSweep(a,b,dur,r,total){const A=sndStart();if(!A)return;SND.src="tone";const t=A.ac.currentTime;
+  A.o.frequency.cancelScheduledValues(t);A.o.frequency.setValueAtTime(a,t);A.o.frequency.exponentialRampToValueAtTime(b,t+dur);
+  SND.f=a;SND.sw={a,b,dur,t0:t,r:r||[a,b],total:total||dur};SND.held=false;sndRoute();render();}
+function sndHold(){const A=SNDA;if(!A||!SND.sw)return;const t=A.ac.currentTime;
+  A.o.frequency.cancelScheduledValues(t);A.o.frequency.setValueAtTime(SND.f,t);SND.held=true;render();}
+function sndResume(){const sw=SND.sw;if(!sw)return;const r=sw.r,rem=sw.total*Math.log(r[1]/SND.f)/Math.log(r[1]/r[0]);
+  if(rem<=.5||SND.f>=r[1]){SND.sw=null;SND.held=false;render();return;}
+  sndSweep(SND.f,r[1],rem,r,sw.total);}
+function sndLoop(){if(SND_RAF)return;const step=()=>{SND_RAF=0;if(!SND.on||!SNDA)return;
+  const sw=SND.sw;
+  if(sw&&!SND.held){const p=Math.min(1,(SNDA.ac.currentTime-sw.t0)/sw.dur);SND.f=sw.a*Math.pow(sw.b/sw.a,p);
+    const bar=document.getElementById("sndBar");if(bar)bar.style.width=Math.max(0,Math.min(100,Math.log(SND.f/sw.r[0])/Math.log(sw.r[1]/sw.r[0])*100))+"%";
+    if(p>=1){SND.f=sw.b;SND.sw=null;SND.held=false;SND.hearing=false;if(APP.view==="sound")render();}}
+  const h=document.getElementById("sndHz");if(h&&SND.src==="tone")h.textContent=sndHz(SND.f);
+  const z=document.getElementById("sndZone"),zk=sndZone(SND.f);if(z&&zk!==SND_ZK){SND_ZK=zk;z.innerHTML=`<strong>Usual suspects at this pitch:</strong> ${esc(zk)}`;}
+  SND_RAF=requestAnimationFrame(step);};SND_RAF=requestAnimationFrame(step);}
+
+function sndSub(){if(SND.src==="pink")return "Pink noise · every speaker, every pitch";
+  const side=SND.ch==="both"?"Both sides":SND.ch==="left"?"Left side only":"Right side only";
+  return (SND.sw&&!SND.held?"Sweeping · ":SND.held?"Held · ":"")+side+(SND.flip?" · polarity flipped":"");}
+function sndNudges(){return `<div class="snd-row">${[["-10","−10"],["-1","−1"],["1","+1"],["10","+10"]].map(([d,l])=>`<button class="mini" type="button" data-snd="nudge:${d}">${l} Hz</button>`).join("")}</div>`;}
+function sndNowCard(){const sw=SND.sw,on=SND.on,r=sw?sw.r:null;
+  const pct=sw?Math.max(0,Math.min(100,Math.log(SND.f/r[0])/Math.log(r[1]/r[0])*100)):0;
+  return `<div class="snd-card snd-now">
+    <div class="snd-read"><b id="sndHz">${SND.src==="pink"?"Pink noise":sndHz(SND.f)}</b><span>${esc(sndSub())}</span></div>
+    ${sw?`<div class="snd-bar"><i id="sndBar" style="width:${pct}%"></i></div>`:""}
+    <div class="snd-row"><button class="btn primary snd-play${on?" on":""}" type="button" data-snd="toggle">${on?"■ Stop":"▶ Play"}</button>
+      ${sw&&on&&!SND.hearing?`<button class="btn snd-hold" type="button" data-snd="${SND.held?"resume":"hold"}">${SND.held?"▶ Resume":"⏸ Hold here"}</button>`:""}</div>
+    <div class="seg snd-seg3" role="group" aria-label="Which side">${[["left","Left only"],["both","Both"],["right","Right only"]].map(([k,l])=>`<button type="button" data-snd="ch:${k}" aria-pressed="${SND.ch===k}">${l}</button>`).join("")}</div>
+    <label class="snd-vol">Volume<input id="snd-vol" type="range" min="0" max="100" value="${Math.round(SND.vol*100)}" data-sndin="vol" aria-label="Volume"><span id="sndVol">${Math.round(SND.vol*100)}%</span></label>
+  </div>`;}
+function sndPick(act,title,sub,pressed){return `<button type="button" class="snd-pick" data-snd="${act}" aria-pressed="${!!pressed}"><b>${title}</b><span>${sub}</span></button>`;}
+
+function renderSound(){const t=SND.tab,toneOn=SND.on&&SND.src==="tone"&&!SND.sw;
+  let body="";
+  if(t==="speaker")body=`<div class="snd-card"><p class="snd-h">Test one kind of speaker</p><div class="snd-grid">
+      ${SND_SPK.map(([n,f,r])=>sndPick("f:"+f,`${n} · ${sndHz(f)}`,`Covers ${r}`,toneOn&&Math.abs(SND.f-f)<.5)).join("")}
+      ${sndPick("pink","Pink noise","Compare loudness side to side",SND.on&&SND.src==="pink")}
+      ${sndPick("flip",SND.flip?"Polarity flipped":"Flip polarity","Wiring check at 80 Hz",SND.flip)}
+      ${sndPick("sw:40:150:20","Woofer buzz sweep","40 → 150 Hz · 20 sec")}
+      ${sndPick("sw:20:20000:30","Full range sweep","20 Hz → 20 kHz · 30 sec")}</div></div>
+    <div class="snd-card"><p class="snd-h">Any frequency</p>
+      <input id="snd-freq" type="range" min="0" max="1000" value="${sndPos(SND.f)}" data-sndin="freq" aria-label="Frequency, 20 hertz to 20 kilohertz">
+      ${sndNudges()}</div>
+    <div class="snd-card"><p class="snd-h">What to listen for</p><ul class="snd-tips">
+      <li><b>Blown woofer:</b> run the woofer sweep at medium volume. A good speaker stays clean. A torn surround or rubbing voice coil buzzes or flutters at one spot.</li>
+      <li><b>Dead tweeter:</b> play the 10 kHz tone and put your ear near each tweeter. No sound from one means it's dead or unplugged.</li>
+      <li><b>Which corner:</b> use Left only and Right only here, and the radio's fader for front and back.</li>
+      <li><b>Wired backwards:</b> tap Flip polarity. The bass should get thinner. If it gets fuller when flipped, one speaker is wired backwards.</li>
+      <li>Set the radio's EQ flat. Keep the volume moderate and don't hold low tones at full volume.</li></ul></div>`;
+  else if(t==="rattle")body=`<div class="snd-card"><p class="snd-h">Sweep to find it</p><div class="snd-grid">
+      ${sndPick("sw:20:200:90","Panels &amp; doors","20 → 200 Hz · 90 sec")}
+      ${sndPick("sw:20:200:30","Quick pass","20 → 200 Hz · 30 sec")}
+      ${sndPick("sw:200:1000:60","Small parts","200 Hz → 1 kHz · 60 sec")}
+      ${sndPick("sw:1000:5000:45","Trim &amp; clips","1 → 5 kHz · 45 sec")}</div>
+      <p class="snd-note">When something buzzes, tap <b>Hold here</b>. Press on panels until it goes quiet. Use the ±1 Hz buttons to find the loudest spot.</p>
+      ${sndNudges()}
+      <div class="snd-zone" id="sndZone"><strong>Usual suspects at this pitch:</strong> ${esc(sndZone(SND.f))}</div>
+      <button class="btn" type="button" data-snd="found">📌 Save this frequency</button>
+      ${SND.found.length?`<div class="snd-row">${SND.found.map(f=>`<button class="mini" type="button" data-snd="f:${f}">${sndHz(f)}</button>`).join("")}<button class="mini" type="button" data-snd="foundclear">Clear</button></div>`:""}</div>
+    <div class="snd-card"><p class="snd-h">Where rattles usually are</p><div>${SND_ZONES.slice(0,4).map(z=>`<div class="snd-li"><span>${sndHz(z[0])}–${sndHz(z[1])}</span><span>${esc(z[2])}</span></div>`).join("")}</div>
+      <p class="snd-note">Rattles that only show up at a certain RPM: use the <b>RPM → Hz</b> tab to play that exact frequency while parked.</p></div>`;
+  else if(t==="rpm"){const f=sndFire(),c=SND.rpm/60;
+    body=`<div class="snd-card"><label class="snd-h" for="snd-rpm">Engine RPM</label>
+      <input id="snd-rpm" class="snd-in" type="number" inputmode="numeric" min="300" max="9000" step="50" value="${SND.rpm}" data-sndin="rpm" enterkeyhint="done">
+      <div class="snd-g3">${[700,1500,2000,2500,3000,4000].map(r=>`<button class="mini" type="button" data-snd="rpm:${r}" aria-pressed="${SND.rpm===r}">${r.toLocaleString("en-US")}</button>`).join("")}</div>
+      <p class="snd-h">Cylinders</p>
+      <div class="seg snd-cyl" role="group" aria-label="Cylinders">${[3,4,5,6,8,10,12].map(n=>`<button type="button" data-snd="cyl:${n}" aria-pressed="${SND.cyl===n}">${n}</button>`).join("")}</div></div>
+    <div class="snd-card"><p class="snd-h">Engine firing frequency</p>
+      <div class="snd-big" id="sndFire">${sndHz(f)}</div>
+      <p class="snd-note">${SND.rpm.toLocaleString("en-US")} rpm ÷ 60 × ${SND.cyl} cylinders ÷ 2 (4-stroke). This is the main shake the engine puts into the body.</p>
+      <div class="snd-row"><button class="btn primary" type="button" data-snd="fire">▶ Play ${sndHz(f)}</button><button class="btn" type="button" data-snd="fire2">2× · ${sndHz(f*2)}</button></div>
+      <div class="snd-row"><button class="btn" type="button" data-snd="crank">Crank · ${sndHz(c)}</button><button class="btn" type="button" data-snd="rpmsweep">Sweep idle → ${SND.rpm.toLocaleString("en-US")}</button></div>
+      ${f<30?`<p class="snd-warn">Most car speakers can't make much below 30 Hz without a subwoofer. Try the 2× tone. It often shakes the same loose part.</p>`:""}
+      <p class="snd-note">Crank speed (RPM ÷ 60) matches parts that turn once per revolution, like an out-of-balance pulley, fan or flywheel.</p></div>`;}
+  else body=`<div class="snd-card"><p class="snd-h">Hearing check</p>
+      <p class="snd-note">Sweeps up from 8 kHz. Tap the button the moment the tone disappears.</p>
+      <div class="snd-row"><button class="btn primary" type="button" data-snd="hear">▶ Start hearing sweep</button>${SND.hearing&&SND.sw?`<button class="btn snd-hold" type="button" data-snd="heardone">I can't hear it</button>`:""}</div>
+      ${SND.hearTop?`<div class="snd-zone">Your top: <strong>${sndHz(SND.hearTop)}</strong>. Most adults top out between 14 and 17 kHz.</div>`:""}</div>
+    <div class="snd-card"><p class="snd-h">High tones</p><div class="snd-grid">
+      ${[[15000,"Most adults hear it"],[17400,"Mostly under-25s hear it"],[19000,"Dogs and cats hear it clearly"],[20000,"Top of car audio"]].map(([f,s])=>sndPick("f:"+f,sndHz(f),s,toneOn&&Math.abs(SND.f-f)<.5)).join("")}</div>
+      <p class="snd-warn">Keep the volume low. Tones you can barely hear can still damage tweeters and bother pets.</p></div>
+    <div class="snd-card"><p class="snd-h">Who can hear what</p><div>${SND_PETS.map(([a,r])=>`<div class="snd-li"><span>${a}</span><span>${r}</span></div>`).join("")}</div>
+      <p class="snd-note">Phones and car stereos stop around 20 kHz, so true ultrasonic sound can't be played. That also means this won't work as a rodent repeller for wiring.</p></div>`;
+  return `<div class="stage-head"><div class="eyebrow">Sound tools</div><h2>Speaker &amp; rattle tester</h2>
+    <p class="when">Plays through the car's stereo. Connect your phone by Bluetooth, AUX or CarPlay, set the balance to the center, and <strong>start with the volume low</strong>.</p></div>
+  <div class="seg snd-tabs" role="group" aria-label="Tool">${SND_TABS.map(([k,l])=>`<button type="button" data-snd="tab:${k}" aria-pressed="${t===k}">${l}</button>`).join("")}</div>
+  ${sndNowCard()}${body}`;}
+
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-snd]");if(!b)return;e.stopPropagation();e.preventDefault();
+  const [a,x,y,z]=b.dataset.snd.split(":");
+  switch(a){
+    case "toggle":if(SND.on)sndStop();else sndStart();render();break;
+    case "tab":SND.tab=x;render();window.scrollTo(0,0);break;
+    case "f":sndTone(+x);break;
+    case "pink":if(!sndStart())return;SND.src="pink";SND.sw=null;SND.held=false;SND.hearing=false;sndRoute();render();break;
+    case "sw":SND.hearing=false;sndSweep(+x,+y,+z);break;
+    case "hold":sndHold();break;
+    case "resume":sndResume();break;
+    case "nudge":sndTone(sndR1(SND.f+(+x)),true);break;
+    case "ch":SND.ch=x;sndRoute();render();break;
+    case "flip":SND.flip=!SND.flip;if(SND.flip)SND.ch="both";sndTone(80);break;
+    case "rpm":SND.rpm=+x;render();break;
+    case "cyl":SND.cyl=+x;render();break;
+    case "fire":sndTone(sndR1(sndFire()));break;
+    case "fire2":sndTone(sndR1(sndFire()*2));break;
+    case "crank":sndTone(sndR1(SND.rpm/60));break;
+    case "rpmsweep":{const lo=700/60*SND.cyl/2,hi=sndFire();if(Math.abs(hi-lo)<1){sndTone(sndR1(hi));break;}sndSweep(Math.min(lo,hi),Math.max(lo,hi),20);break;}
+    case "hear":SND.hearTop=0;SND.hearing=true;sndSweep(8000,20000,40);SND.hearing=true;render();break;
+    case "heardone":SND.hearTop=Math.round(SND.f);sndStop();render();break;
+    case "found":{const f=sndR1(SND.f);if(!SND.found.includes(f))SND.found.push(f);toast("Saved "+sndHz(f));render();break;}
+    case "foundclear":SND.found=[];render();break;}},true);
+document.addEventListener("input",e=>{const t=e.target,k=t&&t.dataset&&t.dataset.sndin;if(!k)return;
+  if(k==="vol"){SND.vol=t.value/100;const v=document.getElementById("sndVol");if(v)v.textContent=t.value+"%";sndRoute();}
+  else if(k==="freq"){const f=sndR1(20*Math.pow(1000,t.value/1000));if(!SND.on||SND.src!=="tone"){if(!sndStart())return;SND.src="tone";}
+    SND.sw=null;SND.held=false;SND.hearing=false;sndSetF(f);sndRoute();}
+  else if(k==="rpm"){const v=parseInt(t.value,10);if(v>=100&&v<=12000){SND.rpm=v;const a=document.getElementById("sndFire");if(a)a.textContent=sndHz(sndFire());}}},true);
+document.addEventListener("change",e=>{const k=e.target&&e.target.dataset&&e.target.dataset.sndin;if(k==="rpm"||k==="freq")render();},true);
+
 function renderLookup(){
   const d=dtcInfo(LOOK.q),j=LOOK.jobId&&APP.jobs.find(x=>x.id===LOOK.jobId);
   return `<div class="stage-head"><div class="eyebrow">Look it up</div><h2>Search codes, fixes &amp; videos</h2>
@@ -4161,10 +4359,10 @@ function renderChrome(){try{syncLabel();}catch(e){}
   $("#navDash").setAttribute("aria-current",APP.view==="dash"?"page":"false");
   $("#navExp").setAttribute("aria-current",APP.view==="expenses"?"page":"false");
   const foot=$("#foot"),tb=$("#tabbar");
-  const ROOTS=["dash","jobs","customers","expenses","settings","requests","dispatch","help","lookup","pay","plan","reports"];
+  const ROOTS=["dash","jobs","customers","expenses","settings","requests","dispatch","help","lookup","sound","pay","plan","reports"];
   const showTabs=()=>{tb.hidden=!ROOTS.includes(APP.view)||(APP.view==="jobs"&&APP.adding);};showTabs();
   if(APP.view==="jobs"&&!APP.adding){foot.hidden=true;return;}
-  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="lookup"||APP.view==="pay"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"||APP.view==="reports"||APP.view==="welcome"){foot.hidden=true;return;}
+  if(APP.view==="settings"||APP.view==="customers"||APP.view==="dash"||APP.view==="expenses"||APP.view==="requests"||APP.view==="dispatch"||APP.view==="help"||APP.view==="lookup"||APP.view==="sound"||APP.view==="pay"||APP.view==="plan"||APP.view==="join"||APP.view==="techlocked"||APP.view==="reports"||APP.view==="welcome"){foot.hidden=true;return;}
   foot.hidden=false;
   if(APP.view==="jobs"){
     $("#prevBtn").style.visibility="hidden";$("#prevBtn").textContent="Back";$("#countLbl").textContent="";
@@ -5751,7 +5949,7 @@ const QI={
  request:`<path d="M12 2c.6 0 1 .4 1 1v7.6l2.3-2.3 1.4 1.4L12 14.4 7.3 9.7l1.4-1.4 2.3 2.3V3c0-.6.4-1 1-1ZM3.8 14.5h4.6c.5 0 .9.3 1 .8l.3 1.2h4.6l.3-1.2c.1-.5.5-.8 1-.8h4.6c.5 0 .9.4.8.9l-.9 5c-.2 1-1 1.6-2 1.6H5.9c-1 0-1.8-.7-2-1.6l-.9-5c-.1-.5.3-.9.8-.9Z"/>`,
  customer:`<path d="M12 2.5a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6ZM12 13.6c4.6 0 8.3 2.6 8.3 5.9v1c0 .6-.4 1-1 1H4.7c-.6 0-1-.4-1-1v-1c0-3.3 3.7-5.9 8.3-5.9Z"/>`,
  expense:`<path d="M5 3.5C5 2.7 5.7 2 6.5 2h7c.8 0 1.5.7 1.5 1.5V12h.5c1.4 0 2.5 1.1 2.5 2.5v3c0 .3.2.5.5.5s.5-.2.5-.5V9.4l-2.2-2.2 1.4-1.4 2.6 2.6c.2.2.2.4.2.7v8.4c0 1.4-1.1 2.5-2.5 2.5S17 18.9 17 17.5v-3c0-.3-.2-.5-.5-.5H15v6.5h.5c.6 0 1 .4 1 1v.5h-13V21.5c0-.6.4-1 1-1H5ZM7 4.5V9h6V4.5Z"/>`,
- look:`<path d="M10.5 2.5a8 8 0 0 1 6.4 12.8l4.4 4.4c.4.4.4 1.1 0 1.5l-.1.1c-.4.4-1.1.4-1.5 0l-4.4-4.4A8 8 0 1 1 10.5 2.5Zm0 2.6a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8Z"/>`};
+ look:`<path d="M10.5 2.5a8 8 0 0 1 6.4 12.8l4.4 4.4c.4.4.4 1.1 0 1.5l-.1.1c-.4.4-1.1.4-1.5 0l-4.4-4.4A8 8 0 1 1 10.5 2.5Zm0 2.6a5.4 5.4 0 1 0 0 10.8 5.4 5.4 0 0 0 0-10.8Z"/>`,sound:`<path d="M4 9.2h3.3L12 5v14l-4.7-4.2H4a1 1 0 0 1-1-1V10.2a1 1 0 0 1 1-1Z"/><path d="M15.3 8.6a1 1 0 0 1 1.4-.1 4.8 4.8 0 0 1 0 7 1 1 0 1 1-1.3-1.5 2.8 2.8 0 0 0 0-4 1 1 0 0 1-.1-1.4Zm2.9-2.9a1 1 0 0 1 1.4 0 8.9 8.9 0 0 1 0 12.6 1 1 0 0 1-1.4-1.4 6.9 6.9 0 0 0 0-9.8 1 1 0 0 1 0-1.4Z"/>`};
 const QS_COLORS=[["","App color"],["#1fae2c","Green"],["#1d6fe0","Blue"],["#e2620f","Orange"],["#d42a2a","Red"],["#7a3fd1","Purple"],["#0b9aa8","Teal"],["#2b2f36","Black"],["#c99a06","Gold"]];
 let QS_PICK=false;
 const qsColor=()=>(APP.settings.qsColor||"").trim()||getComputedStyle(document.documentElement).getPropertyValue("--accent").trim()||"#1d6fe0";
@@ -5769,7 +5967,7 @@ function quickTextList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q);
     :`<p class="empty">${QUICK_Q?"No customers with a phone number match.":"No customers with a phone number yet."}</p>`;}
 const QUICK_ITEMS=[["omw","🚗","On my way","Text your ETA"],["text","💬","Text a customer","Pick and send"],["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
   ["unpaid","💵","Unpaid invoices","Collect or mark paid"],["ppi","🔍","Book an inspection","Pre-purchase inspection"],["request","📥","Paste a request","From an email or text"],
-  ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"]];
+  ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"],["sound","🔊","Sound tools","Speakers, rattles, RPM"]];
 function quickHTML(){if(!QUICK)return "";
   const sub=(title,body)=>`<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="${title}"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>${title}</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>${body}</div>`;
   if(QUICK==="omw"){const js=omwJobs();
@@ -5792,6 +5990,7 @@ function quickGo(k){QUICK=null;if(!["sched","ppi","quote"].includes(k)){APP.addi
   if(k==="request"){APP.view="requests";REQ_PASTE={raw:""};REQ_EDIT=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("reqRaw")?.focus(),60);return;}
   if(k==="customer"){APP.view="customers";CUST_OPEN=null;CUST_EDIT=null;CUST_NEW={id:"c"+uid(),name:"",phone:"",email:"",location:"",dist:"",notes:"",vehicles:[],last:"",from:"manual"};render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("ce-name")?.focus(),60);return;}
   if(k==="expense"){APP.view="expenses";EXP_DRAFT=newExpDraft();EXP_DEL=false;EXP_RET=null;render();window.scrollTo(0,0);setTimeout(()=>document.getElementById("x-desc")?.focus(),60);return;}
+  if(k==="sound"){APP.view="sound";render();window.scrollTo(0,0);return;}
   if(k==="look"){LOOK.jobId="";openLookup(null);return;}
   if(k==="help"||k==="settings"){APP.view=k;render();window.scrollTo(0,0);return;}
   render();}
@@ -6612,7 +6811,7 @@ try{history.replaceState({nav:0},"");}catch(e){}
 let LAST_VK="";
 function render(){applyTheme();
   const acc=access();document.body.classList.toggle("gated",acc.kind==="account");document.body.classList.toggle("tech-mode",isTech());
-  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help","lookup"].includes(APP.view))APP.view="jobs";}
+  if(isTech()&&acc.kind!=="account"){if(!acc.ok)APP.view="techlocked";else if(!["jobs","job","settings","help","lookup","sound"].includes(APP.view))APP.view="jobs";}
   if(isTech()&&S&&!isSvc(S)&&S.step>=STAGES.length)S.step=STAGES.length-1;
   if(acc.kind==="account"){if(!["join","help"].includes(APP.view))APP.view="join";}
   else if(APP.view==="join")APP.view="dash";
@@ -6627,6 +6826,7 @@ function render(){applyTheme();
   else if(APP.view==="dispatch")html=renderDispatch();
   else if(APP.view==="help")html=renderHelp();
   else if(APP.view==="lookup")html=renderLookup();
+  else if(APP.view==="sound")html=renderSound();
   else if(APP.view==="pay")html=renderPay();
   else if(APP.view==="plan")html=renderPlan();
   else if(APP.view==="welcome")html=renderWelcome();
@@ -6639,7 +6839,7 @@ function render(){applyTheme();
   else{const s=STAGES[S.step];
     html=s.id==="intake"?renderIntake():s.id==="report"?renderReport():s.id==="invoice"?renderInvoice():renderSection(s,S.step);}
   if(APP.view==="job"&&S)html=jobCtlHTML()+html;
-  $("#main").innerHTML=html;if(SIGPAD&&APP.view!=="job")sigClose();
+  $("#main").innerHTML=html;if(APP.view!=="sound"&&SND.on)sndStop();if(SIGPAD&&APP.view!=="job")sigClose();
   {const vk=APP.view+"|"+(APP.view==="job"&&S?S.id:"");if(vk!==LAST_VK){const m=$("#main");m.classList.remove("view-in");void m.offsetWidth;if(LAST_VK)m.classList.add("view-in");LAST_VK=vk;}}
   {let q=document.getElementById("quickSheet");if(!q){q=document.createElement("div");q.id="quickSheet";document.body.appendChild(q);}q.innerHTML=quickHTML();document.body.classList.toggle("quick-open",!!QUICK);}
   navTrack();

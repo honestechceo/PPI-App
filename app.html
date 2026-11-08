@@ -4955,8 +4955,12 @@ document.addEventListener("input",e=>{const t=e.target,d=t.dataset||{};if(d.baro
   if(d.barcustom!=null)st.barColor=t.value.toLowerCase();
   if(d.barinkcustom!=null)st.barInk=t.value.toLowerCase();
   applyTheme();saveSoon();},true);
-// a new appointment day or time: redraw so the status line, Next step and schedule show it right away
-document.addEventListener("change",e=>{const t=e.target,d=(t&&t.dataset)||{};if(S&&(d.info==="date"||d.info==="time"||d.info==="timeEnd")){save();rerenderKeep();}});
+// a new appointment day or time: redraw so the status line, Next step and schedule show it.
+// Only once the picker is closed: iPhone fires "change" on every turn of the wheel, and redrawing then closes the picker.
+let WHEN_DIRTY=false;
+document.addEventListener("change",e=>{const d=(e.target&&e.target.dataset)||{};if(S&&(d.info==="date"||d.info==="time"||d.info==="timeEnd")){WHEN_DIRTY=true;save();}});
+document.addEventListener("focusout",e=>{const d=(e.target&&e.target.dataset)||{};if(!WHEN_DIRTY||!(d.info==="date"||d.info==="time"||d.info==="timeEnd"))return;
+  WHEN_DIRTY=false;setTimeout(()=>{const a=document.activeElement,ad=(a&&a.dataset)||{};if(S&&!(ad.info==="date"||ad.info==="time"||ad.info==="timeEnd"))rerenderKeep();else WHEN_DIRTY=true;},150);});
 document.addEventListener("change",e=>{const t=e.target,d=t.dataset||{};
   if(d.barbd!=null){APP.settings.barBorder=t.checked?"":false;applyTheme();save();rerenderKeep();}
   if(d.barcustom!=null||d.barinkcustom!=null)rerenderKeep();

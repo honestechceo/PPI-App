@@ -24,6 +24,7 @@
 		A1B2C3D4E5F6071829305003 /* HonestechWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829305013 /* HonestechWidget.swift */; };
 		A1B2C3D4E5F6071829305004 /* SharedSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829305011 /* SharedSchedule.swift */; };
 		A1B2C3D4E5F6071829305005 /* HonestechWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829305016 /* HonestechWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A1B2C3D4E5F6071829305031 /* LiveLocationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6071829305032 /* LiveLocationPlugin.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 		A1B2C3D4E5F6071829305014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829305015 /* HonestechWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HonestechWidget.entitlements; sourceTree = "<group>"; };
 		A1B2C3D4E5F6071829305016 /* HonestechWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = HonestechWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D4E5F6071829305032 /* LiveLocationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveLocationPlugin.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -121,6 +123,7 @@
 				A1B2C3D4E5F6071829304A01 /* VinScannerPlugin.swift */,
 				A1B2C3D4E5F6071829304A05 /* BioLockPlugin.swift */,
 				A1B2C3D4E5F6071829305012 /* WidgetBridgePlugin.swift */,
+				A1B2C3D4E5F6071829305032 /* LiveLocationPlugin.swift */,
 				A1B2C3D4E5F6071829305011 /* SharedSchedule.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
@@ -259,6 +262,7 @@
 				A1B2C3D4E5F6071829304A06 /* BioLockPlugin.swift in Sources */,
 				A1B2C3D4E5F6071829305001 /* SharedSchedule.swift in Sources */,
 				A1B2C3D4E5F6071829305002 /* WidgetBridgePlugin.swift in Sources */,
+				A1B2C3D4E5F6071829305031 /* LiveLocationPlugin.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

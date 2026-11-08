@@ -17,7 +17,11 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Honestech saves job photos and reports to your library when you choose Save.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Honestech uses your location when you tap Use my location, for the weather, route and arrival time to a job.</string>
+	<string>Honestech uses your location for the weather, routes and arrival times, and, when you tap On my way, to show your customer where you are until you arrive.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
 	<key>CFBundleDevelopmentRegion</key>

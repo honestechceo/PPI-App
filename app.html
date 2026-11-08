@@ -4281,13 +4281,12 @@ function renderJobs(){
   return `${sampleBanner()}${installBannerHTML()}${isTech()?pushCardHTML(true)+weatherCardHTML():""}
   <div class="stage-head${isTech()?"":" dash-head"}"><div><div class="eyebrow">${fmtDate(TODAY,{weekday:"long",month:"long",day:"numeric"})}</div><h2>Schedule</h2></div>${isTech()||APP.adding?"":`<button class="btn primary" type="button" data-act="dashbook">+ Book a job</button>`}</div><div class="stage-sub">
   <p class="when">${upAll} upcoming job${upAll===1?"":"s"}${owed?` · <strong>${money(owed)}</strong> unpaid`:""}</p>
-  <div class="jump"><button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isBooked(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
+  <div class="jump">${!isTech()&&AUTH?`<button class="mini" type="button" data-teammap="1" title="${esc(L_("Where your techs are while they're on the way to a job"))}">📍 ${esc(L_("Team map"))}</button>`:""}<button class="mini${APP.requests.some(r=>r.status==="new"&&reqLive(r))?" go":""}" type="button" data-nav="requests">📥 Requests${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length?` (${APP.requests.filter(r=>r.status==="new"&&reqLive(r)).length} new)`:""}</button>${APP.jobs.filter(j=>j.info.date===(APP.day||TODAY)&&isBooked(j)).length>1?`<button class="mini" type="button" data-routeplan="${APP.day||TODAY}">🗺 ${APP.day&&APP.day!==TODAY?"Plan "+esc(fmtDate(APP.day,{weekday:"short"}))+" route":"Plan today's route"}</button>`:""}${hasTeam()?`<button class="mini" type="button" data-nav="dispatch">🧭 Dispatch${APP.jobs.some(j=>j.info.date===TODAY&&isOpenJob(j)&&!techOf(j))?" (unassigned)":""}</button>`:""}</div></div>
   ${backupDue()?`<div class="sample"><span><strong>Your jobs are only on this phone.</strong> Make a free account so they're backed up automatically. ${APP.lastBackup?"Last backup file: "+esc(fmtDate(APP.lastBackup))+".":""}</span><button class="mini go" type="button" data-helpgo="settings|setCloud">Create free account</button>${CAN_CAL?`<button class="mini go" type="button" data-act="bknow">Save backup now</button>`:`<button class="mini" type="button" data-act="gobackup">Back up now</button>`}</div>`:""}
   ${APP.adding?renderJobForm():""}
   ${countyChipsHTML(countyCounts(APP.jobs.filter(j=>isOpenJob(j)||jDate(j)>=addDays(TODAY,-90)),jobCounty),ctyF,"data-ctyf","Filter jobs by county")}
   ${routeHTML()}
   ${APP.schedMode==="pend"?"":pendSumHTML()}
-  ${!isTech()&&AUTH?`<button type="button" class="hist-row team-map-btn" data-teammap="1"><span>🗺</span><span class="hist-what"><strong>${esc(L_("Team map"))}</strong><small>${esc(L_("Where your techs are while they're on the way to a job"))}</small></span><span class="jc-go">›</span></button>`:""}
   <div class="seg sched-seg sched-seg3" role="group" aria-label="View"><button type="button" data-schedmode="list" aria-pressed="${APP.schedMode!=="month"&&APP.schedMode!=="pend"}">List</button><button type="button" data-schedmode="month" aria-pressed="${APP.schedMode==="month"}">Month</button>${(()=>{const n=APP.jobs.filter(isPend).length;return `<button type="button" class="sched-wait${n?" has":""}" data-schedmode="pend" aria-pressed="${APP.schedMode==="pend"}">${esc(L_("Waiting"))}${n?` <span class="sw-n">${n}</span>`:""}</button>`;})()}</div>
   ${APP.schedMode==="pend"?(pendListHTML()||`<div class="emptybox">${esc(L_("No estimates waiting on a customer. Estimates you send show up here until they say yes or no."))}</div>`):APP.schedMode==="month"?renderMonthCal():`${renderFollowups()}
   ${strip}
@@ -4956,6 +4955,8 @@ document.addEventListener("input",e=>{const t=e.target,d=t.dataset||{};if(d.baro
   if(d.barcustom!=null)st.barColor=t.value.toLowerCase();
   if(d.barinkcustom!=null)st.barInk=t.value.toLowerCase();
   applyTheme();saveSoon();},true);
+// a new appointment day or time: redraw so the status line, Next step and schedule show it right away
+document.addEventListener("change",e=>{const t=e.target,d=(t&&t.dataset)||{};if(S&&(d.info==="date"||d.info==="time"||d.info==="timeEnd")){save();rerenderKeep();}});
 document.addEventListener("change",e=>{const t=e.target,d=t.dataset||{};
   if(d.barbd!=null){APP.settings.barBorder=t.checked?"":false;applyTheme();save();rerenderKeep();}
   if(d.barcustom!=null||d.barinkcustom!=null)rerenderKeep();
@@ -5812,6 +5813,7 @@ function renderService(){
     <div class="sug-wrap">${f("customer","Customer",'autocomplete="off"')}<div class="sug" id="sug-info"></div></div>
     ${f("phone","Phone",'inputmode="tel"')}
     ${f("date","Appointment date",'type="date"')}
+    ${f("time","Appointment time",'type="time"')}${f("timeEnd","Until (optional, for a time window)",'type="time"')}
     <div class="full addr-row">${f("location","Service address")}${dirLink(i.location,"dirLink")}</div>
     ${hasTeam()?techFieldHTML("info",i.tech):""}
         <label class="full">VIN<span class="vin-in"><input id="f-vin" class="mono" data-info="vin" maxlength="17" autocapitalize="characters" value="${esc(i.vin)}"><button class="vin-cam" type="button" data-scanvin="f-vin" aria-label="Scan VIN with camera"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><span>Scan</span></button></span><span class="vinmsg ${vc.cls}" id="vinMsg">${esc(vc.msg)}</span><span class="vin-dec" id="vinDec">${vinDecHTML(S)}</span></label>

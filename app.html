@@ -5564,7 +5564,7 @@ function renderItem(it){
     ${it.corners?renderCorners(it,r):""}
     <div class="extras">
       ${it.measure?`<label class="meas"><input id="m-${it.id}" data-val="${it.id}" inputmode="decimal" placeholder="${it.measure.ph}" value="${esc(typeof r.val==="object"?"":r.val)}" aria-label="${esc(it.label)} measurement"><span>${esc(it.measure.unit)}</span></label>`:""}
-      <label class="mini">＋ Photo<input type="file" accept="image/*" capture="environment" multiple data-photo="${it.id}"></label>
+      <label class="mini">📷 Take photo<input type="file" accept="image/*" capture="environment" multiple data-photo="${it.id}"></label><label class="mini">🖼 From photos<input type="file" accept="image/*" multiple data-photo="${it.id}"></label>
       ${!r.note&&!r.open?`<button class="mini" type="button" data-addnote="${it.id}">＋ Note</button>`:""}
     </div>
     ${r.note||r.open?`<textarea class="note" id="n-${it.id}" data-note="${it.id}" placeholder="What did you find?">${esc(r.note)}</textarea>`:""}

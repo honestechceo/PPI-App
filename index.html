@@ -1835,7 +1835,7 @@ function renderJoin(){
     <p><a href="${esc(BILLING.terms)}" target="_blank" rel="noopener">Terms</a> <a href="${esc(BILLING.privacy)}" target="_blank" rel="noopener">Privacy</a> <button class="mini" type="button" data-nav="help">How the app works</button></p>
   </footer></div>`;
 }
-function techCfg(){const s=APP.settings;const o={};["biz","owner","phone","email","web","logo","hidden","custom","mpiList","mpiAuto","omwTpl","mapsApp","ppiDisc","pdfAccent","themeAccent"].forEach(k=>{if(s[k]!==undefined)o[k]=s[k];});
+function techCfg(){const s=APP.settings;const o={};["biz","owner","phone","email","web","logo","hidden","custom","mpiList","mpiAuto","omwTpl","mapsApp","ppiDisc","pdfAccent","themeAccent","pdfStyle","roNotice"].forEach(k=>{if(s[k]!==undefined)o[k]=s[k];});
   o.techs=(s.techs||[]).map(t=>({id:t.id,name:t.name,color:t.color}));return o;}
 function stampTechUsers(){const ts=APP.settings.techs||[];APP.jobs.forEach(j=>{const t=ts.find(x=>x.id===j.techId);const u=t&&t.userId||"";if((j.techUser||"")!==u)j.techUser=u;
   const p=t&&t.pay&&t.pay.show&&num(t.pay.rate)>0?{basis:t.pay.basis||"labor",rate:num(t.pay.rate),show:true}:null;
@@ -5281,6 +5281,8 @@ function themeSectionHTML(){
         <label class="check" style="margin:0"><input type="checkbox" data-bgblur="1" ${s.bgBlur?"checked":""}> Blur it</label>`:`<span class="help">Your shop, your truck, your logo. It shows behind the app on all your phones.</span>`}</div></div></div>
     ${cardSettingsHTML()}
     ${isTech()?"":`<label class="check full"><input type="checkbox" id="s-pdfAccent" data-setc="pdfAccent" ${s.pdfAccent?"checked":""}> Use my app color on PDF reports and invoices</label>`}
+    ${isTech()?"":`<label class="full">Invoice & estimate style (service jobs)<select id="s-pdfStyle" data-set="pdfStyle">${[["","Modern (clean, in your color)"],["ro","Repair order (classic shop ticket, shows past visits)"]].map(([v,l])=>`<option value="${v}" ${(s.pdfStyle||"")===v?"selected":""}>${l}</option>`).join("")}</select><span class="help">Repair order style prints the vehicle's service history, recommended services and a signature line.</span></label>
+    <label class="full">Notices in red (repair order style)<textarea data-set="roNotice" rows="2" placeholder="All parts are new or factory equivalent.&#10;Credit card payments are subject to a 3% processing fee.">${esc(s.roNotice||"")}</textarea><span class="help">One per line. Printed in red under the totals.</span></label>`}
     ${s.themeAccent||s.themeBg||s.themeMode?`<div class="full"><button class="mini" type="button" data-act="themereset">Reset to the original look</button></div>`:""}
   </div>`;
 }
@@ -6628,7 +6630,179 @@ function buildReportPdf_(job){
   return doc.output("blob");
   }finally{S=prev;}
 }
-function buildInvoicePdf(job,est){return withLang(custLang(job),()=>buildInvoicePdf_(job,est));}
+function buildInvoicePdf(job,est){return withLang(custLang(job),()=>isSvc(job)&&APP.settings.pdfStyle==="ro"?buildRoPdf_(job,est):buildInvoicePdf_(job,est));}
+function pdfMediaPages(P,job,est){const {doc}=P,i=job.info,svc=isSvc(job);
+  const media=svc&&!est?(job.media||[]):[];
+  if(media.length){
+    const tagName=Object.fromEntries(MTAGS),photos=media.filter(m=>m.kind==="photo"),vids=media.filter(m=>m.kind==="video");
+    doc.addPage();P.y=PM;P.font(14,"bold");P.text("Photos",PM,P.y+4);P.font(9,"normal",PC.muted);P.text(vehOf(i),PW-PM,P.y+4,{align:"right"});P.y+=22;
+    const cw=(PW-2*PM-20)/3;let col=0,rowH=0;
+    photos.forEach(m=>{
+      const src=MEDIA_URL[m.id]||m.thumb;if(!src)return;
+      let h=cw*0.75;try{const pr=doc.getImageProperties(src);h=Math.min(cw*1.25,cw*pr.height/pr.width);}catch(e){}
+      if(col===0)P.need(h+40);
+      const x=PM+col*(cw+10);
+      try{doc.addImage(src,"JPEG",x,P.y,cw,h,undefined,"FAST");}catch(e){}
+      P.font(7,"bold",m.tag==="after"?PC.good:m.tag==="finding"?PC.bad:PC.accent);P.text((tagName[m.tag]||"").toUpperCase(),x,P.y+h+11);
+      if(m.cap){P.font(8,"normal",PC.muted);P.text(P.wrap(m.cap,cw).slice(0,2),x,P.y+h+22);}
+      rowH=Math.max(rowH,h+(m.cap?44:24));col++;if(col===3){col=0;P.y+=rowH;rowH=0;}
+    });
+    if(col)P.y+=rowH;
+    if(vids.length){P.need(30);P.y+=6;P.font(9,"normal",PC.muted);P.text(P.wrap(`${vids.length} video${vids.length===1?"":"s"} sent separately: `+vids.map(v=>`${tagName[v.tag]}${v.cap?" – "+v.cap:""}${v.dur?" ("+fmtDur(v.dur)+")":""}`).join("; "),PW-2*PM),PM,P.y);}
+  }
+}
+/* ---- "Repair order" PDF style: the classic shop-ticket look (black header bars, boxed grid), with the vehicle's past visits ---- */
+function roHistory(job){const i=job.info,vin=String(i.vin||"").trim().toUpperCase(),vk=vehOf(i).toLowerCase();
+  return APP.jobs.filter(j=>j.id!==job.id&&isSvc(j)&&(j.status==="done")&&!j.declined&&(
+      (vin&&String(j.info.vin||"").trim().toUpperCase()===vin)||(!vin||!j.info.vin)&&j.custId&&j.custId===job.custId&&vk&&vehOf(j.info).toLowerCase()===vk))
+    .sort((a,b)=>((b.info.date||"")>(a.info.date||"")?1:-1)).slice(0,6);}
+const initials=n=>String(n||"").trim().split(/\s+/).filter(w=>/^[A-Za-z]/.test(w)&&!/^(and|&)$/i.test(w)).map(w=>w[0].toUpperCase()).join("").slice(0,3);
+function buildRoPdf_(job,est){
+  const prev=S;S=job;
+  try{
+  if(est)ensureEst();else ensureInvoice();
+  const P=pdfStart(),{doc}=P,i=job.info,inv=job.invoice,t=totals(job),s=APP.settings,W=PW-2*PM,BLK=[17,17,17],GRY=[226,228,231],BOR=[17,17,17];
+  const up=x=>String(x||"").toUpperCase();
+  const box=(x,y,w,h,lw=1)=>{doc.setDrawColor(...BOR);doc.setLineWidth(lw);doc.rect(x,y,w,h,"S");};
+  const fill=(x,y,w,h,c)=>{doc.setFillColor(...c);doc.rect(x,y,w,h,"F");};
+  // a black bar with white column titles; cols = [[label, width, align]]
+  const bar=(y,cols,h=17)=>{fill(PM,y,W,h,BLK);let x=PM;P.font(8.5,"bold",[255,255,255]);
+    cols.forEach(([l,w,al])=>{P.text(l,al==="left"?x+8:al==="right"?x+w-8:x+w/2,y+h-5.5,{align:al||"center"});x+=w;});
+    doc.setDrawColor(255,255,255);doc.setLineWidth(.75);x=PM;cols.slice(0,-1).forEach(([,w])=>{x+=w;doc.line(x,y+2,x,y+h-2);});return y+h;};
+  const vlines=(y0,y1,cols)=>{doc.setDrawColor(...BOR);doc.setLineWidth(.75);let x=PM;cols.slice(0,-1).forEach(([,w])=>{x+=w;doc.line(x,y0,x,y1);});};
+  const title=h=>{P.need(40);P.font(12,"bold",BLK);P.text(h,PM,P.y);P.y+=6;};
+  const docNum=est?(job.est.num||""):(inv.num||""),docDate=est?job.est.date:inv.date;
+  // ---- header ----
+  let logoW=0,logoH=0;
+  if(s.logo&&s.logoW&&s.logoH){const sc=Math.min(74/s.logoH,130/s.logoW);logoW=s.logoW*sc;logoH=s.logoH*sc;try{doc.addImage(s.logo,"JPEG",PM,PM-6,logoW,logoH,"biz-logo","FAST");}catch(e){logoW=0;logoH=0;}}
+  const cx=PM+(logoW?logoW+12:0)+(W-(logoW?logoW+12:0)-120)/2,cw=W-(logoW?logoW+12:0)-130;
+  let hy=PM+8;P.font(17,"bold",BLK);let nm=P.wrap(up(bizName()),cw);if(nm.length>2){P.font(13,"bold",BLK);nm=P.wrap(up(bizName()),cw).slice(0,2);}
+  nm.forEach(l=>{P.text(l,cx,hy+6,{align:"center"});hy+=17;});
+  P.font(10.5,"normal",BLK);
+  const addr=String(s.hq||"").trim().replace(/,\s*(USA|United States)$/i,"").replace(/,\s*/,"\n").split(/\n/).map(x=>x.trim()).filter(Boolean);
+  [...addr,fmtPhone(s.phone),s.web||s.email].filter(Boolean).forEach(l=>{P.text(l,cx,hy+6,{align:"center"});hy+=13;});
+  P.font(8,"bold",[90,90,90]);P.text(est?(isEs()?"PRESUPUESTO":"ESTIMATE"):(isEs()?"ORDEN DE REPARACIÓN / FACTURA":"REPAIR ORDER / INVOICE"),PW-PM,PM+2,{align:"right"});
+  P.font(18,"bold",BLK);P.text(docNum,PW-PM,PM+22,{align:"right"});
+  P.font(9,"normal",BLK);P.text(fmtDate(docDate,{month:"short",day:"numeric",year:"numeric"}),PW-PM,PM+36,{align:"right"});
+  if(est){P.font(8,"normal",[90,90,90]);P.text((isEs()?"Válido hasta ":"Valid until ")+fmtDate(estValidUntil(job.est),{month:"short",day:"numeric",year:"numeric"}),PW-PM,PM+48,{align:"right"});}
+  P.y=Math.max(hy,PM-6+logoH,PM+52)+14;
+  // ---- recommended services ----
+  const recs=[];
+  mpiRows(job).filter(x=>x.r==="bad"||x.r==="mon").forEach(x=>recs.push([x.it.label+(x.reading?" ("+x.reading+")":"")+(x.note?" · "+x.note:""),x.r==="bad"?(isEs()?"AHORA":"NOW"):(isEs()?"PRONTO":"SOON"),x.r==="bad"?PC.bad:PC.mon]));
+  String(i.recs||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).forEach(x=>recs.push([x,"",BLK]));
+  const nsl=!est&&nextServiceLine(job);if(nsl)recs.push([nsl,isEs()?"PRÓXIMA VISITA":"NEXT VISIT",PC.accent]);
+  if(recs.length){title(isEs()?"SERVICIOS RECOMENDADOS":"RECOMMENDED SERVICES");
+    const cols=[["#",34],[isEs()?"RECOMENDACIÓN":"RECOMMENDATION",W-34-100,"left"],[isEs()?"CUÁNDO":"WHEN",100]];
+    let y0=P.y,y=bar(P.y,cols);
+    recs.forEach(([d,w,c],n)=>{const dl=P.wrap(d,W-34-100-16);const h=Math.max(20,dl.length*12+8);
+      if(y+h>PH-PM-30){box(PM,y0,W,y-y0);vlines(y0+17,y,cols);doc.addPage();P.y=PM;y0=P.y;y=bar(P.y,cols);}
+      P.font(10,"normal",BLK);P.text(String(n+1),PM+17,y+14,{align:"center"});P.text(dl,PM+42,y+14);P.font(9,"bold",c);P.text(w,PW-PM-50,y+14,{align:"center"});
+      doc.setDrawColor(...BOR);doc.setLineWidth(.5);doc.line(PM,y+h,PW-PM,y+h);y+=h;});
+    box(PM,y0,W,y-y0);vlines(y0+17,y,cols);P.y=y+18;}
+  // ---- service history ----
+  const hist=roHistory(job),rows=(!est&&job.status==="done"?[job]:[]).concat(hist);
+  title(isEs()?"HISTORIAL DE SERVICIO":"SERVICE HISTORY");
+  {const cols=[[isEs()?"FECHA":"DATE",64],[isEs()?"NÚMERO":"RO / INV #",76],[isEs()?"MILLAJE":"MILEAGE",64],[isEs()?"TÉC.":"TECH",42],[isEs()?"TRABAJO":"WORK DONE",W-246,"left"]];
+    let y0=P.y,y=bar(P.y,cols);
+    const show=rows.length?rows:[null];
+    show.forEach(j=>{let dl=[""];if(j){const ls=(j.invoice.lines||[]).filter(x=>x.d).map(x=>x.d).join(", ");dl=P.wrap(j.info.work||ls||"Service",W-246-16).slice(0,2);}
+      const h=Math.max(18,dl.length*11+7);
+      if(y+h>PH-PM-30){box(PM,y0,W,y-y0);vlines(y0+17,y,cols);doc.addPage();P.y=PM;y0=P.y;y=bar(P.y,cols);}
+      P.font(9.5,"normal",BLK);
+      if(j){const tn=(techOf(j)||{}).name||j.info.tech||s.owner||"";
+        P.text(fmtDate(j.info.date,{month:"2-digit",day:"2-digit",year:"2-digit"}),PM+32,y+12.5,{align:"center"});P.text(j.invoice.num||"",PM+64+38,y+12.5,{align:"center"});
+        P.text(j.info.miles?num(String(j.info.miles).replace(/[^\d.]/g,"")).toLocaleString():"",PM+140+32,y+12.5,{align:"center"});P.text(initials(tn),PM+204+21,y+12.5,{align:"center"});P.text(dl,PM+254,y+12.5);}
+      else{P.font(9,"normal",[110,110,110]);P.text(isEs()?"No hay visitas anteriores registradas para este vehículo.":"No earlier visits on file for this vehicle.",PM+254,y+12.5);}
+      doc.setDrawColor(...BOR);doc.setLineWidth(.5);doc.line(PM,y+h,PW-PM,y+h);y+=h;});
+    box(PM,y0,W,y-y0);vlines(y0+17,y,cols);P.y=y+16;}
+  // ---- customer / vehicle grid ----
+  {P.need(110);const y0=P.y,c1=W*0.36,c2=W*0.33,c3=W-c1-c2,hb=15;
+    const veh=[vehOf(i),i.engine,[i.color,i.plate?(isEs()?"Placa ":"Plate ")+i.plate:"",i.unit?(isEs()?"Unidad ":"Unit ")+i.unit:""].filter(Boolean).join(" · ")].filter(Boolean);
+    const cust=[...billToLines(job),...P.wrap(i.location||"",c1-16).slice(0,2)].filter(Boolean);
+    const rowH=Math.max(cust.length,veh.length,1)*12+hb+10;
+    [[PM,c1,isEs()?"CLIENTE":"CUSTOMER",cust],[PM+c1,c2,isEs()?"VEHÍCULO":"VEHICLE INFORMATION",veh],[PM+c1+c2,c3,"VIN",[String(i.vin||"").toUpperCase()]]].forEach(([x,w,l,v])=>{
+      fill(x,y0,w,hb,GRY);box(x,y0,w,rowH,.9);P.font(8.5,"bold",BLK);P.text(l,x+8,y0+11);P.font(10.5,"normal",BLK);v.forEach((ln,k)=>P.text(P.wrap(ln,w-16)[0]||"",x+8,y0+hb+12+k*12));});
+    const y1=y0+rowH,tn=(techOf(job)||{}).name||i.tech||"",h2=hb+20;
+    [[PM,c1,isEs()?"FECHA DE SERVICIO":"SERVICE DATE",fmtDate(i.date,{month:"2-digit",day:"2-digit",year:"2-digit"})+(i.time?"  "+tmW(i):"")],[PM+c1,c2,isEs()?"MILLAJE":"MILEAGE",i.miles?num(String(i.miles).replace(/[^\d.]/g,"")).toLocaleString():""],
+     [PM+c1+c2,c3,tn&&tn!==s.owner?(isEs()?"TÉCNICO":"TECHNICIAN"):(isEs()?"ASESOR":"ADVISOR"),tn||s.owner||""]].forEach(([x,w,l,v])=>{
+      fill(x,y1,w,hb,GRY);box(x,y1,w,h2,.9);P.font(8.5,"bold",BLK);P.text(l,x+8,y1+11);P.font(10.5,"normal",BLK);P.text(P.wrap(v||"",w-16)[0]||"",x+8,y1+hb+14);});
+    P.y=y1+h2+16;}
+  // ---- job lines ----
+  {const cols=[[isEs()?"N.º":"JOB",36],[isEs()?"DESCRIPCIÓN":"DESCRIPTION",W-36-96,"left"],[isEs()?"IMPORTE":"AMOUNT",96]];
+    P.need(80);let y0=P.y,y=bar(P.y,cols,19);y+=6;
+    const lines=(inv.lines||[]).filter(x=>x.d||num(x.p)).map(x=>{const q=num(x.q===""||x.q==null?1:x.q);
+      const sub=x.k==="labor"?`${L_("Labor")}: ${q} hr @ ${money(num(x.p))}`:x.k==="part"?`${L_("Part")}${q!==1?`: ${q} @ ${money(num(x.p))}`:""}`:x.k==="flat"?L_("Flat fee"):RK[x.k]||"";
+      return {d:x.d||RK[x.k],sub,a:lineAmt(x)};});
+    if(t.travel.fee)lines.push({d:L_("Travel"),sub:i.dist?`${i.dist} mi`:"",a:t.travel.fee});
+    let n=0;
+    lines.forEach(L=>{n++;const dl=P.wrap(up(L.d),W-36-96-24);const h=dl.length*13+(L.sub?14:0)+12;
+      if(y+h>PH-PM-30){box(PM,y0,W,y-y0);vlines(y0+19,y,cols);doc.addPage();P.y=PM;y0=P.y;y=bar(P.y,cols,19)+6;}
+      fill(PM,y,36,h,[244,245,247]);fill(PM+36+6,y,W-36-96-12,dl.length*13+5,GRY);P.font(10.5,"bold",BLK);P.text(String(n),PM+18,y+12,{align:"center"});P.text(dl,PM+48,y+12);
+      P.font(10.5,"bold",BLK);P.text(money(L.a),PW-PM-8,y+12,{align:"right"});
+      if(L.sub){P.font(9.5,"normal",BLK);P.text(L.sub,PM+48,y+dl.length*13+13);}
+      y+=h;});
+    fill(PM,y0+19,36,6,[244,245,247]);
+    const minY=y0+19+70;if(y<minY){fill(PM,y,36,minY-y,[244,245,247]);y=minY;}
+    box(PM,y0,W,y-y0);vlines(y0+19,y,cols);
+    P.y=y+12;}
+  // ---- notes + totals ----
+  {const nt=[i.work?(isEs()?"Pedido del cliente: ":"Customer request: ")+i.work:"",(!est&&i.performed)?(isEs()?"Trabajo realizado: ":"Work performed: ")+i.performed:""].filter(Boolean).join("\n");
+    const tw=200,nw=W-tw-12,tr=[];
+    if(t.labor)tr.push([isEs()?"MANO DE OBRA":"LABOR",money(t.labor)]);tr.push([isEs()?"PIEZAS":"PARTS",money(t.parts)]);
+    if(t.fees)tr.push([isEs()?"CARGOS":"FEES",money(t.fees)]);if(t.travel.fee)tr.push([isEs()?"VIAJE":"TRAVEL",money(t.travel.fee)]);
+    if(t.disc)tr.push([up(t.discLabel).slice(0,22),"-"+money(t.disc)]);if(t.taxOn)tr.push([(isEs()?"IMPUESTO ":"SALES TAX ")+rates(job).taxRate+"%",money(t.tax)]);
+    const dep=!est&&!inv.paid?depPaid(job):0;if(dep)tr.push([isEs()?"DEPÓSITO PAGADO":"DEPOSIT PAID","-"+money(dep)]);
+    const big=[est?(isEs()?"TOTAL ESTIMADO":"ESTIMATE TOTAL"):inv.paid?(isEs()?"TOTAL PAGADO":"TOTAL PAID"):dep?(isEs()?"SALDO":"BALANCE DUE"):(isEs()?"TOTAL A PAGAR":"TOTAL DUE"),money(dep?balanceDue(job):t.total)];
+    const nl=nt?P.wrap(nt,nw-16):[];const th=tr.length*20+26,nh=Math.max(th,nl.length*12+30);
+    P.need(nh+10);const y0=P.y;
+    fill(PM,y0,nw,17,GRY);box(PM,y0,nw,nh,.9);P.font(9,"bold",BLK);P.text(isEs()?"NOTAS":"NOTES",PM+8,y0+12);P.font(9.5,"normal",BLK);P.text(nl,PM+8,y0+30);
+    const tx=PM+nw+12,vx=tx+tw*0.58;let y=y0;
+    tr.forEach(([k,v])=>{box(tx,y,tw,20,.9);doc.line(vx,y,vx,y+20);P.font(10,"normal",BLK);P.text(k,tx+8,y+14);P.font(10,"bold",BLK);P.text(v,tx+tw-8,y+14,{align:"right"});y+=20;});
+    fill(tx,y,tw,26,inv.paid&&!est?[214,240,222]:GRY);box(tx,y,tw,26,1.5);doc.line(vx,y,vx,y+26);P.font(11.5,"bold",BLK);P.text(big[0],tx+8,y+17);P.font(12.5,"bold",BLK);P.text(big[1],tx+tw-8,y+17,{align:"right"});
+    P.y=y0+nh+14;}
+  // ---- red notices ----
+  {const lines=String(s.roNotice||"").split(/\n+/).map(x=>x.trim()).filter(Boolean);
+    lines.forEach(l=>{const w=P.wrap(up(l),W);P.need(w.length*14+4);P.font(10.5,"bold",[200,30,30]);w.forEach(x=>{P.text(x,PW/2,P.y+4,{align:"center"});P.y+=14;});});if(lines.length)P.y+=8;}
+  // ---- pay / approve ----
+  if(est){const ap=!(job.sig&&job.sig.est)&&PDF_LINK&&PDF_LINK.approve;
+    P.need(ap?100:40);P.font(9,"normal",[70,70,70]);const nl=P.wrap(isEs()?"Si se necesita más trabajo, le consultaremos primero. No se hace nada más allá de este presupuesto sin su aprobación.":"If more work turns out to be needed, we'll check with you first. Nothing beyond this estimate is done without your OK.",ap?W-110:W);
+    const qy=P.y;P.text(nl,PM,P.y+4);P.y+=nl.length*12+8;
+    if(ap){qrPdf(P,PDF_LINK.approve,PW-PM-84,qy-6,84);P.font(10.5,"bold",BLK);P.text(isEs()?"Escanee para aprobar y firmar:":"Scan to approve and sign:",PM,P.y+4);P.font(10,"bold",PC.accent);if(doc.textWithLink)doc.textWithLink(PDF_LINK.approve.replace(/^https:\/\//,""),PM,P.y+18,{url:PDF_LINK.approve});P.y=Math.max(P.y+30,qy+86);}}
+  else if(inv.paid){P.need(50);doc.setDrawColor(...PC.good);doc.setLineWidth(2);doc.roundedRect(PM,P.y,140,36,5,5,"S");P.font(20,"bold",PC.good);P.text(isEs()?"PAGADO":"PAID",PM+70,P.y+25,{align:"center"});
+    P.font(9.5,"normal",BLK);P.text([inv.paidVia&&inv.paidVia!=="Zoho"?inv.paidVia:"",inv.paidDate?fmtDate(inv.paidDate,{month:"short",day:"numeric",year:"numeric"}):""].filter(Boolean).join("  ·  "),PM+156,P.y+16);P.text(isEs()?"Gracias por su preferencia.":"Thank you for your business.",PM+156,P.y+29);P.y+=50;}
+  else{const po=payOptions(balanceDue(job)),link=PDF_LINK&&PDF_LINK.pay,qo=link?{k:"Card",href:link}:["Card","Cash App","PayPal","Venmo"].map(k=>po.find(o=>o.k===k&&o.href)).find(Boolean);
+    const tt=fleetTermsLine(job,inv.date)||termsFor(job);
+    if(po.length||link||s.pay||tt){const rows=po.length+(link?1:0)+(s.pay?1:0);P.need(Math.max(rows*14+40,qo?110:0));const y0=P.y;
+      P.font(9,"bold",BLK);P.text(isEs()?"CÓMO PAGAR":"HOW TO PAY",PM,P.y+4);P.y+=18;
+      if(link){P.font(10,"bold",BLK);P.text(isEs()?"Tarjeta / Apple Pay":"Card / Apple Pay",PM,P.y);P.font(10,"normal",PC.accent);if(doc.textWithLink)doc.textWithLink(link.replace(/^https:\/\//,""),PM+110,P.y,{url:link});P.y+=14;}
+      po.forEach(o=>{P.font(10,"bold",BLK);P.text(o.k,PM,P.y);P.font(10,"normal",o.href?PC.accent:BLK);if(o.href&&doc.textWithLink)doc.textWithLink(pdfTxt(o.v),PM+110,P.y,{url:o.href});else P.text(o.v,PM+110,P.y);P.y+=14;});
+      if(s.pay){P.font(10,"normal",BLK);const l=P.wrap(s.pay,W-110);P.text(l,PM,P.y);P.y+=l.length*13;}
+      if(tt){P.font(9,"normal",[70,70,70]);const l=P.wrap(tt,W-110);P.text(l,PM,P.y+2);P.y+=l.length*12+4;}
+      if(qo&&qrPdf(P,qo.href,PW-PM-84,y0-4,84)){P.font(7.5,"bold",[90,90,90]);P.text(isEs()?"ESCANEE PARA PAGAR":"SCAN TO PAY",PW-PM-42,y0+90,{align:"center"});P.text(up(qo.k),PW-PM-42,y0+99,{align:"center"});P.y=Math.max(P.y,y0+104);}
+      P.y+=10;}}
+  // ---- warranty & terms ----
+  {const wl=wtyTextLines(job);if(wl.length){P.need(14+wl.length*12);P.font(9,"bold",BLK);P.text(isEs()?"SU GARANTÍA":"YOUR WARRANTY",PM,P.y+4);P.y+=16;P.font(9.5,"normal",BLK);wl.forEach(x=>{P.text(x,PM,P.y);P.y+=12;});P.y+=6;}}
+  const dx=jobDisc(job),ag=termsAgreed(job);
+  if(dx){const sm=!est&&invDiscShort(dx.text);P.need(40);P.font(9,"bold",BLK);P.text(up(L_(dx.title)),PM,P.y+4);P.y+=16;
+    const txt=sm?sm:dx.text;P.font(9,"normal",sm?BLK:[60,60,60]);P.wrap(txt,W).forEach(l=>{P.need(12);P.font(9,"normal",sm?BLK:[60,60,60]);P.text(l,PM,P.y);P.y+=11.5;});
+    if(sm){P.font(9,"normal",[90,90,90]);P.wrap(ag?(isEs()?"Los términos completos están en el presupuesto que aprobó. Pídalos y se los enviamos de nuevo.":"The full policy is on the estimate you approved. Ask us any time and we'll send it again."):(isEs()?"Pida la póliza completa en cualquier momento.":"Ask us for the full policy any time."),W).forEach(l=>{P.text(l,PM,P.y);P.y+=11.5;});}
+    P.y+=4;}
+  if(ag){P.need(16);P.font(9.5,"bold",PC.good);P.text((isEs()?"Aceptó la garantía y los términos: ":"Agreed to the warranty & terms: ")+(ag.name||i.customer||"")+", "+ag.when,PM,P.y+4);P.y+=16;}
+  // ---- signature ----
+  {const sg=est?(job.sig&&job.sig.est):(job.sig&&(job.sig.inv||job.sig.est));P.y+=8;P.need(84);
+    if(sg&&sg.data){try{doc.addImage(sg.data,"JPEG",PM,P.y,180,46);}catch(e){}}
+    P.y+=50;doc.setDrawColor(...BLK);doc.setLineWidth(.9);doc.line(PM,P.y,PM+300,P.y);doc.line(PM+340,P.y,PW-PM,P.y);
+    if(sg&&sg.at){P.font(10,"normal",BLK);P.text(fmtDate(isoDay(new Date(sg.at)),{month:"2-digit",day:"2-digit",year:"numeric"}),PM+346,P.y-6);}
+    P.font(8.5,"bold",BLK);P.text(est?(isEs()?"APROBADO POR (CLIENTE)":"APPROVED BY (CUSTOMER)"):(isEs()?"FIRMA DEL CLIENTE":"CUSTOMER SIGNATURE")+(sg&&sg.name?" · "+up(sg.name):""),PM,P.y+12);P.text(isEs()?"FECHA":"DATE",PM+340,P.y+12);P.y+=26;}
+  pdfMediaPages(P,job,est);
+  // footers: PAGE X OF Y · CUSTOMER COPY
+  {const n=doc.internal.getNumberOfPages();for(let k=1;k<=n;k++){doc.setPage(k);
+    P.font(9.5,"bold",BLK);P.text((isEs()?"PÁGINA ":"PAGE ")+k+(isEs()?" DE ":" OF ")+n,PM,PH-PM+14);
+    P.text(isEs()?"COPIA DEL CLIENTE":"CUSTOMER COPY",PW-PM,PH-PM+14,{align:"right"});
+    P.font(7,"normal",[140,140,140]);P.text("Prepared with Honestech Mobile Mechanic App",PW/2,PH-PM+14,{align:"center"});}}
+  return doc.output("blob");
+  }finally{S=prev;}
+}
 function buildInvoicePdf_(job,est){
   const prev=S;S=job;
   try{
@@ -6723,24 +6897,7 @@ function buildInvoicePdf_(job,est){
     P.font(9,"normal",PC.muted);const more=P.wrap(ag?(isEs()?`Los términos completos están en el presupuesto que aprobó. Pídalos y se los enviamos de nuevo.`:`The full policy is on the estimate you approved. Ask us any time and we'll send it again.`):(isEs()?`Pida la póliza completa en cualquier momento.`:`Ask us for the full policy any time.`)+(APP.settings.web?" "+APP.settings.web:""),PW-2*PM);more.forEach(l=>{P.need(12);P.text(l,PM,P.y);P.y+=12;});}
   else if(dx){P.font(9,"normal",PC.muted);const wl=P.wrap(dx.text,PW-2*PM);P.y+=8;P.need(14+Math.min(wl.length,4)*12);P.font(8,"bold",PC.muted);P.text(L_(dx.title).toUpperCase(),PM,P.y);P.y+=12;P.font(9,"normal",PC.muted);wl.forEach(l=>{P.need(12);P.font(9,"normal",PC.muted);P.text(l,PM,P.y);P.y+=12;});}
   if(ag){P.y+=4;P.need(16);P.font(9,"bold",PC.good);P.text((isEs()?`Aceptó la garantía y los términos: ${ag.name||job.info.customer||""}, ${ag.when}`:`Agreed to the warranty & terms: ${ag.name||job.info.customer||""}, ${ag.when}`),PM,P.y);P.y+=14;}
-  const media=svc&&!est?(job.media||[]):[];
-  if(media.length){
-    const tagName=Object.fromEntries(MTAGS),photos=media.filter(m=>m.kind==="photo"),vids=media.filter(m=>m.kind==="video");
-    doc.addPage();P.y=PM;P.font(14,"bold");P.text("Photos",PM,P.y+4);P.font(9,"normal",PC.muted);P.text(vehOf(i),PW-PM,P.y+4,{align:"right"});P.y+=22;
-    const cw=(PW-2*PM-20)/3;let col=0,rowH=0;
-    photos.forEach(m=>{
-      const src=MEDIA_URL[m.id]||m.thumb;if(!src)return;
-      let h=cw*0.75;try{const pr=doc.getImageProperties(src);h=Math.min(cw*1.25,cw*pr.height/pr.width);}catch(e){}
-      if(col===0)P.need(h+40);
-      const x=PM+col*(cw+10);
-      try{doc.addImage(src,"JPEG",x,P.y,cw,h,undefined,"FAST");}catch(e){}
-      P.font(7,"bold",m.tag==="after"?PC.good:m.tag==="finding"?PC.bad:PC.accent);P.text((tagName[m.tag]||"").toUpperCase(),x,P.y+h+11);
-      if(m.cap){P.font(8,"normal",PC.muted);P.text(P.wrap(m.cap,cw).slice(0,2),x,P.y+h+22);}
-      rowH=Math.max(rowH,h+(m.cap?44:24));col++;if(col===3){col=0;P.y+=rowH;rowH=0;}
-    });
-    if(col)P.y+=rowH;
-    if(vids.length){P.need(30);P.y+=6;P.font(9,"normal",PC.muted);P.text(P.wrap(`${vids.length} video${vids.length===1?"":"s"} sent separately: `+vids.map(v=>`${tagName[v.tag]}${v.cap?" – "+v.cap:""}${v.dur?" ("+fmtDur(v.dur)+")":""}`).join("; "),PW-2*PM),PM,P.y);}
-  }
+  pdfMediaPages(P,job,est);
   pdfFooters(P,est?"Estimate "+job.est.num:"Invoice "+inv.num);
   return doc.output("blob");
   }finally{S=prev;}

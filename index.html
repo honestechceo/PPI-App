@@ -3906,7 +3906,7 @@ function fleetTermsLine(job,invDate){const c=jobCust(job);if(!c||!c.fleet||!c.te
   const d=termDays(c.terms);return d?`Payment terms: Net ${d}. Due ${fmtDate(addDays(invDate||TODAY,d),{month:"short",day:"numeric",year:"numeric"})}.`:"Payment terms: Due on receipt.";}
 function poWarnHTML(job){const c=jobCust(job);if(!c||!c.fleet||!c.poReq||job.info.po)return "";
   return `<p class="vin-warn" style="margin:0 0 8px">${esc(c.name)} needs a PO number on every invoice. Add it in the PO # box${isSvc(job)?" under Customer &amp; vehicle":" when you edit the job"}.</p>`;}
-function billToLines(job){const i=job.info,c=jobCust(job);return [i.customer,c&&c.fleet&&c.contact?L_("Attn: ")+c.contact:"",i.phone].filter(Boolean);}
+function billToLines(job){const i=job.info,c=jobCust(job);return [i.customer,c&&c.fleet&&c.contact?L_("Attn: ")+c.contact:"",fmtPhone(i.phone)].filter(Boolean);}
 function fleetRows(job){const i=job.info;return [[L_("Unit #"),i.unit],[L_("Plate"),i.plate],[L_("PO #"),i.po]].filter(r=>r[1]);}
 const custJobs=c=>APP.jobs.filter(j=>j.custId===c.id).sort((a,b)=>((a.info.date||"")>(b.info.date||"")?-1:1));
 function custMatches(q,limit=6){
@@ -5343,6 +5343,10 @@ function renderSettings(){
     ${f("payCard","Card payment link","","full",'Square, Stripe or Clover pay link (optional)')}
     <label class="full">Other payment notes<textarea id="s-pay" data-set="pay" rows="2" placeholder="Cash or check accepted on site">${esc(s.pay)}</textarea></label>
     ${f("terms","Payment terms","","full")}
+    <details class="full more-terms"${s.termsSvc||s.termsPpi?" open":""}><summary>Different terms for service jobs and inspections</summary>
+      <p class="help">Leave blank to use the terms above. If the terms above mention PPI or inspections, service invoices leave that sentence out, and inspection invoices leave out the one about other services.</p>
+      ${f("termsSvc","Service job terms","","full")}${f("termsPpi","Inspection (PPI) terms","","full")}</details>
+    ${f("oilMiles","Next oil change: every … miles",'inputmode="numeric" placeholder="5000"')}${f("oilMonths","or every … months",'inputmode="numeric" placeholder="6"',"","Printed on oil change invoices as Next oil change due, when you haven't set a follow-up.")}
     <label class="full">Warranty / fine print on service invoices<textarea data-set="warranty" rows="2" placeholder="e.g. 12 months / 12,000 miles on parts and labor I supply. Customer-supplied parts are not covered.">${esc(s.warranty||"")}</textarea><span class="help">${esc(L_("Your default."))} Prints at the bottom of service estimates and invoices. Leave blank for none.</span></label>
     <div class="full dscl-set"><span class="lbl">${esc(L_("Other disclaimers"))}</span><span class="help">${esc(L_("Pick one on any estimate or invoice instead of the default, e.g. labor only, customer-supplied parts, diagnostic fee. Save it with a service on your menu and it comes with that service."))}</span>
       ${dsclList().map(x=>`<div class="dscl-item"><input data-dscln="${esc(x.id)}" value="${esc(x.name)}" placeholder="${esc(L_("Name, e.g. Customer parts"))}" autocomplete="off"><textarea data-dsclt="${esc(x.id)}" rows="2" placeholder="${esc(L_("What it says"))}">${esc(x.text)}</textarea><button class="mini del" type="button" data-dscldel="${esc(x.id)}">${esc(L_("Delete"))}</button></div>`).join("")}
@@ -5720,7 +5724,13 @@ const docSubject=(j,kind)=>withLang(custLang(j),()=>{const num=kind==="estimate"
 // a quick box to add the customer's email right where it's needed
 function emailAddHTML(j){return custEmail(j)?"":`<label class="em-add">✉️ ${esc(L_("Customer email, to send by email too"))}<input type="email" inputmode="email" autocapitalize="off" autocomplete="off" data-info="email" placeholder="name@email.com" value="${esc(j.info.email||"")}"></label>`;}
 function smsHref(phone,body){const n=String(phone||"").replace(/[^0-9+]/g,"");return `sms:${n}${IS_IOS?"&":"?"}body=${encodeURIComponent(body)}`;}
-function nextServiceLine(j){const f=j.followup;if(!f||!f.date)return "";
+// an oil change with mileage on it: when the next one is due (the shop can change the interval in Settings)
+function oilNext(j){if(!j||!isSvc(j))return null;const i=j.info||{},st=APP.settings;
+  const txt=[i.work,...(j.invoice.lines||[]).map(x=>x.d)].join(" ");if(!/\boil\b/i.test(txt)||/\b(leak|pan|pump|pressure|cooler|seal|gasket)\b/i.test(txt))return null;
+  const mi=num(String(i.miles||"").replace(/[^\d.]/g,""));const every=num(st.oilMiles)||5000,months=num(st.oilMonths)||6;
+  const base=j.doneDate||j.invoice.date||i.date||TODAY,d=new Date(base+"T12:00:00");d.setMonth(d.getMonth()+months);
+  return {what:isEs()?"Próximo cambio de aceite":"Next oil change",date:isoDay(d),miles:mi?String(Math.round((mi+every)/100)*100):""};}
+function nextServiceLine(j){const f=(j.followup&&j.followup.date)?j.followup:oilNext(j);if(!f||!f.date)return "";
   if(isEs()){const due=[fmtDate(f.date,{month:"short",day:"numeric",year:"numeric"}),f.miles&&num(f.miles).toLocaleString()+" mi"].filter(Boolean).join(" o ");return `${f.what||"Próximo servicio"} para el ${due}${f.miles?", lo que llegue primero":""}.`;}
   const due=[fmtDate(f.date,{month:"short",day:"numeric",year:"numeric"}),f.miles&&num(f.miles).toLocaleString()+" mi"].filter(Boolean).join(" or ");
   return `${f.what||"Next service"} due ${due}${f.miles?", whichever comes first":""}.`;}
@@ -6118,6 +6128,15 @@ const DSCL_STARTER=[
 function dsclStarter(){const L=dsclList(),have=new Set(L.map(x=>String(x.name||"").toLowerCase()));let n=0;
   DSCL_STARTER.forEach(([name,text])=>{const nm=L_(name);if(have.has(nm.toLowerCase()))return;L.push({id:uid(),name:nm,text:L_(text)});n++;});return n;}
 const dsclList=()=>Array.isArray(APP.settings.discl)?APP.settings.discl:(APP.settings.discl=[]);
+// a long policy on the invoice: just the line that says how long the warranty lasts (the full text was agreed to on the estimate)
+function invDiscShort(t){t=String(t||"").trim();if(t.length<=700)return "";
+  const sent=t.replace(/\s+/g," ").match(/[^.!?]+[.!?]+/g)||[];
+  const hit=sent.find(x=>/\b\d+\s*(days?|months?|years?|mi(les)?)\b|\b\d{1,3}(,\d{3})+\s*mi/i.test(x)&&/warrant|guarant|cover/i.test(x))||sent.find(x=>/\b\d+\s*(days?|months?|years?)\b/i.test(x));
+  return (hit||sent.slice(0,2).join(" ")||t.slice(0,300)).trim();}
+// when and who agreed to the terms (signed in person or approved online)
+function termsAgreed(j){const sg=j.sig&&j.sig.est,on=j.est&&j.est.online&&j.est.online.agreed;
+  const at=sg&&sg.agreed?sg.at:on?on.at:0;if(!at)return null;
+  return {name:(sg&&sg.name)||"",when:new Date(at).toLocaleDateString(LOCALE(),{month:"short",day:"numeric",year:"numeric"})};}
 function jobDisc(j){const d=j&&j.discl,st=APP.settings;
   if(d&&d.mode==="none")return null;
   if(d&&d.mode==="custom")return String(d.text||"").trim()?{title:"Warranty & terms",text:String(d.text).trim()}:null;
@@ -6226,6 +6245,13 @@ function lineRow(x,k){
 
 function priceExample(){const s=APP.settings;return `Example: a job ${num(s.freeMiles)+15} miles away is ${money(num(s.fee))} + ${money(Math.round(15*num(s.perMile)))} travel = ${money(num(s.fee)+Math.round(15*num(s.perMile)))}`;}
 /* ================= payment options on invoices ================= */
+// payment terms for this kind of job: its own field if set, otherwise the general terms minus sentences about the other kind
+function termsFor(j){const s=APP.settings,svc=j&&isSvc(j);
+  const own=String((svc?s.termsSvc:s.termsPpi)||"").trim();if(own)return own;
+  const t=String(s.terms||"").trim();if(!t||!j)return t;
+  const sent=t.match(/[^.!?]+[.!?]*/g)||[t];
+  const other=svc?/\b(ppi|pre-?purchase|inspections?)\b/i:/\b(all )?other services\b|\bservice (jobs|work)\b|\brepairs?\b/i;
+  const keep=sent.filter(x=>!other.test(x));return (keep.length?keep:sent).join("").trim();}
 function payOptions(amount){
   const s=APP.settings,amt=Math.max(0,Math.round(num(amount)*100)/100),a2=amt?amt.toFixed(2):"",out=[];
   const ca=String(s.payCashapp||"").trim().replace(/^\$?/,"");
@@ -6235,7 +6261,9 @@ function payOptions(amount){
   const zl=String(s.payZelle||"").trim();
   if(zl)out.push({k:"Zelle",v:zl,href:""});
   let pp=String(s.payPaypal||"").trim();
-  if(pp){const m=pp.match(/paypal\.me\/([^/?#\s]+)/i),user=m?m[1]:(/@/.test(pp)?"":pp.replace(/^@/,""));
+  if(pp){const m=pp.match(/paypal\.me\/([^/?#\s]+)/i);let user=m?m[1]:(/@/.test(pp)?"":pp.replace(/^@/,""));
+    // "paypal.me/name@email.com" isn't a real PayPal.me link: show the email to send to instead
+    if(/@/.test(user)){pp=user;user="";}
     out.push({k:"PayPal",v:user?`paypal.me/${user}`:pp,href:user?`https://paypal.me/${encodeURIComponent(user)}${a2?"/"+a2+"USD":""}`:""});}
   const cd=String(s.payCard||"").trim();
   if(cd)out.push({k:"Card",v:cd.replace(/^https?:\/\//,""),href:/^https?:\/\//.test(cd)?cd:"https://"+cd});
@@ -6245,7 +6273,7 @@ function payBoxHTML(amount){
   const s=APP.settings,opts=payOptions(amount);
   if(!opts.length&&!s.pay&&!s.terms&&!(S&&fleetTermsLine(S)))return `<p class="empty">Add your payment options in Settings so they show on the invoice.</p>`;
   return `<div class="paybox">${opts.map(o=>`<div class="payrow"><span class="payk">${esc(o.k)}</span>${o.href?`<a href="${esc(o.href)}" target="_blank" rel="noopener">${esc(o.v)}</a>`:`<span>${esc(o.v)}</span>`}</div>`).join("")}
-    ${s.pay?`<div class="paynote">${esc(s.pay)}</div>`:""}${(S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||s.terms?`<div class="paynote">${esc((S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||s.terms)}</div>`:""}</div>`;
+    ${s.pay?`<div class="paynote">${esc(s.pay)}</div>`:""}${(S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||termsFor(S)?`<div class="paynote">${esc((S&&fleetTermsLine(S,S.invoice&&S.invoice.date))||termsFor(S))}</div>`:""}</div>`;
 }
 function payTextLines(amount){
   const s=APP.settings,L=payOptions(amount).map(o=>`${L_(o.k)}: ${o.v}${o.href&&o.k!=="Card"?" — "+o.href:o.k==="Card"?" — "+o.href:""}`);
@@ -6413,7 +6441,7 @@ function invoiceText_(){
   if(t.svc&&wtyTextLines(S).length){L.push("");L.push("YOUR WARRANTY");L.push(...wtyTextLines(S));}
   {const x=t.svc&&jobDisc(S);if(x){L.push("");L.push(L_(x.title).toUpperCase()+": "+x.text);}}
   if(inv.paid)L.push(`Paid${inv.paidVia&&inv.paidVia!=="Zoho"?" by "+inv.paidVia:""}${inv.paidDate?" on "+fmtDate(inv.paidDate,{month:"short",day:"numeric"}):""}. Thank you!`);
-  else{ const pl=payTextLines(balanceDue(S));if(pl.length){L.push("");L.push("How to pay:");L.push(...pl);} const ft=fleetTermsLine(S,inv.date);if(ft)L.push(ft);else if(st.terms)L.push(st.terms); }
+  else{ const pl=payTextLines(balanceDue(S));if(pl.length){L.push("");L.push("How to pay:");L.push(...pl);} const ft=fleetTermsLine(S,inv.date);if(ft)L.push(ft);else if(termsFor(S))L.push(termsFor(S)); }
   return L.join("\n");
 }
 
@@ -6467,7 +6495,7 @@ function pdfHeader(P,title,rightLines){
   if(nm.length>1){P.font(14,"bold");nm=P.wrap(bizName(),room).slice(0,2);}
   P.text(nm[0],tx,cy+14);if(nm[1]){P.text(nm[1],tx,cy+30);cy+=16;}
   P.font(9,"normal",PC.muted);
-  const contact=[s.owner,s.phone,s.email,s.web].filter(Boolean).join("  ·  ");
+  const contact=[s.owner,fmtPhone(s.phone),s.email,s.web].filter(Boolean).join("  ·  ");
   if(contact){const cl=P.wrap(contact,PW-PM-150-tx).slice(0,2);P.text(cl,tx,cy+30);if(cl.length>1)cy+=11;}
   P.font(16,"bold",PC.accent);P.text(title.toUpperCase(),PW-PM,P.y+14,{align:"right"});
   rightLines.forEach((l,k)=>{if(k===0){P.font(10.5,"bold");P.text(l,PW-PM,P.y+30,{align:"right"});}else{P.font(9,"normal",PC.muted);P.text(l,PW-PM,P.y+30+k*12,{align:"right"});}});
@@ -6670,13 +6698,17 @@ function buildInvoicePdf_(job,est){
     P.font(10,"bold",PC.accent);if(doc.textWithLink)doc.textWithLink(PDF_LINK.pay.replace(/^https:\/\//,""),PM,P.y,{url:PDF_LINK.pay});else P.text(PDF_LINK.pay,PM,P.y);P.y+=14;
     const other=payOptions(balanceDue(job)).map(o=>o.k).filter(k=>!/card/i.test(k));if(other.length){P.font(9,"normal",PC.muted);P.text((isEs()?"También: ":"Also accepted: ")+other.join(", "),PM,P.y);P.y+=12;}
     P.y=Math.max(P.y,y0+78)+4;
-    {const tt=fleetTermsLine(job,inv.date)||s.terms;if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
-  }else if(payOptions(balanceDue(job)).length||s.pay||s.terms||fleetTermsLine(job,inv.date)){
-    P.y+=6;P.need(40);P.font(8,"bold",PC.muted);P.text("HOW TO PAY",PM,P.y);P.y+=15;
-    payOptions(balanceDue(job)).forEach(o=>{P.need(16);P.font(10,"bold");P.text(o.k,PM,P.y);P.font(10,"normal",o.href?PC.accent:PC.ink);
+    {const tt=fleetTermsLine(job,inv.date)||termsFor(job);if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
+  }else if(payOptions(balanceDue(job)).length||s.pay||termsFor(job)||fleetTermsLine(job,inv.date)){
+    P.y+=6;const po=payOptions(balanceDue(job)),qo=["Card","Cash App","PayPal","Venmo"].map(k=>po.find(o=>o.k===k&&o.href)).find(Boolean);
+    P.need(qo?110:40);const qy0=P.y;
+    if(qo){const ok=qrPdf(P,qo.href,PW-PM-84,qy0-8,84);if(ok){P.font(7.5,"bold",PC.muted);P.text((isEs()?"ESCANEE PARA PAGAR":"SCAN TO PAY"),PW-PM-42,qy0+86,{align:"center"});P.text(qo.k.toUpperCase(),PW-PM-42,qy0+95,{align:"center"});}}
+    P.font(8,"bold",PC.muted);P.text("HOW TO PAY",PM,P.y);P.y+=15;
+    po.forEach(o=>{P.need(16);P.font(10,"bold");P.text(o.k,PM,P.y);P.font(10,"normal",o.href?PC.accent:PC.ink);
       if(o.href&&doc.textWithLink)doc.textWithLink(pdfTxt(o.v),PM+80,P.y,{url:o.href});else P.text(o.v,PM+80,P.y);P.y+=15;});
-    if(s.pay){P.font(10);const l=P.wrap(s.pay,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13+4;}
-    {const tt=fleetTermsLine(job,inv.date)||s.terms;if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM);P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
+    if(s.pay){P.font(10);const l=P.wrap(s.pay,PW-2*PM-(qo?100:0));P.text(l,PM,P.y);P.y+=l.length*13+4;}
+    {const tt=fleetTermsLine(job,inv.date)||termsFor(job);if(tt){P.font(9,"normal",PC.muted);const tl2=P.wrap(tt,PW-2*PM-(qo?100:0));P.text(tl2,PM,P.y);P.y+=tl2.length*12+6;}}
+    if(qo)P.y=Math.max(P.y,qy0+100);
   }
   if(svc&&i.recs){P.y+=10;P.need(40);P.font(8,"bold",PC.muted);P.text("RECOMMENDATIONS",PM,P.y);P.y+=13;P.font(10);const l=P.wrap(i.recs,PW-2*PM);P.text(l,PM,P.y);P.y+=l.length*13;}
   if(svc)mpiPdf(P,job);
@@ -6685,7 +6717,12 @@ function buildInvoicePdf_(job,est){
   if(!est&&job.sig&&job.sig.inv){const sg=job.sig.inv;P.y+=14;P.need(80);try{doc.addImage(sg.data,"JPEG",PM,P.y,180,48);}catch(e){}P.y+=52;
     doc.setDrawColor(...PC.ink);doc.setLineWidth(.75);doc.line(PM,P.y,PM+260,P.y);P.font(8,"bold",PC.muted);P.text(`CUSTOMER SIGNATURE${sg.name?" · "+sg.name.toUpperCase():""} · ${fmtDate(isoDay(new Date(sg.at)),{month:"short",day:"numeric",year:"numeric"})}`,PM,P.y+12);P.y+=24;}
   if(svc&&wtyTextLines(job).length){const wl=wtyTextLines(job);P.y+=8;P.need(14+wl.length*12);P.font(8,"bold",PC.muted);P.text("YOUR WARRANTY",PM,P.y);P.y+=12;P.font(9,"normal",PC.ink);wl.forEach(x=>{P.text(x,PM,P.y);P.y+=12;});}
-  const dx=svc&&jobDisc(job);if(dx){P.font(9,"normal",PC.muted);const wl=P.wrap(dx.text,PW-2*PM);P.y+=8;P.need(14+Math.min(wl.length,4)*12);P.font(8,"bold",PC.muted);P.text(L_(dx.title).toUpperCase(),PM,P.y);P.y+=12;P.font(9,"normal",PC.muted);wl.forEach(l=>{P.need(12);P.font(9,"normal",PC.muted);P.text(l,PM,P.y);P.y+=12;});}
+  const dx=svc&&jobDisc(job),ag=!est&&termsAgreed(job);
+  if(dx&&!est&&invDiscShort(dx.text)){const sm=invDiscShort(dx.text);P.y+=8;P.need(60);P.font(8,"bold",PC.muted);P.text(L_(dx.title).toUpperCase(),PM,P.y);P.y+=12;
+    P.font(9,"normal",PC.ink);const sl=P.wrap(sm,PW-2*PM);sl.forEach(l=>{P.need(12);P.text(l,PM,P.y);P.y+=12;});
+    P.font(9,"normal",PC.muted);const more=P.wrap(ag?(isEs()?`Los términos completos están en el presupuesto que aprobó. Pídalos y se los enviamos de nuevo.`:`The full policy is on the estimate you approved. Ask us any time and we'll send it again.`):(isEs()?`Pida la póliza completa en cualquier momento.`:`Ask us for the full policy any time.`)+(APP.settings.web?" "+APP.settings.web:""),PW-2*PM);more.forEach(l=>{P.need(12);P.text(l,PM,P.y);P.y+=12;});}
+  else if(dx){P.font(9,"normal",PC.muted);const wl=P.wrap(dx.text,PW-2*PM);P.y+=8;P.need(14+Math.min(wl.length,4)*12);P.font(8,"bold",PC.muted);P.text(L_(dx.title).toUpperCase(),PM,P.y);P.y+=12;P.font(9,"normal",PC.muted);wl.forEach(l=>{P.need(12);P.font(9,"normal",PC.muted);P.text(l,PM,P.y);P.y+=12;});}
+  if(ag){P.y+=4;P.need(16);P.font(9,"bold",PC.good);P.text((isEs()?`Aceptó la garantía y los términos: ${ag.name||job.info.customer||""}, ${ag.when}`:`Agreed to the warranty & terms: ${ag.name||job.info.customer||""}, ${ag.when}`),PM,P.y);P.y+=14;}
   const media=svc&&!est?(job.media||[]):[];
   if(media.length){
     const tagName=Object.fromEntries(MTAGS),photos=media.filter(m=>m.kind==="photo"),vids=media.filter(m=>m.kind==="video");
@@ -6735,6 +6772,7 @@ function estSnapshot(j,inv){const prev=S;S=j;try{return withLang(custLang(j),()=
   return {num:(inv?j.invoice.num:j.est&&j.est.num)||"",total:inv?balanceDue(j):Math.round(t.total*100)/100,...(!inv&&depositFor(j)?{deposit:depositFor(j)}:{}),lines:L.slice(0,60),cust:name.split(/\s+/)[0]||"",custFull:name,veh:vehOf(i)||"",biz:bizName(),phone:APP.settings.phone||"",lang:custLang(j)==="es"?"es":"en",valid:!inv&&j.est?estValidUntil(j.est):"",...(!inv&&APP.settings.apprVerify&&String(i.phone||"").replace(/\D/g,"").length>=4?{verify:true}:{}),...(()=>{const x=isSvc(j)&&jobDisc(j);return x?{disc:{t:L_(x.title),x:x.text.slice(0,8000)}}:{};})()};});}finally{S=prev;}}
 async function sendPdf(kind){
   if(!window.jspdf){toast("The PDF tool didn't load. Check your connection and try again.");return;}
+  if(kind==="invoice")await Promise.race([loadQr(),new Promise(r=>setTimeout(r,2500))]); // scan-to-pay code
   if(!APP.settings.biz.trim()){toast("Add your business name in Settings first. It goes at the top of the PDF.");return;}
   const j=S;if(kind==="estimate")ensureEst();else ensureInvoice();
   if(!AUTH||!AUTH.shop_id){toast("Sign in to text a PDF link. Opening the share sheet instead");return savePdf(kind);}
@@ -6763,6 +6801,7 @@ async function sendPdf(kind){
   rerenderKeep();}
 async function savePdf(kind){
   if(!window.jspdf){toast("The PDF tool didn't load. Check your connection and try again.");return;}
+  if(kind==="invoice")await Promise.race([loadQr(),new Promise(r=>setTimeout(r,2500))]); // scan-to-pay code
   const dl=await getSaver();
   if(!dl){toast("Saving PDFs isn't available in this view.");return;}
   if(!APP.settings.biz.trim()){toast("Add your business name in Settings first. It goes at the top of the PDF.");return;}

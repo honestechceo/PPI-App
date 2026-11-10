@@ -2847,7 +2847,11 @@ function reqForm(rq){
     ${f("agreed","Price quote ($)",'inputmode="decimal" placeholder="If you gave them a price"')}<label class="check"><input type="checkbox" data-reqc="agreedTravel" ${rq.agreedTravel!==false?"checked":""}> Travel included</label>
     <div class="full">${availHTML(rq)}</div>
     <label class="full">Notes / full message<textarea data-req="notes" rows="3">${esc(rq.notes||"")}</textarea></label>
-    <div class="formacts full">${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?`<button class="btn primary" type="button" data-act="reqest">📝 Send estimate</button>`:""}<button class="btn${rq.type!=="ppi"&&(!rq.status||rq.status==="new")?"":" primary"}" type="button" data-act="reqsave">Save to inbox</button>${rq.status&&rq.status!=="new"?"":`<button class="btn" type="button" data-act="reqbook">Book it now</button>`}<button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
+    ${(()=>{const lj=rq.jobId&&APP.jobs.find(j=>j.id===rq.jobId);
+      // already made into a job/estimate: open it, or book it if they said yes
+      if(lj)return `<div class="formacts full req-acts">${lj.pending?`<button class="btn primary" type="button" data-act="reqbookjob">📅 They said yes: book it${rq.date?" for "+esc(fmtDate(rq.date,{weekday:"short",month:"short",day:"numeric"}))+(rq.time?" "+esc(tmW(rq)):""):""}</button>`:""}<button class="btn${lj.pending?"":" primary"}" type="button" data-act="reqopenjob">${lj.pending||(lj.est&&lj.status==="sched"&&!isBooked(lj))?"📄 Open the estimate":"📄 Open the job"}</button><button class="btn" type="button" data-act="reqsave">Save changes</button><button class="btn" type="button" data-act="reqcancel">Cancel</button></div>
+        <p class="help full" style="margin:0">${esc(lj.pending?L_("You already sent an estimate for this request. It's in Waiting."):L_("This request is already on your schedule."))}</p>`;
+      return `<div class="formacts full req-acts"><button class="btn primary" type="button" data-act="reqbook">📅 Book it now</button>${rq.type!=="ppi"?`<button class="btn" type="button" data-act="reqest">📝 Send an estimate</button>`:""}<button class="btn" type="button" data-act="reqsave">Save to inbox</button><button class="btn" type="button" data-act="reqcancel">Cancel</button></div>`;})()}
   </div>`;
 }
 function declineText(rq,why){return withLang(rq.lang||"en",()=>declineText_(rq,why));}
@@ -7806,6 +7810,10 @@ document.addEventListener("click",e=>{
   if(d.act==="reqcancel"){REQ_PASTE=null;REQ_EDIT=null;rerenderKeep();return;}
   if(d.act==="reqest"){const r=REQ_EDIT;if(!r)return;if(!(r.customer||"").trim()){toast("Add the customer's name");return;}const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
     REQ_EDIT=null;save();quoteFromReq(r);return;}
+  if(d.act==="reqopenjob"||d.act==="reqbookjob"){const r=REQ_EDIT;if(!r)return;const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
+    const j=APP.jobs.find(x=>x.id===r.jobId);REQ_EDIT=null;if(!j){save();render();return;}
+    if(d.act==="reqbookjob"){if(r.date)j.info.date=r.date;if(r.time){j.info.time=r.time;j.info.timeEnd=r.timeEnd||"";}unPend(j);r.status="booked";save();openJob(j.id);toast(L_("Booked")+(r.date?" · "+fmtDate(r.date,{weekday:"short",month:"short",day:"numeric"}):""));return;}
+    save();if(j.pending||j.est){SVC_TAB[j.id]="bill";j.docMode="est";}openJob(j.id);return;}
   if(d.act==="reqsave"||d.act==="reqbook"){const r=REQ_EDIT;if(!r)return;const k=APP.requests.findIndex(x=>x.id===r.id);if(k>-1)APP.requests[k]=r;else APP.requests.push(r);
     REQ_EDIT=null;save();if(d.act==="reqbook"){reqToDraft(r);render();window.scrollTo(0,0);return;}render();window.scrollTo(0,0);toast("Saved to your requests");return;}
   if(d.reqtype&&REQ_EDIT){REQ_EDIT.type=d.reqtype;if(d.reqtype==="ppi"&&!REQ_EDIT.work)REQ_EDIT.work="Pre-purchase inspection";rerenderKeep();return;}

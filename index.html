@@ -577,6 +577,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .omw-eta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}.omw-eta strong{font-size:22px;font-family:var(--f-display)}
 .omw-adj{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.omw-adj .mini{padding-left:4px;padding-right:4px;justify-content:center}.omw .note{margin:0}
 .omw-sent{grid-column:1/-1;color:var(--good)}
+.qs-month{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:10px 2px 4px}.done-row .hist-what{display:flex;flex-direction:column;min-width:0}.done-row .hist-what small{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.done-row .hist-amt{display:flex;flex-direction:column;align-items:flex-end}.done-row .hist-amt small{font-size:11px;font-weight:700}.done-num{color:var(--muted);font-size:13px}.done-row small.ok{color:var(--good)}.done-row small.due{color:var(--bad)}
 .op-chip{display:inline-block;font:700 11px/1.5 ui-monospace,Menlo,monospace;letter-spacing:.04em;padding:0 6px;border-radius:5px;background:var(--ink);color:var(--surface);vertical-align:1px}.ln-op{margin:0 0 4px}.ms-op{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}.ms-op .ms-lbl{flex:0 1 180px}
 .em-add{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted);margin:6px 0 8px}.em-add input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;color:var(--ink);font-weight:400}
 .omw-trk{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}.omw-trk input{width:20px;height:20px;accent-color:var(--accent)}
@@ -5969,6 +5970,7 @@ function shareMedia(){
 // ---- ☰ quick actions: one tap to the things done most ----
 // white glyphs for the quick-action buttons (24×24, solid)
 const QI={
+done:`<path d="M12 1.8a10.2 10.2 0 1 0 0 20.4 10.2 10.2 0 0 0 0-20.4Zm5.1 7.7-6 6.3a1.1 1.1 0 0 1-1.6 0l-3-3.1a1.1 1.1 0 1 1 1.6-1.5l2.2 2.3 5.2-5.5a1.1 1.1 0 0 1 1.6 1.5Z"/>`,
  omw:`<path d="M6.2 9.6 8 5.8C8.4 5 9.2 4.5 10.1 4.5h3.8c.9 0 1.7.5 2.1 1.3l1.8 3.8h.7c.4-.6.9-.8 1.4-.8h.6c.6 0 .9.6.6 1.1l-.6.9c.9.7 1.4 1.7 1.4 2.8v4.1c0 .5-.4.9-.9.9h-.6v1.4c0 .6-.5 1-1 1h-1.3c-.6 0-1-.4-1-1v-1.4H6.9v1.4c0 .6-.5 1-1 1H4.6c-.6 0-1-.4-1-1v-1.4H3c-.5 0-.9-.4-.9-.9v-4.1c0-1.1.5-2.1 1.4-2.8l-.6-.9c-.3-.5 0-1.1.6-1.1h.6c.5 0 1 .2 1.4.8ZM8.1 9.4h7.8l-1.3-2.7c-.2-.4-.5-.6-.9-.6h-3.4c-.4 0-.7.2-.9.6Zm-2.8 3c-.5 0-.7.6-.4 1 .6.6 1.6 1.1 2.6 1.2.5 0 .7-.5.5-.9l-.3-.5c-.2-.3-.5-.5-.8-.6Zm13.4 0-1.6.2c-.3.1-.6.3-.8.6l-.3.5c-.2.4 0 .9.5.9 1-.1 2-.6 2.6-1.2.3-.4.1-1-.4-1ZM9.3 15c-.4 0-.6.5-.3.8l.2.2h5.6l.2-.2c.3-.3.1-.8-.3-.8Z"/>`,
  text:`<path d="M4.5 4h15c1.4 0 2.5 1.1 2.5 2.5v9c0 1.4-1.1 2.5-2.5 2.5H10l-4.6 3.6c-.7.5-1.6 0-1.6-.8V18h.7C3.1 18 2 16.9 2 15.5v-9C2 5.1 3.1 4 4.5 4Zm3 6.2a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Zm4.5 0a1.3 1.3 0 1 0 0 2.6 1.3 1.3 0 0 0 0-2.6Z"/>`,
  sched:`<path d="M7.5 2.5c.6 0 1 .4 1 1V5h7V3.5a1 1 0 1 1 2 0V5h1c1.7 0 3 1.3 3 3v10.5c0 1.7-1.3 3-3 3h-13c-1.7 0-3-1.3-3-3V8c0-1.7 1.3-3 3-3h1V3.5c0-.6.4-1 1-1ZM4.5 10v8.5c0 .6.4 1 1 1h13c.6 0 1-.4 1-1V10Zm2.5 2h3v3H7Zm4.5 0h3v3h-3Z"/>`,
@@ -5991,11 +5993,24 @@ function omwJobs(){return APP.jobs.filter(j=>isBooked(j)&&(j.info.date||TODAY)>=
 function textHi(name,lg){const first=String(name||"").trim().split(/\s+/)[0]||"",me=String(APP.settings.owner||"").trim().split(/\s+/)[0];
   if(lg==="es")return `Hola${first?" "+first:""}, ${me?`le escribe ${me} de ${bizName()}. `:`le escribe ${bizName()}. `}`;
   return `Hi ${first||"there"}, ${me?`it's ${me} from ${bizName()}. `:`this is ${bizName()}. `}`;}
+// finished jobs, newest first, searchable by name, phone, vehicle, VIN, plate, work, invoice # or op code
+let DONE_N=40;
+function quickDoneList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q),qq=String(QUICK_Q||"").trim().toLowerCase();
+  const all=APP.jobs.filter(j=>j.status==="done").sort((a,b)=>jDate(b).localeCompare(jDate(a))||(b.invoice.num||"").localeCompare(a.invoice.num||""));
+  const hits=!qq?all:all.filter(j=>{const i=j.info||{};const hay=[i.customer,vehOf(i),i.vin,i.plate,i.unit,i.work,j.invoice.num,(j.est||{}).num,...(j.invoice.lines||[]).map(x=>[x.op,x.d].join(" "))].join(" ").toLowerCase();
+    return hay.includes(qq)||(q&&normName(i.customer||"").includes(q))||(dq.length>=3&&digits(i.phone).includes(dq));});
+  if(!hits.length)return `<p class="empty">${qq?"No finished jobs match.":"No finished jobs yet. Jobs show up here after you tap Finish job."}</p>`;
+  const show=hits.slice(0,DONE_N);let lastM="";
+  return show.map(j=>{const i=j.info,m=fmtDate(jDate(j),{month:"long",year:"numeric"});const head=m!==lastM?`<div class="qs-month">${esc(m)}</div>`:"";lastM=m;
+    return head+`<button type="button" class="hist-row done-row" data-quickdone="${j.id}"><span>${esc(fmtDate(jDate(j),{month:"short",day:"numeric"}))}</span>
+      <span class="hist-what"><span><strong>${esc(i.customer||"Customer")}</strong>${j.invoice.num?` <span class="done-num">#${esc(j.invoice.num)}</span>`:""}</span><small>${esc([vehOf(i),isSvc(j)?(i.work||((j.invoice.lines||[])[0]||{}).d||"Service"):"Inspection"].filter(Boolean).join(" · "))}</small></span>
+      <span class="hist-amt">${money(jobTotal(j))}<small class="${j.invoice.paid?"ok":"due"}">${j.invoice.paid?"Paid":"Unpaid"}</small></span></button>`;}).join("")
+    +(hits.length>show.length?`<button type="button" class="mini more-jobs" data-donemore="1">Show more (${hits.length-show.length})</button>`:"");}
 function quickTextList(){const q=normName(QUICK_Q),dq=digits(QUICK_Q);
   const cs=(APP.customers||[]).filter(c=>!c.hidden&&c.phone&&(!q||normName(c.name).includes(q))&&(!dq||dq.length<3||digits(c.phone).includes(dq))).sort((a,b)=>(b.last||"").localeCompare(a.last||"")).slice(0,30);
   return cs.length?cs.map(c=>`<a class="hist-row qs-sms" href="${esc(smsHref(c.phone,textHi(c.name,c.lang)))}"><span>💬</span><span class="hist-what"><strong>${esc(c.name)}</strong> · ${esc(c.phone)}</span><span class="hist-amt">${c.last?esc(fmtDate(c.last,{month:"short",day:"numeric"})):""}</span></a>`).join("")
     :`<p class="empty">${QUICK_Q?"No customers with a phone number match.":"No customers with a phone number yet."}</p>`;}
-const QUICK_ITEMS=[["omw","🚗","On my way","Text your ETA"],["text","💬","Text a customer","Pick and send"],["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
+const QUICK_ITEMS=[["done","✅","Completed jobs","Find a finished job"],["omw","🚗","On my way","Text your ETA"],["text","💬","Text a customer","Pick and send"],["sched","📅","Schedule appointment","Book a service job"],["quote","📝","Send a quote","Estimate for a new customer"],["receipt","🧾","Send a receipt","Invoice for a finished job"],
   ["unpaid","💵","Unpaid invoices","Collect or mark paid"],["ppi","🔍","Book an inspection","Pre-purchase inspection"],["request","📥","Paste a request","From an email or text"],
   ["customer","👤","Add customer","Name, phone, address"],["expense","⛽","Add expense","Parts, fuel, tools"],["look","🔎","Look it up","Codes, specs, videos"],["sound","🔊","Sound tools","Speakers, rattles, RPM"]];
 function quickHTML(){if(!QUICK)return "";
@@ -6006,6 +6021,7 @@ function quickHTML(){if(!QUICK)return "";
   if(QUICK==="text"){
     return sub("Text a customer",`<label class="search" style="margin:0 0 8px"><input id="qsQ" data-quickq="1" value="${esc(QUICK_Q)}" placeholder="Search name or phone" autocomplete="off" inputmode="search"></label>
       <p class="help" style="margin:0 0 8px">Tap a customer to open Messages with a greeting already started.</p><div class="qs-list" id="qsList">${quickTextList()}</div>`);}
+  if(QUICK==="done")return sub("Completed jobs",`<label class="search" style="margin:0 0 8px"><input id="qsQ" data-quickq="1" value="${esc(QUICK_Q)}" placeholder="Search name, phone, vehicle, VIN, invoice # or code" autocomplete="off" inputmode="search"></label><div class="qs-list" id="qsList">${quickDoneList()}</div>`);
   if(QUICK==="receipt"){const js=APP.jobs.filter(j=>j.status==="done").sort((a,b)=>jDate(b).localeCompare(jDate(a))||(b.invoice.num||"").localeCompare(a.invoice.num||"")).slice(0,25);
     return `<button type="button" class="qs-back" data-act="quickclose" aria-label="Close"></button><div class="qs-panel" role="dialog" aria-label="Send a receipt"><div class="qs-head"><button class="mini" type="button" data-act="quick">‹ Back</button><strong>Send a receipt</strong><button class="xbtn" type="button" data-act="quickclose" aria-label="Close">×</button></div>
       <p class="help" style="margin:0 0 8px">Pick the job. Its invoice opens, ready to text, email or save as a PDF. Mark it paid first so it shows PAID.</p>
@@ -7576,7 +7592,9 @@ document.addEventListener("click",e=>{
   if(d.act==="qspick"){QS_PICK=!QS_PICK;render();return;}
   if(d.qscolor){APP.settings.qsColor=d.qscolor==="app"?"":d.qscolor;save();render();return;}
   if(d.act==="quickclose"){QUICK=null;render();return;}
-  if(d.quick){if(["receipt","omw","text"].includes(d.quick)){QUICK=d.quick;QUICK_Q="";render();if(d.quick==="text"&&!/iPhone|iPad|Android/i.test(navigator.userAgent))setTimeout(()=>document.getElementById("qsQ")?.focus(),60);return;}quickGo(d.quick);return;}
+  if(d.donemore){DONE_N+=40;const l=document.getElementById("qsList");if(l)l.innerHTML=quickDoneList();return;}
+  if(d.quickdone){const j=APP.jobs.find(x=>x.id===d.quickdone);QUICK=null;if(!j){render();return;}openJob(j.id);return;}
+  if(d.quick){if(["receipt","omw","text","done"].includes(d.quick)){QUICK=d.quick;QUICK_Q="";DONE_N=40;render();if(d.quick==="text"&&!/iPhone|iPad|Android/i.test(navigator.userAgent))setTimeout(()=>document.getElementById("qsQ")?.focus(),60);return;}quickGo(d.quick);return;}
   if(d.quickomw){const j=APP.jobs.find(x=>x.id===d.quickomw);QUICK=null;if(!j){render();return;}
     if(!j.info.phone){openJob(j.id);toast("Add the customer's phone number to text them");return;}
     APP.view="jobs";APP.adding=false;APP.editing=null;APP.day="";APP.schedMode="list";APP.ctyF=null;render();startOMW(j.id).then(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}));setTimeout(()=>document.querySelector(".omw")?.scrollIntoView({block:"center"}),80);return;}
@@ -8102,6 +8120,7 @@ document.addEventListener("input",e=>{
   if(d.toolhave!==undefined&&S){const T=S.tools||(S.tools={});T.have={...(T.have||{}),[d.toolhave]:t.checked};if(!t.checked)delete T.have[d.toolhave];saveSoon();rerenderKeep();return;}
   if(d.qscustom){APP.settings.qsColor=t.value;const g=document.querySelector(".qs-grid");if(g)g.style.setProperty("--qs",t.value);clearTimeout(QI._t);QI._t=setTimeout(()=>{saveSoon();render();},500);return;}
   if(d.quickq&&QUICK==="text"){QUICK_Q=t.value;const l=document.getElementById("qsList");if(l)l.innerHTML=quickTextList();return;}
+  if(d.quickq&&QUICK==="done"){QUICK_Q=t.value;DONE_N=40;const l=document.getElementById("qsList");if(l)l.innerHTML=quickDoneList();return;}
   if(d.wxoff){APP.settings.wxOff=!t.checked;saveSoon();return;}
   if(d.estpick!==undefined&&EST_BOOK){EST_BOOK.pick=d.estpick==="other"?"other":+d.estpick;rerenderKeep();return;}
   if(d.estbd&&EST_BOOK){EST_BOOK.d=t.value;return;}

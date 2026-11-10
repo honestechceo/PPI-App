@@ -576,6 +576,7 @@ a.mini.dir{background:var(--accent-soft);border-color:var(--accent);color:var(--
 .omw-eta{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}.omw-eta strong{font-size:22px;font-family:var(--f-display)}
 .omw-adj{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.omw-adj .mini{padding-left:4px;padding-right:4px;justify-content:center}.omw .note{margin:0}
 .omw-sent{grid-column:1/-1;color:var(--good)}
+.op-chip{display:inline-block;font:700 11px/1.5 ui-monospace,Menlo,monospace;letter-spacing:.04em;padding:0 6px;border-radius:5px;background:var(--ink);color:var(--surface);vertical-align:1px}.ln-op{margin:0 0 4px}.ms-op{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}.ms-op .ms-lbl{flex:0 1 180px}
 .em-add{display:flex;flex-direction:column;gap:4px;font-size:13px;font-weight:600;color:var(--muted);margin:6px 0 8px}.em-add input{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:10px;color:var(--ink);font-weight:400}
 .omw-trk{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px}.omw-trk input{width:20px;height:20px;accent-color:var(--accent)}
 .trk-pill{position:fixed;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;border-radius:14px;background:var(--surface);color:var(--ink);border:1px solid var(--accent);box-shadow:0 6px 20px rgba(0,0,0,.18);max-width:560px;margin:0 auto}
@@ -3298,6 +3299,10 @@ document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest
   if(k==="copy"){copyText(t);toast("Copied");return;}
   if(k==="sms"){location.href=smsHref(A.phone,t);return;}
   if(k==="email"){location.href=`mailto:${encodeURIComponent(A.email)}?subject=${encodeURIComponent(A.subject||bizName())}&body=${encodeURIComponent(t)}`;return;}},true);
+// Service menu: type an operation code and press Enter (Go) to add that job
+document.addEventListener("keydown",e=>{if(e.key!=="Enter"||!e.target||e.target.id!=="menuQ")return;e.preventDefault();
+  const v=e.target.value.trim(),it=menuByCode(v)||(()=>{const q=v.toLowerCase(),l=(APP.settings.menu||[]).filter(x=>x.name.toLowerCase().includes(q)||String(x.code||"").toLowerCase().startsWith(q));return l.length===1?l[0]:null;})();
+  if(it){MENU_Q="";document.querySelector(`[data-menuadd="${it.id}"]`)?.click();}else toast(v?`No menu job with code ${opClean(v)}`:"Type a code like OIL001");});
 document.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target&&e.target.id==="aiNote"){e.preventDefault();aiDraft();}});
 function reviewBtnHTML(j){
   if(!j.invoice.paid)return "";const st=APP.settings;
@@ -6107,6 +6112,13 @@ function renderService(){
 }
 /* ---- saved service menu ---- */
 let MENU_OPEN=false,MENU_SAVE=false,MENU_Q="";
+// operation codes (e.g. OIL001, BRKF001): short, uppercase, letters/numbers/dash
+const opClean=v=>String(v||"").toUpperCase().replace(/[^A-Z0-9-]/g,"").slice(0,12);
+const OP_HINTS=[[/full.*oil|oil.*full|synthetic/i,"OIL"],[/oil/i,"OIL"],[/front.*brake|brake.*front/i,"BRKF"],[/rear.*brake|brake.*rear/i,"BRKR"],[/brake/i,"BRK"],[/batter/i,"BAT"],[/alternator/i,"ALT"],[/starter/i,"STR"],[/spark|plug|tune/i,"TUNE"],[/coolant|radiator|thermostat|water pump/i,"COOL"],[/diag|check engine|scan/i,"DIAG"],[/inspect|ppi/i,"INSP"],[/tire|rotat/i,"TIRE"],[/wiper/i,"WIPE"],[/filter/i,"FILT"],[/belt/i,"BELT"],[/suspension|strut|shock|control arm|tie rod/i,"SUSP"],[/fluid|flush/i,"FLD"]];
+function opSuggest(name,except){const used=new Set((APP.settings.menu||[]).filter(x=>x.id!==except).map(x=>opClean(x.code)).filter(Boolean));
+  const h=OP_HINTS.find(([re])=>re.test(name||""));const base=h?h[1]:(String(name||"").toUpperCase().replace(/[^A-Z]/g,"").slice(0,4)||"OP");
+  for(let n=1;n<1000;n++){const c=base+String(n).padStart(3,"0");if(!used.has(c))return c;}return base;}
+const menuByCode=c=>{c=opClean(c);return c?(APP.settings.menu||[]).find(x=>opClean(x.code)===c):null;};
 const menuTotal=m=>(m.lines||[]).reduce((a,x)=>a+lineAmt({...x,p:x.k==="labor"&&x.p===""?APP.settings.laborRate:x.p}),0);
 const menuSum=m=>(m.lines||[]).map(x=>x.k==="labor"?`${x.d||"Labor"} ${num(x.q)||1} hr`:x.d||RK[x.k]).join(" · ");
 const STARTER_MENU=[
@@ -6116,7 +6128,7 @@ const STARTER_MENU=[
   ["Battery replacement",[["labor","Replace battery, test charging system","0.5",""],["part","Battery","1",""]]],
   ["Check engine light diagnosis",[["flat","Diagnostic: scan, test and report","1",""]]],
   ["Serpentine belt",[["labor","Replace serpentine belt","1",""],["part","Serpentine belt","1",""]]]];
-function addStarterMenu(){const m=APP.settings.menu;let n=0;STARTER_MENU.forEach(([name,ls])=>{if(m.some(x=>x.name.toLowerCase()===name.toLowerCase()))return;
+function addStarterMenu(){setTimeout(()=>{let ch=false;(APP.settings.menu||[]).forEach(x=>{if(!x.code&&x.name&&STARTER_MENU.some(([n])=>n.toLowerCase()===x.name.toLowerCase())){x.code=opSuggest(x.name,x.id);ch=true;}});if(ch){save();rerenderKeep();}},0);const m=APP.settings.menu;let n=0;STARTER_MENU.forEach(([name,ls])=>{if(m.some(x=>x.name.toLowerCase()===name.toLowerCase()))return;
   m.push({id:uid(),name,lines:ls.map(([k,d,q,p])=>({k,d,q,p}))});n++;});return n;}
 /* ---- disclaimer / fine print: the default from Settings, a saved one, one written for this job, or none ---- */
 // a starting set any shop can edit (plain, general wording; each shop adjusts it to its own policies)
@@ -6161,13 +6173,14 @@ function menuPanel(){
   if(MENU_SAVE){const def=(S.info.work||"").split(/[\n.,]/)[0].trim().slice(0,60)||((S.invoice.lines||[])[0]||{}).d||"";
     return `<div class="menu-pan"><strong>Save these ${(S.invoice.lines||[]).length} lines to your menu</strong>
       <label class="menu-name">Name<input id="menuName" value="${esc(def)}" placeholder="e.g. Front brakes, pads & rotors" autocomplete="off"></label>
+      <label class="menu-name">Operation code (optional)<input id="menuCode" value="${esc(((S.invoice.lines||[]).find(x=>x.op)||{}).op||"")}" placeholder="e.g. ${esc(opSuggest(def))}" autocomplete="off" autocapitalize="characters" maxlength="12"></label>
       <p class="help" style="margin:0">Using a name that's already on the menu replaces it.</p>
       <div class="acts"><button class="mini go" type="button" data-act="menusavego">Save to menu</button><button class="mini" type="button" data-act="menuclose">Cancel</button></div></div>`;}
   if(!MENU_OPEN)return "";
-  const q=MENU_Q.trim().toLowerCase(),list=m.filter(x=>!q||x.name.toLowerCase().includes(q)||menuSum(x).toLowerCase().includes(q));
+  const q=MENU_Q.trim().toLowerCase(),list=m.filter(x=>!q||x.name.toLowerCase().includes(q)||menuSum(x).toLowerCase().includes(q)||String(x.code||"").toLowerCase().startsWith(q));
   return `<div class="menu-pan"><div class="menu-head"><strong>Service menu</strong><button class="xbtn" type="button" data-act="menuclose" aria-label="Close menu">×</button></div>
-    ${m.length>5?`<input id="menuQ" data-menuq="1" value="${esc(MENU_Q)}" placeholder="Search your menu" autocomplete="off">`:""}
-    ${m.length?`<div class="menu-list">${list.map(x=>`<button type="button" class="menu-item" data-menuadd="${x.id}"><span class="mi-name">${esc(x.name)}</span><span class="mi-amt">${menuTotal(x)?money(menuTotal(x)):"Set prices"}</span><span class="mi-sub">${esc(menuSum(x))}${(()=>{const c=JOB_CATS.find(([n,re])=>re.test(x.name));const st=catStats(c?c[0]:x.name);return st?` · your avg ${st.avg} hr`:"";})()}</span></button>`).join("")||`<p class="help">Nothing matches.</p>`}</div>`
+    ${m.length>5||m.some(x=>x.code)?`<input id="menuQ" data-menuq="1" value="${esc(MENU_Q)}" placeholder="${m.some(x=>x.code)?"Type a code (OIL001) or search":"Search your menu"}" autocomplete="off" autocapitalize="characters" enterkeyhint="go">`:""}
+    ${m.length?`<div class="menu-list">${list.map(x=>`<button type="button" class="menu-item" data-menuadd="${x.id}"><span class="mi-name">${x.code?`<span class="op-chip">${esc(opClean(x.code))}</span> `:""}${esc(x.name)}</span><span class="mi-amt">${menuTotal(x)?money(menuTotal(x)):"Set prices"}</span><span class="mi-sub">${esc(menuSum(x))}${(()=>{const c=JOB_CATS.find(([n,re])=>re.test(x.name));const st=catStats(c?c[0]:x.name);return st?` · your avg ${st.avg} hr`:"";})()}</span></button>`).join("")||`<p class="help">Nothing matches.</p>`}</div>`
       :`<p class="help" style="margin:0">Your menu is empty. Build a job's lines below, then tap <strong>Save to menu</strong>. Or start with common jobs and fill in your prices.</p><div class="acts"><button class="mini" type="button" data-act="menustarter">Add common jobs</button></div>`}
   </div>`;
 }
@@ -6191,10 +6204,12 @@ function menuSettingsHTML(){
     <div class="full"><button class="btn primary" type="button" data-act="msnew">＋ Add a job</button></div>
     ${m.length?`<div class="full menu-set">${m.map(it=>{const open=MS_OPEN===it.id,tot=menuTotal(it);
       return `<div class="ms-item${open?" open":""}" id="ms-${it.id}">
-        <button type="button" class="ms-head" data-msopen="${it.id}" aria-expanded="${open}"><span class="ms-name">${esc(it.name||"Untitled job")}</span><span class="ms-amt" id="mstot-${it.id}">${tot?money(tot):"Set price"}</span><span class="ms-chev">${open?"▴":"▾"}</span>
+        <button type="button" class="ms-head" data-msopen="${it.id}" aria-expanded="${open}"><span class="ms-name">${it.code?`<span class="op-chip">${esc(opClean(it.code))}</span> `:""}${esc(it.name||"Untitled job")}</span><span class="ms-amt" id="mstot-${it.id}">${tot?money(tot):"Set price"}</span><span class="ms-chev">${open?"▴":"▾"}</span>
           ${open?"":`<span class="help ms-sub">${esc(menuSum(it))||"No lines yet"}</span>`}</button>
         ${open?`<div class="ms-body">
           <label class="ms-lbl">Job name<input id="msn-${it.id}" data-menuname="${it.id}" value="${esc(it.name)}" placeholder="e.g. Oil & filter change" autocomplete="off"></label>
+          <div class="ms-op"><label class="ms-lbl">Operation code<input id="msc-${it.id}" data-menucode="${it.id}" value="${esc(it.code||"")}" placeholder="e.g. ${esc(opSuggest(it.name,it.id))}" autocomplete="off" autocapitalize="characters" maxlength="12"></label>
+            ${it.code?"":`<button class="mini" type="button" data-opsug="${it.id}">Use ${esc(opSuggest(it.name,it.id))}</button>`}<span class="help" id="mscm-${it.id}"></span></div>
           <div class="ms-lines">${(it.lines||[]).map((x,k)=>menuLineHTML(it,x,k)).join("")||`<p class="help" style="margin:0">No lines yet. Add a flat fee, labor or parts below.</p>`}</div>
           <div class="copyrow"><button class="mini" type="button" data-maddline="${it.id}:flat">＋ Flat fee</button><button class="mini" type="button" data-maddline="${it.id}:labor">＋ Labor (hourly)</button><button class="mini" type="button" data-maddline="${it.id}:part">＋ Part</button><button class="mini" type="button" data-maddline="${it.id}:fee">＋ Fee</button></div>
           <div class="ms-foot"><span>Job total <strong id="mstot2-${it.id}">${money(tot)}</strong></span>
@@ -6233,7 +6248,7 @@ document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest
 function lineRow(x,k){
   const lab=x.k==="labor",flat=x.k==="flat";
   return `<div class="ln${flat?" flat":""}" data-ln="${k}">
-    <div class="ln-top"><select id="ln-k-${k}" data-lnk="${k}" aria-label="Line type">${LINE_KINDS.map(([v,l])=>`<option value="${v}" ${x.k===v?"selected":""}>${l}</option>`).join("")}</select>
+    ${x.op?`<span class="op-chip ln-op" title="${esc(x.opn||"")}">${esc(x.op)}</span>`:""}<div class="ln-top"><select id="ln-k-${k}" data-lnk="${k}" aria-label="Line type">${LINE_KINDS.map(([v,l])=>`<option value="${v}" ${x.k===v?"selected":""}>${l}</option>`).join("")}</select>
       <input id="ln-d-${k}" data-lnd="${k}" value="${esc(x.d)}" placeholder="${lab?"Labor description":flat?"Job, e.g. Front brakes – pads & rotors":x.k==="part"?"Part name or number":"Fee description"}" aria-label="Description">
       <button class="xbtn" type="button" data-delline="${k}" aria-label="Remove line">×</button></div>
     <div class="ln-nums">${flat?`<div class="ln-flat"><span>Flat fee</span></div>`:`<label>${lab?"Hours":"Qty"}<input id="ln-q-${k}" data-lnq="${k}" inputmode="decimal" value="${esc(x.q)}" placeholder="1"></label>`}
@@ -6704,7 +6719,8 @@ function buildRoPdf_(job,est){
   {const cols=[[isEs()?"FECHA":"DATE",64],[isEs()?"NÚMERO":"RO / INV #",76],[isEs()?"MILLAJE":"MILEAGE",64],[isEs()?"TÉC.":"TECH",42],[isEs()?"TRABAJO":"WORK DONE",W-246,"left"]];
     let y0=P.y,y=bar(P.y,cols);
     const show=rows.length?rows:[null];
-    show.forEach(j=>{let dl=[""];if(j){const ls=(j.invoice.lines||[]).filter(x=>x.d).map(x=>x.d).join(", ");dl=P.wrap(j.info.work||ls||"Service",W-246-16).slice(0,2);}
+    show.forEach(j=>{let dl=[""];if(j){const ls=(j.invoice.lines||[]).filter(x=>x.d).map(x=>x.d).join(", ");const ops=[...new Map((j.invoice.lines||[]).filter(x=>x.op).map(x=>[x.op,x.op+" "+(x.opn||x.d||"")])).values()];
+        dl=P.wrap(ops.length?ops.join(", "):(j.info.work||ls||"Service"),W-246-16).slice(0,2);}
       const h=Math.max(18,dl.length*11+7);
       if(y+h>PH-PM-30){box(PM,y0,W,y-y0);vlines(y0+17,y,cols);doc.addPage();P.y=PM;y0=P.y;y=bar(P.y,cols);}
       P.font(9.5,"normal",BLK);
@@ -6729,16 +6745,23 @@ function buildRoPdf_(job,est){
   // ---- job lines ----
   {const cols=[[isEs()?"N.º":"JOB",36],[isEs()?"DESCRIPCIÓN":"DESCRIPTION",W-36-96,"left"],[isEs()?"IMPORTE":"AMOUNT",96]];
     P.need(80);let y0=P.y,y=bar(P.y,cols,19);y+=6;
-    const lines=(inv.lines||[]).filter(x=>x.d||num(x.p)).map(x=>{const q=num(x.q===""||x.q==null?1:x.q);
+    const lines=[];
+    (inv.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""||x.q==null?1:x.q);
       const sub=x.k==="labor"?`${L_("Labor")}: ${q} hr @ ${money(num(x.p))}`:x.k==="part"?`${L_("Part")}${q!==1?`: ${q} @ ${money(num(x.p))}`:""}`:x.k==="flat"?L_("Flat fee"):RK[x.k]||"";
-      return {d:x.d||RK[x.k],sub,a:lineAmt(x)};});
+      const last=lines[lines.length-1];
+      // lines added from the same menu job sit under one operation: "OIL002 – FULL SERVICE OIL CHANGE"
+      if(x.op&&last&&last.op===x.op){last.parts.push({d:x.d||RK[x.k],sub,a:lineAmt(x)});last.a+=lineAmt(x);return;}
+      lines.push(x.op?{op:x.op,d:x.op+" – "+(x.opn||x.d||RK[x.k]),parts:[{d:x.d||RK[x.k],sub,a:lineAmt(x)}],a:lineAmt(x)}:{d:x.d||RK[x.k],sub,a:lineAmt(x)});});
+    // an operation with one line just shows that line's detail under the code
+    lines.forEach(L=>{if(L.parts&&L.parts.length===1){const p0=L.parts[0];L.sub=(p0.d&&p0.d.toUpperCase()!==String(L.d).toUpperCase().replace(/^[A-Z0-9-]+ – /,"")?p0.d+" · ":"")+p0.sub;delete L.parts;}});
     if(t.travel.fee)lines.push({d:L_("Travel"),sub:i.dist?`${i.dist} mi`:"",a:t.travel.fee});
     let n=0;
-    lines.forEach(L=>{n++;const dl=P.wrap(up(L.d),W-36-96-24);const h=dl.length*13+(L.sub?14:0)+12;
+    lines.forEach(L=>{n++;const dl=P.wrap(up(L.d),W-36-96-24);const pl=(L.parts||[]);const h=dl.length*13+(L.sub?14:0)+pl.length*14+12;
       if(y+h>PH-PM-30){box(PM,y0,W,y-y0);vlines(y0+19,y,cols);doc.addPage();P.y=PM;y0=P.y;y=bar(P.y,cols,19)+6;}
       fill(PM,y,36,h,[244,245,247]);fill(PM+36+6,y,W-36-96-12,dl.length*13+5,GRY);P.font(10.5,"bold",BLK);P.text(String(n),PM+18,y+12,{align:"center"});P.text(dl,PM+48,y+12);
       P.font(10.5,"bold",BLK);P.text(money(L.a),PW-PM-8,y+12,{align:"right"});
       if(L.sub){P.font(9.5,"normal",BLK);P.text(L.sub,PM+48,y+dl.length*13+13);}
+      pl.forEach((q,k)=>{const yy=y+dl.length*13+13+k*14;P.font(9.5,"normal",BLK);P.text(P.wrap(q.d+(q.sub&&q.sub!==q.d?"  ("+q.sub+")":""),W-36-96-140)[0],PM+48,yy);P.font(9.5,"normal",[80,80,80]);P.text(money(q.a),PM+W-96-16,yy,{align:"right"});});
       y+=h;});
     fill(PM,y0+19,36,6,[244,245,247]);
     const minY=y0+19+70;if(y<minY){fill(PM,y,36,minY-y,[244,245,247]);y=minY;}
@@ -6824,8 +6847,10 @@ function buildInvoicePdf_(job,est){
     if(sub){P.font(8.5,"normal",PC.muted);P.text(sub,PM+8,P.y+12);}P.y+=sub?20:12;P.rule(P.y);P.y+=18;};
   let ZEB=0;
   if(svc){
+    let lastOp="";
     (inv.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{
-      const q=num(x.q===""||x.q==null?1:x.q),dl=P.wrap(x.d||RK[x.k],PW-2*PM-230);P.need(dl.length*12+30);
+      const showOp=x.op&&x.op!==lastOp;lastOp=x.op||"";
+      const q=num(x.q===""||x.q==null?1:x.q),dl=P.wrap((showOp?x.op+"  ·  ":"")+(x.d||RK[x.k]),PW-2*PM-230);P.need(dl.length*12+30);
       if((ZEB=(ZEB||0)+1)%2===0){doc.setFillColor(249,250,252);doc.rect(PM,P.y-17,PW-2*PM,38+(dl.length-1)*12,"F");}
       P.font(10,"bold");P.text(dl,PM+8,P.y);
       P.font(10);if(x.k==="flat"){P.text("Flat",PW-PM-190,P.y,{align:"right"});}else{P.text(`${q}${x.k==="labor"?" hr":""}`,PW-PM-190,P.y,{align:"right"});P.text(money(num(x.p)),PW-PM-100,P.y,{align:"right"});}P.text(money(lineAmt(x)),PW-PM-8,P.y,{align:"right"});
@@ -6919,7 +6944,7 @@ function sendPdfHTML(kind){const j=S,i=j.info,first=(i.customer||"").trim().spli
 // what the customer sees on the online approval page (honestechmobileapp.com/e/?CODE)
 const canApproveOnline=j=>isSvc(j)&&!(j.est&&(j.est.status==="approved"||j.est.status==="declined"))&&j.status!=="done"&&!j.declined;
 function estSnapshot(j,inv){const prev=S;S=j;try{return withLang(custLang(j),()=>{const i=j.info,t=totals(j),L=[];
-  (j.invoice.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q);L.push({d:L_(x.d||RK[x.k])+(x.k==="labor"&&q?` (${L_(q+" hr")})`:q!==1&&x.k!=="flat"?` ×${q}`:""),a:lineAmt(x)});});
+  let lastOp="";(j.invoice.lines||[]).filter(x=>x.d||num(x.p)).forEach(x=>{const q=num(x.q===""?1:x.q),so=x.op&&x.op!==lastOp;lastOp=x.op||"";L.push({d:(so?x.op+" · ":"")+L_(x.d||RK[x.k])+(x.k==="labor"&&q?` (${L_(q+" hr")})`:q!==1&&x.k!=="flat"?` ×${q}`:""),a:lineAmt(x)});});
   if(t.travel.fee)L.push({d:L_("Travel"),a:t.travel.fee});
   if(t.disc)L.push({d:L_(t.discLabel),a:-t.disc});
   if(t.taxOn)L.push({d:L_("Sales tax"),a:t.tax});
@@ -7860,7 +7885,10 @@ document.addEventListener("click",e=>{
   if(d.act==="menusavego"){const name=(document.getElementById("menuName")?.value||"").trim();if(!name){toast("Give it a name");return;}
     const lines=(S.invoice.lines||[]).filter(x=>x.d||num(x.p)).map(x=>({k:x.k,d:x.d,q:x.q,p:x.p}));const m=APP.settings.menu;
     const dc=S.discl&&S.discl.mode&&S.discl.mode!=="default"?JSON.parse(JSON.stringify(S.discl)):null;
-    const ex=m.find(x=>x.name.toLowerCase()===name.toLowerCase());if(ex){ex.lines=lines;ex.name=name;if(dc)ex.discl=dc;else delete ex.discl;}else m.push({id:uid(),name,lines,...(dc?{discl:dc}:{})});
+    const ex=m.find(x=>x.name.toLowerCase()===name.toLowerCase()),code=opClean(document.getElementById("menuCode")?.value);
+    const dup=code&&m.find(x=>x!==ex&&opClean(x.code)===code);if(dup){toast(`${code} is already used by "${dup.name}"`);return;}
+    if(ex){ex.lines=lines;ex.name=name;if(code)ex.code=code;if(dc)ex.discl=dc;else delete ex.discl;}else m.push({id:uid(),name,lines,...(code?{code}:{}),...(dc?{discl:dc}:{})});
+    if(code)(S.invoice.lines||[]).forEach(x=>{if(!x.op){x.op=code;x.opn=name;}});
     MENU_SAVE=false;save();rerenderKeep();toast(ex?`Updated "${name}" on your menu`:`Saved "${name}" to your menu`);return;}
   if(d.act==="menustarter"){const n=addStarterMenu();save();rerenderKeep();toast(n?`Added ${n} common job${n===1?"":"s"}. Fill in your prices.`:"Those are already on your menu");return;}
   if(d.dsclsave&&S){if(d.dsclsave==="1"){DSCL_SAVE=true;rerenderKeep();setTimeout(()=>document.getElementById("dsclName")?.focus(),40);return;}
@@ -7869,8 +7897,10 @@ document.addEventListener("click",e=>{
   if(d.dsclstarter){const n=dsclStarter();save();rerenderKeep();toast(n?`${L_("Added")} ${n}. ${L_("Edit the wording to fit your shop.")}`:L_("Those are already in your list"));return;}
   if(d.dscladd){dsclList().push({id:uid(),name:"",text:""});save();rerenderKeep();setTimeout(()=>{const ns=document.querySelectorAll("[data-dscln]");ns[ns.length-1]?.focus();},40);return;}
   if(d.dscldel){APP.settings.discl=dsclList().filter(x=>x.id!==d.dscldel);APP.jobs.forEach(j=>{if(j.discl&&j.discl.id===d.dscldel)j.discl=null;});(APP.settings.menu||[]).forEach(m=>{if(m.discl&&m.discl.id===d.dscldel)delete m.discl;});save();rerenderKeep();return;}
+  if(d.opsug){const it=APP.settings.menu.find(x=>x.id===d.opsug);if(!it)return;it.code=opSuggest(it.name,it.id);save();rerenderKeep();return;}
   if(d.menuadd){const it=APP.settings.menu.find(x=>x.id===d.menuadd);if(!it)return;if(!S.menuName)S.menuName=it.name;const ls=S.invoice.lines||(S.invoice.lines=[]);
-    it.lines.forEach(x=>ls.push({k:x.k,d:x.d,q:x.q,p:x.k==="labor"&&x.p===""?(APP.settings.laborRate||""):x.p}));
+    const op=opClean(it.code);
+    it.lines.forEach(x=>ls.push({k:x.k,d:x.d,q:x.q,p:x.k==="labor"&&x.p===""?(APP.settings.laborRate||""):x.p,...(op?{op,opn:it.name}:{})}));
     if(it.discl&&!(S.discl&&S.discl.mode&&S.discl.mode!=="default"))S.discl=JSON.parse(JSON.stringify(it.discl));
     if(!String(S.info.work||"").trim())S.info.work=it.name;if(S.status==="sched")S.status="active";
     MENU_OPEN=false;save();rerenderKeep();toast(`Added ${it.name}`);document.getElementById("lines")?.scrollIntoView({block:"nearest"});return;}
@@ -8107,6 +8137,10 @@ document.addEventListener("input",e=>{
     const a=document.getElementById(`mamt-${id}-${k}`);if(a)a.textContent=money(lineAmt({...x,p:x.k==="labor"&&x.p===""?APP.settings.laborRate:x.p}));refreshMenuTotals(it);
     clearTimeout(window.__ml);window.__ml=setTimeout(save,400);return;}
   if(d.menuname){const it=APP.settings.menu.find(x=>x.id===d.menuname);if(it){it.name=t.value;clearTimeout(window.__mn);window.__mn=setTimeout(save,400);}return;}
+  if(d.menucode){const it=APP.settings.menu.find(x=>x.id===d.menucode);if(!it)return;const v=opClean(t.value);if(t.value!==v){const p=t.selectionStart;t.value=v;try{t.setSelectionRange(p,p);}catch(e){}}
+    const dup=v&&APP.settings.menu.find(x=>x.id!==it.id&&opClean(x.code)===v);const msg=document.getElementById("mscm-"+it.id);
+    if(msg)msg.textContent=dup?`${v} is already used by "${dup.name}"`:"";msg&&msg.classList.toggle("vin-warn",!!dup);
+    if(!dup){it.code=v;if(v)document.querySelector(`[data-opsug="${it.id}"]`)?.remove();clearTimeout(window.__mc);window.__mc=setTimeout(save,400);}return;}
   if(d.omwtrk&&OMW){const j=APP.jobs.find(x=>x.id===OMW.id);OMW.trkOn=!!t.checked;APP.settings.trackLink=OMW.trkOn;save();
     (async()=>{if(OMW.trkOn&&!OMW.trk&&j)await trkMake(j);if(!OMW)return;if(!OMW.edited&&j)OMW.text=omwText(j,OMW.mins);else if(OMW.edited)toast(OMW.trkOn?"You edited the text, so add the link yourself":"You edited the text, so take the link out yourself");rerenderKeep();})();return;}
   if(d.omwtext&&OMW){OMW.text=t.value;OMW.edited=true;const a=document.getElementById("omwSend");const j=APP.jobs.find(x=>x.id===OMW.id);if(a&&j)a.href=smsHref(j.info.phone,t.value);return;}

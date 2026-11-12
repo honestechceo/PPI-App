@@ -10,10 +10,10 @@
 name: iPhone app
 on:
   pull_request:
-    paths: ["app.html", "build.py", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
+    paths: ["app.html", "build.py", "sw.js", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
   push:
     branches: [main]
-    paths: ["app.html", "build.py", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
+    paths: ["app.html", "build.py", "sw.js", "ios/**", "package.json", "capacitor.config.json", "icons/**", ".github/workflows/ios.yml"]
   workflow_dispatch:
     inputs:
       upload:
@@ -52,6 +52,7 @@ jobs:
             [ -n "$url" ] || continue
             curl -fsSL --retry 3 "$url" -o "www/$local"
           done < www/vendor/SOURCES.txt
+          python3 ios/ci/bundle_json.py www
           ls -la www www/vendor
       - name: Sync into the Xcode project
         run: npx cap sync ios

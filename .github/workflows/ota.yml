@@ -1,0 +1,50 @@
+# Live updates for the iPhone app: after every change to the app screens on main, publish the
+# new screen bundle to the GitHub release "ota". Installed iPhone apps check it, download it in
+# the background and switch to it (see "live updates" in app.html). Native changes (plugins,
+# permissions, the widget) still need an App Store update: the app only takes a bundle whose
+# files other than index.html match its own.
+name: Live update (iPhone app)
+
+on:
+  push:
+    branches: [main]
+    paths: ["app.html", "build.py", "sw.js", "package.json", ".github/workflows/ota.yml", "ios/ci/bundle_json.py"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ota
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+      - name: App files (www/), same as the iPhone build
+        run: |
+          python3 build.py --www
+          cp node_modules/@capacitor/core/dist/capacitor.js www/capacitor.js
+          while read -r url _ local; do
+            [ -n "$url" ] || continue
+            curl -fsSL --retry 3 "$url" -o "www/$local"
+          done < www/vendor/SOURCES.txt
+          python3 ios/ci/bundle_json.py www
+          cp www/bundle.json manifest.json
+      - name: Publish to the "ota" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view ota >/dev/null 2>&1 || gh release create ota --prerelease --latest=false --target main \
+            --title "iPhone app live update" --notes "Screen bundle the installed iPhone app downloads. Updated automatically on every change to main. Don't delete."
+          # index.html first, then the manifest, so an app never sees a manifest for a file that isn't up yet
+          gh release upload ota www/index.html --clobber
+          gh release upload ota manifest.json --clobber
+          echo "Published $(python3 -c 'import json;print(json.load(open("manifest.json"))["ver"])')"

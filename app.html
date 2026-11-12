@@ -8333,6 +8333,85 @@ document.body.classList.add("dl-checking");
 document.body.classList.toggle("no-cal",!CAN_CAL);
 (async()=>{let ok=false;try{ok=!!(await getSaver());}catch(e){}
   document.body.classList.remove("dl-checking");document.body.classList.toggle("no-dl",!ok);})();
+/* ---- iPhone app: live updates ----
+   The App Store app carries its own copy of these screens. After each change, GitHub publishes the new
+   index.html and a manifest to the "ota" release (.github/workflows/ota.yml). The app checks it, downloads it
+   in the background, checks its sha256, and puts a full copy of the bundle in Library/NoCloud/ionic_built_snapshots/<version>.
+   It switches over at the next launch, after 10+ minutes in the background, or when the person taps the bar.
+   Only a bundle whose other files (libraries, icons, Capacitor) match this app's own is taken, so native
+   changes still go through the App Store. A new bundle only becomes permanent once it has started up fine
+   (persistServerBasePath); if it ever fails to start, closing and reopening the app goes back to the last good one. */
+const OTA_URL="https://github.com/honestechceo/PPI-App/releases/download/ota/";
+const OTA_K="honestech-ota",OTA_DIR="NoCloud/ionic_built_snapshots";
+const otaGet=()=>{try{return JSON.parse(localStorage.getItem(OTA_K)||"{}")||{};}catch(e){return {};}};
+const otaSet=o=>{try{localStorage.setItem(OTA_K,JSON.stringify(o));}catch(e){}};
+const otaNum=v=>parseInt(String(v||"").replace(/\D/g,""),10)||0;
+const otaLog=m=>console.log("HT-DIAG ota "+m);
+async function otaHttp(url){const H=capPlugin("CapacitorHttp");if(!H)throw new Error("no http");
+  const r=await H.get({url:url+(url.includes("?")?"&":"?")+"t="+Date.now(),responseType:"text",headers:{"Cache-Control":"no-cache"}});
+  if(r.status<200||r.status>=300)throw new Error("HTTP "+r.status);return typeof r.data==="string"?r.data:JSON.stringify(r.data);}
+async function otaSha(text){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(text));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");}
+let OTA_BUSY=false,OTA_MINE=null;
+async function otaMine(){if(OTA_MINE)return OTA_MINE;try{const r=await fetch("bundle.json",{cache:"no-store"});if(r.ok)OTA_MINE=await r.json();}catch(e){}return OTA_MINE;}
+async function otaCheck(){
+  if(!NATIVE||OTA_BUSY||navigator.onLine===false)return;const FS=capPlugin("Filesystem");if(!FS||!capPlugin("WebView"))return;
+  const mine=await otaMine();if(!mine||!mine.files)return;
+  const st=otaGet();if(st.ready&&otaNum(st.ready.ver)>otaNum(mine.ver))return;   // one is already waiting
+  OTA_BUSY=true;
+  try{
+    const remote=JSON.parse(await otaHttp(OTA_URL+"manifest.json"));
+    if(!remote||!remote.files||otaNum(remote.ver)<=otaNum(mine.ver))return;
+    if((st.bad||[]).includes(remote.ver)){otaLog("skip bad "+remote.ver);return;}
+    // everything but the screens themselves has to be the same as this app's
+    const keys=new Set([...Object.keys(remote.files),...Object.keys(mine.files)]);
+    for(const k of keys){if(k==="index.html"||k==="capacitor.js")continue;if(remote.files[k]!==mine.files[k]){otaLog("needs App Store update ("+k+")");return;}}
+    const html=await otaHttp(OTA_URL+"index.html");
+    if(await otaSha(html)!==remote.files["index.html"]){otaLog("sha mismatch, try later");return;}
+    // Capacitor only keeps (persists) a bundle that lives in Library/NoCloud/ionic_built_snapshots, and drops it by itself after an App Store update
+    const dir=OTA_DIR+"/"+remote.ver,D="LIBRARY";
+    await FS.writeFile({path:dir+"/index.html",data:html,directory:D,encoding:"utf8",recursive:true});
+    await FS.writeFile({path:dir+"/bundle.json",data:JSON.stringify(remote),directory:D,encoding:"utf8",recursive:true});
+    // the rest is copied from the bundle this app is running now
+    for(const k of Object.keys(mine.files)){if(k==="index.html")continue;
+      const r=await fetch(k,{cache:"no-store"});if(!r.ok)throw new Error("copy "+k);
+      await FS.writeFile({path:dir+"/"+k,data:await blobB64(await r.blob()),directory:D,recursive:true});}
+    const uri=(await FS.getUri({path:dir,directory:D})).uri;
+    const path=decodeURIComponent(String(uri).replace(/^file:\/\//,""));
+    otaSet({...otaGet(),ready:{ver:remote.ver,path,at:Date.now()}});otaLog("ready "+remote.ver);otaBar();
+  }catch(e){otaLog("check failed: "+(e&&e.message));}
+  finally{OTA_BUSY=false;}
+}
+// switch to the downloaded bundle (the page reloads into it)
+async function otaApply(){const st=otaGet(),W=capPlugin("WebView");if(!st.ready||!W)return false;
+  try{save();}catch(e){}
+  otaSet({...st,trying:{ver:st.ready.ver,at:Date.now()}});
+  try{await W.setServerBasePath({path:st.ready.path});return true;}catch(e){otaLog("apply failed: "+(e&&e.message));const o=otaGet();o.bad=[...(o.bad||[]),st.ready.ver].slice(-10);delete o.ready;delete o.trying;otaSet(o);return false;}}
+function otaBar(){if(document.getElementById("updBar"))return;const b=document.createElement("button");b.type="button";b.id="updBar";
+  b.textContent=L_("✨ New version ready. Tap to update");b.onclick=()=>{b.disabled=true;otaApply().then(ok=>{if(!ok)b.remove();});};document.body.appendChild(b);}
+async function otaStart(){
+  if(!NATIVE)return;const W=capPlugin("WebView");if(!W)return;
+  const mine=await otaMine();const st=otaGet();
+  if(st.trying&&mine&&mine.ver===st.trying.ver){
+    // the new bundle started fine: keep it from now on
+    try{await W.persistServerBasePath();}catch(e){}
+    const o=otaGet();delete o.trying;delete o.ready;o.cur=mine.ver;otaSet(o);toast(L_("Updated to the latest version"));otaClean(mine.ver);
+  }else if(st.trying&&mine&&mine.ver!==st.trying.ver){
+    // we were sent back to the old bundle (the new one didn't start): don't try that one again
+    const o=otaGet();o.bad=[...(o.bad||[]),st.trying.ver].slice(-10);delete o.trying;if(o.ready&&o.ready.ver===st.trying.ver)delete o.ready;otaSet(o);otaLog("rolled back from "+st.trying.ver);
+  }else if(st.ready&&mine&&otaNum(st.ready.ver)>otaNum(mine.ver)){
+    // downloaded last time: switch now, at launch, before anything is open
+    if(await otaApply())return;
+  }
+  setTimeout(otaCheck,6000);
+  let hid=0;document.addEventListener("visibilitychange",()=>{if(document.hidden){hid=Date.now();return;}
+    const o=otaGet();if(o.ready&&hid&&Date.now()-hid>10*60e3&&!APP.adding&&!(OMW||EST_SEND)){otaApply();return;}
+    if(Date.now()-(otaStart.last||0)>30*60e3){otaStart.last=Date.now();otaCheck();}});
+}
+async function otaClean(keep){const FS=capPlugin("Filesystem");if(!FS)return;
+  try{const r=await FS.readdir({path:OTA_DIR,directory:"LIBRARY"});for(const f of r.files||[]){const n=f.name||f;if(n!==keep)await FS.rmdir({path:OTA_DIR+"/"+n,directory:"LIBRARY",recursive:true}).catch(()=>{});}}catch(e){}}
+// only once the app has drawn its first screen without errors
+if(NATIVE)setTimeout(()=>{try{otaStart();}catch(e){otaLog("start "+e.message);}},2500);
+
 /* Installed web app: work offline */
 if(!IN_CLAUDE&&"serviceWorker" in navigator&&location.protocol==="https:"&&/github\.io$|honestechmobileapp\.com$/.test(location.hostname)){
   window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));

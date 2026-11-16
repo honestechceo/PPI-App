@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Get my device ID · Honestech</title><meta name="robots" content="noindex">
+<style>:root{color-scheme:light dark}body{margin:0;font:17px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f6f8;color:#15202b}@media (prefers-color-scheme:dark){body{background:#0f151c;color:#e6ebf0}.card{background:#18212b!important;border-color:#2a3644!important}}
+main{max-width:560px;margin:0 auto;padding:28px 18px 60px}h1{font-size:26px;margin:0 0 8px}.card{background:#fff;border:1px solid #dde3ea;border-radius:16px;padding:18px;margin:16px 0}
+.btn{display:block;text-align:center;background:#1d5fa8;color:#fff;text-decoration:none;font-weight:700;border-radius:12px;padding:15px;font-size:18px;border:0;width:100%;cursor:pointer}
+.id{font:600 17px/1.4 ui-monospace,Menlo,monospace;word-break:break-all;background:rgba(127,127,127,.12);border-radius:10px;padding:12px;margin:8px 0 12px}ol{padding-left:22px}li{margin:6px 0}.ok{color:#1a7f37;font-weight:700}.bad{color:#c62828;font-weight:700}.d{opacity:.7;font-size:15px}</style></head><body><main>
+<h1>Get my iPhone's device ID</h1>
+<div id="out"></div>
+<script>
+(function(){var q=new URLSearchParams(location.search),u=q.get("u"),p=q.get("p")||"",v=q.get("v")||"",o=document.getElementById("out");
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+if(u){var m=/^iPhone(\d+),/.exec(p),gen=m?+m[1]:0,ttp=gen>=11;
+  o.innerHTML='<div class="card"><p style="margin:0">Your device ID:</p><div class="id" id="uid">'+esc(u)+'</div>'+
+  '<button class="btn" id="cp">Copy it</button><p class="d" style="margin:10px 0 0">Paste it to Claude in the chat. It\'s used only to register this iPhone for test versions of the app.</p></div>'+
+  '<div class="card"><p style="margin:0">Model: '+esc(p||"unknown")+(v?' · build '+esc(v):'')+'</p><p style="margin:6px 0 0" class="'+(ttp?'ok':'bad')+'">'+(ttp?'✓ Works with Tap to Pay on iPhone':(gen?'This iPhone is older than an iPhone XS, so it can\'t use Tap to Pay on iPhone.':''))+'</p></div>'+
+  '<p class="d">Nothing was installed. If Settings still shows the profile, you can remove it: Settings → General → VPN &amp; Device Management.</p>';
+  document.getElementById("cp").onclick=function(){var t=u;(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){document.getElementById("cp").textContent="✓ Copied";},function(){var r=document.createRange();r.selectNode(document.getElementById("uid"));getSelection().removeAllRanges();getSelection().addRange(r);});};
+  return;}
+o.innerHTML=(q.get("err")?'<div class="card bad">That didn\'t come through. Try again.</div>':'')+
+ '<div class="card"><p style="margin-top:0">Open this page in <strong>Safari on the iPhone</strong> you want to register.</p>'+
+ '<a class="btn" href="https://dvgjrqbrqvizbvszubdh.supabase.co/functions/v1/intake?udidcfg=1">Get my device ID</a>'+
+ '<ol><li>Tap <strong>Get my device ID</strong>, then <strong>Allow</strong>.</li><li>Open <strong>Settings</strong>. Near the top, tap <strong>Profile Downloaded</strong>.</li><li>Tap <strong>Install</strong> (top right), enter your passcode, then <strong>Install</strong> again. It says "Not Verified"; that\'s normal for this.</li><li>Safari opens this page again with your ID.</li></ol>'+
+ '<p class="d">Nothing stays on your phone and nothing is saved. The ID only lets Apple install test versions of the Honestech app on this iPhone.</p></div>';})();
+</script></main></body></html>

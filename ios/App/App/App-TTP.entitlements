@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Test builds for registered iPhones only (ios-dev.yml): the Tap to Pay on iPhone development entitlement.
+     App Store / TestFlight builds keep using App.entitlements until Apple grants the publishing entitlement. -->
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.honestechmobileapp.app</string>
+		<string>$(AppIdentifierPrefix)com.honestechmobileapp.shared</string>
+	</array>
+	<key>com.apple.developer.proximity-reader.payment.acceptance</key>
+	<true/>
+</dict>
+</plist>

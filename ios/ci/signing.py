@@ -13,9 +13,14 @@ API = "https://api.appstoreconnect.apple.com/v1"
 KEY_ID, ISSUER, KEY_PATH = os.environ["ASC_KEY_ID"], os.environ["ASC_ISSUER_ID"], os.environ["ASC_KEY_PATH"]
 BUNDLE = os.environ.get("BUNDLE_ID", "com.honestechmobileapp.app")
 TMP = pathlib.Path(os.environ.get("RUNNER_TEMP", "/tmp")) / "signing"
-PROFILE_NAME = "Honestech App Store (GitHub)"
+# SIGN_MODE=dev: a test build for registered iPhones (Apple Development certificate + development profiles that
+# list the iPhones in TEST_DEVICES, "Name=UDID, Name=UDID"). Used for Tap to Pay testing, which TestFlight can't do yet.
+DEV = os.environ.get("SIGN_MODE", "") == "dev"
+PROFILE_NAME = "Honestech App Dev (GitHub)" if DEV else "Honestech App Store (GitHub)"
 WIDGET_BUNDLE = BUNDLE + ".widget"            # the Home Screen widget, shipped inside the app
-WIDGET_PROFILE_NAME = "Honestech Widget App Store (GitHub)"
+WIDGET_PROFILE_NAME = "Honestech Widget Dev (GitHub)" if DEV else "Honestech Widget App Store (GitHub)"
+CERT_TYPE = "DEVELOPMENT" if DEV else "DISTRIBUTION"
+IDENTITY = "Apple Development" if DEV else "Apple Distribution"
 OPENSSL = "/usr/bin/openssl" if os.path.exists("/usr/bin/openssl") else "openssl"  # macOS LibreSSL makes .p12 files the keychain accepts
 
 
@@ -148,14 +153,38 @@ def widget_bundle_id() -> str:
     return made["id"]
 
 
-def make_profile(bundle_id: str, name: str, cert_id: str) -> str:
+def test_devices() -> list:
+    """Register the iPhones in TEST_DEVICES (once each) and return every enabled iPhone on the account."""
+    have = {d["attributes"]["udid"].upper(): d for d in api("GET", "/devices?filter[platform]=IOS&limit=200")["data"]}
+    for item in [x.strip() for x in os.environ.get("TEST_DEVICES", "").replace("\n", ",").split(",") if x.strip()]:
+        name, _, udid = item.rpartition("=")
+        udid = udid.strip().upper()
+        if not udid or udid in have:
+            continue
+        made = api("POST", "/devices", {"data": {"type": "devices", "attributes": {"name": (name.strip() or "Test iPhone")[:50], "udid": udid, "platform": "IOS"}}})["data"]
+        have[udid] = made
+        print(f"::notice::Signing: registered test iPhone {made['attributes']['name']}")
+    ids = [d["id"] for d in have.values() if d["attributes"].get("status") != "DISABLED" and d["attributes"].get("deviceClass") in (None, "IPHONE")]
+    if not ids:
+        print("::error::No test iPhones are registered. Add the iPhone's device ID to the TEST_DEVICES repo variable (Name=UDID).")
+        raise SystemExit(1)
+    return ids
+
+
+def make_profile(bundle_id: str, name: str, cert_id: str, devices=None) -> str:
     for p in api("GET", f"/profiles?filter[name]={urllib.parse.quote(name)}&limit=50")["data"]:
         api("DELETE", f"/profiles/{p['id']}")
-    prof = api("POST", "/profiles", {"data": {"type": "profiles", "attributes": {"name": name, "profileType": "IOS_APP_STORE"},
-                                              "relationships": {"bundleId": {"data": {"type": "bundleIds", "id": bundle_id}},
-                                                                "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}}})["data"]
+    rel = {"bundleId": {"data": {"type": "bundleIds", "id": bundle_id}}, "certificates": {"data": [{"type": "certificates", "id": cert_id}]}}
+    if devices:
+        rel["devices"] = {"data": [{"type": "devices", "id": d} for d in devices]}
+    prof = api("POST", "/profiles", {"data": {"type": "profiles", "attributes": {"name": name, "profileType": "IOS_APP_DEVELOPMENT" if DEV else "IOS_APP_STORE"},
+                                              "relationships": rel}})["data"]
     uid = prof["attributes"]["uuid"]
     content = base64.b64decode(prof["attributes"]["profileContent"])
+    if DEV and bundle_id and b"proximity-reader.payment.acceptance" in content:
+        print(f"::notice::Signing: {name} includes Tap to Pay on iPhone")
+    elif DEV and name == PROFILE_NAME:
+        print("::warning::The development profile doesn't include Tap to Pay on iPhone yet. In developer.apple.com → Identifiers → com.honestechmobileapp.app, turn on Tap to Pay on iPhone (under Additional Capabilities) and Save, then run this again.")
     for d in [pathlib.Path.home() / "Library/MobileDevice/Provisioning Profiles", pathlib.Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"]:
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{uid}.mobileprovision").write_bytes(content)
@@ -174,9 +203,9 @@ def main():
 
     # 2. the Apple Distribution certificate: reuse ours if Apple still has it, otherwise make it (once)
     key = TMP / "dist.key"
-    key_pem, modulus = signing_key_pem(open(KEY_PATH, "rb").read().strip())
+    key_pem, modulus = signing_key_pem(open(KEY_PATH, "rb").read().strip() + (b"|development" if DEV else b""))
     key.write_text(key_pem)
-    certs = api("GET", "/certificates?filter[certificateType]=DISTRIBUTION&limit=50")["data"]
+    certs = api("GET", f"/certificates?filter[certificateType]={CERT_TYPE}&limit=50")["data"]
     cer = TMP / "dist.cer"
     cert_id = None
     for c in certs:
@@ -187,17 +216,17 @@ def main():
         mod = subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-noout", "-modulus"], capture_output=True, text=True).stdout
         if mod.strip().split("=")[-1].upper() == format(modulus, "X"):
             cert_id = c["id"]
-            print(f"::notice::Signing: reused the App Store certificate ({cert_id})")
+            print(f"::notice::Signing: reused the {IDENTITY} certificate ({cert_id})")
             break
     if not cert_id:
         certs.sort(key=lambda c: c["attributes"].get("expirationDate") or "")
-        while len(certs) >= 2:   # Apple allows only a few
+        while not DEV and len(certs) >= 2:   # Apple allows only a few (never touch development certificates)
             old = certs.pop(0)
             print("Retiring old distribution certificate", old["id"])
             api("DELETE", f"/certificates/{old['id']}")
         csr = TMP / "dist.csr"
         subprocess.run([OPENSSL, "req", "-new", "-key", str(key), "-out", str(csr), "-subj", "/CN=Honestech GitHub/O=Honestech/C=US"], check=True, capture_output=True)
-        made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": "DISTRIBUTION", "csrContent": csr.read_text()}}})["data"]
+        made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": CERT_TYPE, "csrContent": csr.read_text()}}})["data"]
         cert_id = made["id"]
         cer.write_bytes(base64.b64decode(made["attributes"]["certificateContent"]))
         print(f"::notice::Signing: made the App Store certificate ({cert_id}); later builds reuse it")
@@ -208,8 +237,9 @@ def main():
     subprocess.run([OPENSSL, "pkcs12", "-export", "-inkey", str(key), "-in", str(pem), "-out", str(p12), "-passout", f"pass:{p12pw}"], check=True, capture_output=True)
 
     # 3. fresh App Store profiles for the app and its widget with that certificate (replace the last ones)
-    uid = make_profile(bundle_id, PROFILE_NAME, cert_id)
-    wuid = make_profile(widget_bundle_id(), WIDGET_PROFILE_NAME, cert_id)
+    devs = test_devices() if DEV else None
+    uid = make_profile(bundle_id, PROFILE_NAME, cert_id, devs)
+    wuid = make_profile(widget_bundle_id(), WIDGET_PROFILE_NAME, cert_id, devs)
 
     # 4. a private keychain on the build Mac holding the certificate
     kc = str(TMP / "build.keychain-db")
@@ -224,7 +254,7 @@ def main():
     sh("security", "list-keychains", "-d", "user", "-s", kc, *[e.strip('"') for e in existing])
     ident = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning", kc], capture_output=True, text=True).stdout
     print(ident)
-    if "Apple Distribution" not in ident:
+    if IDENTITY not in ident:
         print("::error::The signing certificate didn't install on the build Mac.")
         raise SystemExit(1)
 

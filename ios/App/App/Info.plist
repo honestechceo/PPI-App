@@ -16,6 +16,8 @@
 	<string>Honestech lets you add photos from your library to a job or inspection report.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Honestech saves job photos and reports to your library when you choose Save.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Honestech uses Bluetooth only to connect a Stripe card reader, if you use one.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Honestech uses your location for the weather, routes and arrival times, and, when you tap On my way, to show your customer where you are until you arrive.</string>
 	<key>UIBackgroundModes</key>

@@ -72,7 +72,7 @@ public class TapToPayPlugin: CAPPlugin, CAPBridgedPlugin, ConnectionTokenProvide
             self.ensureInit()
             var supported = false, reason = ""
             switch Terminal.shared.supportsReaders(of: .tapToPay, discoveryMethod: .tapToPay, simulated: false) {
-            case .success(let ok): supported = ok
+            case .success: supported = true
             case .failure(let error): reason = Self.plain(error)
             }
             let t = Terminal.shared

@@ -231,7 +231,7 @@ def main():
         made = api("POST", "/certificates", {"data": {"type": "certificates", "attributes": {"certificateType": CERT_TYPE, "csrContent": csr.read_text()}}})["data"]
         cert_id = made["id"]
         cer.write_bytes(base64.b64decode(made["attributes"]["certificateContent"]))
-        print(f"::notice::Signing: made the App Store certificate ({cert_id}); later builds reuse it")
+        print(f"::notice::Signing: made the {IDENTITY} certificate ({cert_id}); later builds reuse it")
     pem = TMP / "dist.pem"
     subprocess.run([OPENSSL, "x509", "-inform", "DER", "-in", str(cer), "-out", str(pem)], check=True, capture_output=True)
     p12 = TMP / "dist.p12"

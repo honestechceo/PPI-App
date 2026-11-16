@@ -2,7 +2,7 @@
 # Apple's Tap to Pay *development* entitlement only works in development-signed builds installed on iPhones
 # registered to the developer account; TestFlight and the App Store need the publishing entitlement later.
 #  - Run by hand (Actions → "iPhone test build" → Run workflow), or on pushes to the ttp-test branch.
-#  - Repo variable TEST_DEVICES: "Juan iPhone=00008110-XXXXXXXXXXXXXXXX" (comma-separated for more).
+#  - Test iPhones: ios/ci/test-devices.txt (Name=UDID per line), plus repo variable TEST_DEVICES if set.
 #    Get an iPhone's ID at https://honestechmobileapp.com/udid.html
 #  - Install: open https://honestechmobileapp.com/devbuild.html on the registered iPhone in Safari.
 # Uses the same Apple secrets as the TestFlight workflow.
@@ -56,6 +56,8 @@ jobs:
           { echo "-----BEGIN PRIVATE KEY-----"; printf '%s\n' "$body" | fold -w 64; echo "-----END PRIVATE KEY-----"; } > "$KEY"
           openssl pkey -in "$KEY" -noout 2>/dev/null || { echo "::error::The ASC_KEY_P8 secret isn't a complete Apple key."; exit 1; }
           echo "ASC_KEY_PATH=$KEY" >> "$GITHUB_ENV"
+          LIST=$(grep -v '^\s*#' ios/ci/test-devices.txt 2>/dev/null | grep '=' | paste -sd, -)
+          export TEST_DEVICES="${TEST_DEVICES:+$TEST_DEVICES,}$LIST"
           ASC_KEY_PATH="$KEY" SIGN_MODE=dev BUNDLE_ID=com.honestechmobileapp.app python3 ios/ci/signing.py
       - name: Build and sign for the test iPhones
         run: |
@@ -72,6 +74,12 @@ jobs:
               bid = re.search(r"PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);", b).group(1).strip('"')
               nb = b.replace("CODE_SIGN_STYLE = Automatic;", f'CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = {team};\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Development";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profs[bid]}";')
               nb = nb.replace("CODE_SIGN_ENTITLEMENTS = App/App.entitlements;", "CODE_SIGN_ENTITLEMENTS = App/App-TTP.entitlements;")
+          # no Tap to Pay in the profile yet (capability not turned on): still make a test build, just without it
+          if os.environ.get("TTP_IN_PROFILE") != "1":
+              e = open("ios/App/App/App-TTP.entitlements").read()
+              e = re.sub(r"\s*<key>com.apple.developer.proximity-reader.payment.acceptance</key>\s*<true/>", "", e)
+              open("ios/App/App/App-TTP.entitlements", "w").write(e)
+              print("::warning::Building without Tap to Pay on iPhone (the profile doesn't have it yet).")
               s = s.replace(b, nb)
           open(p, "w").write(s)
           PY

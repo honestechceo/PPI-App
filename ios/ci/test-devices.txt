@@ -1,0 +1,3 @@
+# iPhones registered for test builds (Tap to Pay on iPhone testing). One per line: Name=UDID
+# Get an iPhone's ID at https://honestechmobileapp.com/udid.html
+Juan iPhone=00008101-001E702E34BA001E

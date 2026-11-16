@@ -183,6 +183,8 @@ def make_profile(bundle_id: str, name: str, cert_id: str, devices=None) -> str:
     content = base64.b64decode(prof["attributes"]["profileContent"])
     if DEV and bundle_id and b"proximity-reader.payment.acceptance" in content:
         print(f"::notice::Signing: {name} includes Tap to Pay on iPhone")
+        with open(os.environ["GITHUB_ENV"], "a") as f:
+            f.write("TTP_IN_PROFILE=1\n")
     elif DEV and name == PROFILE_NAME:
         print("::warning::The development profile doesn't include Tap to Pay on iPhone yet. In developer.apple.com → Identifiers → com.honestechmobileapp.app, turn on Tap to Pay on iPhone (under Additional Capabilities) and Save, then run this again.")
     for d in [pathlib.Path.home() / "Library/MobileDevice/Provisioning Profiles", pathlib.Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles"]:

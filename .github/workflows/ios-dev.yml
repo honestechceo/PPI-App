@@ -74,13 +74,13 @@ jobs:
               bid = re.search(r"PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);", b).group(1).strip('"')
               nb = b.replace("CODE_SIGN_STYLE = Automatic;", f'CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = {team};\n\t\t\t\tCODE_SIGN_IDENTITY = "Apple Development";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = "{profs[bid]}";')
               nb = nb.replace("CODE_SIGN_ENTITLEMENTS = App/App.entitlements;", "CODE_SIGN_ENTITLEMENTS = App/App-TTP.entitlements;")
+              s = s.replace(b, nb)
           # no Tap to Pay in the profile yet (capability not turned on): still make a test build, just without it
           if os.environ.get("TTP_IN_PROFILE") != "1":
               e = open("ios/App/App/App-TTP.entitlements").read()
               e = re.sub(r"\s*<key>com.apple.developer.proximity-reader.payment.acceptance</key>\s*<true/>", "", e)
               open("ios/App/App/App-TTP.entitlements", "w").write(e)
               print("::warning::Building without Tap to Pay on iPhone (the profile doesn't have it yet).")
-              s = s.replace(b, nb)
           open(p, "w").write(s)
           PY
           BUILD=$((5000 + ${{ github.run_number }}))

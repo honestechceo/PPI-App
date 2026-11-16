@@ -8,5 +8,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(BioLockPlugin())
         bridge?.registerPluginInstance(WidgetBridgePlugin())
         bridge?.registerPluginInstance(LiveLocationPlugin())
+        bridge?.registerPluginInstance(TapToPayPlugin())
     }
 }

@@ -2120,33 +2120,29 @@ async function loadGifts(){if(!AUTH||!PLAN||!PLAN.comp)return;try{const r=await 
 const giftLink=t=>appURL()+"?gift="+String(t).replace(/"/g,"");
 function giftMsg(name,months,link){const first=(name||"").trim().split(/\s+/)[0];
   return `${first?first+", here":"Here"}'s ${mo(months)} free of the Honestech Mobile Mechanic App: book jobs, run inspections, send estimates and invoices, all from your phone. It's on top of the ${PRICES.trialDays}-day free trial, so ${mo(months+1)} free, no card needed. Tap to claim it: ${link}`;}
+// Gift links: the owner makes a link and shares it themselves. Nothing about the person it's for is asked or stored
+// (App Review 5.1.2(iv)). Hidden in the iPhone app; it's platform-owner tooling on the website.
 function giftCardHTML(){
-  if(isTech()||!AUTH||!PLAN||!PLAN.comp)return "";
+  if(NATIVE||isTech()||!AUTH||!PLAN||!PLAN.comp)return "";
   if(!GIFTS.list&&!GIFTS.loading){GIFTS.loading=true;setTimeout(()=>loadGifts().finally(()=>{GIFTS.loading=false;}),0);}
-  const F=GIFTS.form,isMail=/@/.test(F.contact),digits=String(F.contact).replace(/\D/g,"");
+  const F=GIFTS.form;
   const L=GIFTS.list||[];
   return `<div class="form" id="giftSet"><p class="formh">🎁 Gift free months</p>
-    <p class="help full" style="margin:0">Send another mechanic free time on the app. They get it when they create their own account from your link. It's added on top of the ${PRICES.trialDays}-day trial. Only your account can send these.</p>
-    <label>Their name<input id="g-name" data-giftf="name" value="${esc(F.name)}" placeholder="e.g. Mike Torres" autocomplete="off"></label>
-    <label>Phone or email<input id="g-contact" data-giftf="contact" value="${esc(F.contact)}" placeholder="732-555-0100 or mike@email.com" autocomplete="off" inputmode="email"></label>
+    <p class="help full" style="margin:0">Make a link for free time on the app and share it yourself. Whoever creates their own account from it gets the free months on top of the ${PRICES.trialDays}-day trial. Only your account can make these.</p>
     <div class="full"><span class="help" style="display:block;margin-bottom:6px">How much free time?</span><div class="seg" role="group" aria-label="Free months">${[1,2,3].map(n=>`<button type="button" data-giftm="${n}" aria-pressed="${F.months===n}">${mo(n)}</button>`).join("")}</div></div>
     <div class="full formacts">
-      ${CAN_CAL?`<button class="btn primary" type="button" data-act="giftsend" data-via="text" ${GIFTS.busy?"disabled":""}>💬 Text it</button>`:""}
-      <button class="btn${CAN_CAL?"":" primary"}" type="button" data-act="giftsend" data-via="email" ${GIFTS.busy?"disabled":""}>✉️ Email it</button>
-      <button class="btn" type="button" data-act="giftsend" data-via="copy" ${GIFTS.busy?"disabled":""}>Copy link</button></div>
+      ${navigator.share?`<button class="btn primary" type="button" data-act="giftsend" data-via="share" ${GIFTS.busy?"disabled":""}>📤 Share a gift link</button>`:""}
+      <button class="btn${navigator.share?"":" primary"}" type="button" data-act="giftsend" data-via="copy" ${GIFTS.busy?"disabled":""}>Copy a gift link</button></div>
     ${GIFTS.msg?`<p class="help full" style="margin:0;color:var(--bad)">${esc(GIFTS.msg)}</p>`:""}
-    ${L.length?`<div class="full gift-list"><div class="group-h" style="margin:6px 0">Sent</div>${L.map(g=>`<div class="gift-row"><div><strong>${esc(g.to_name||g.to_contact||"Gift link")}</strong> · ${mo(g.months)}<br><span class="help">Sent ${esc(fmtDate(String(g.created_at).slice(0,10),{month:"short",day:"numeric"}))}${g.to_contact&&g.to_name?" · "+esc(g.to_contact):""}</span></div>
-      <div class="gift-st">${g.redeemed_at?`<span class="st st-paid">Claimed</span><br><span class="help">${esc(g.email||"")}</span>`:g.expired?`<span class="st st-cancel">Expired</span>`:`<span class="st st-sched">Not claimed yet</span><br><button class="mini" type="button" data-giftcopy="${esc(g.token)}">Copy link</button> <button class="mini del" type="button" data-giftcancel="${esc(g.token)}">Cancel</button>`}</div></div>`).join("")}</div>`:""}
+    ${L.length?`<div class="full gift-list"><div class="group-h" style="margin:6px 0">Sent</div>${L.map(g=>`<div class="gift-row"><div><strong>${esc(L_("Gift link"))}</strong> · ${mo(g.months)}<br><span class="help">${esc(L_("Made"))} ${esc(fmtDate(String(g.created_at).slice(0,10),{month:"short",day:"numeric"}))}</span></div>
+      <div class="gift-st">${g.redeemed_at?`<span class="st st-paid">Claimed</span>`:g.expired?`<span class="st st-cancel">Expired</span>`:`<span class="st st-sched">Not claimed yet</span><br><button class="mini" type="button" data-giftcopy="${esc(g.token)}">Copy link</button> <button class="mini del" type="button" data-giftcancel="${esc(g.token)}">Cancel</button>`}</div></div>`).join("")}</div>`:""}
   </div>`;}
-async function giftSend(via){const F=GIFTS.form,c=F.contact.trim();
-  if(via==="text"&&!/\d{7,}/.test(c.replace(/\D/g,""))){GIFTS.msg="Enter their phone number to text it.";rerenderKeep();document.getElementById("g-contact")?.focus();return;}
-  if(via==="email"&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(c)){GIFTS.msg="Enter their email address to email it.";rerenderKeep();document.getElementById("g-contact")?.focus();return;}
+async function giftSend(via){const F=GIFTS.form;
   GIFTS.busy=true;GIFTS.msg="";rerenderKeep();
-  try{const tok=await supa("/rest/v1/rpc/create_gift",{method:"POST",body:{p_months:F.months,p_name:F.name.trim(),p_contact:c}});
-    const link=giftLink(tok),msg=giftMsg(F.name,F.months,link);
+  try{const tok=await supa("/rest/v1/rpc/create_gift",{method:"POST",body:{p_months:F.months,p_name:"",p_contact:""}});
+    const link=giftLink(tok),msg=giftMsg("",F.months,link);
     GIFTS.busy=false;GIFTS.form={name:"",contact:"",months:1};loadGifts();
-    if(via==="text"){location.href=smsHref(c,msg);toast("Gift ready. Send the text.");}
-    else if(via==="email"){location.href=`mailto:${encodeURIComponent(c)}?subject=${encodeURIComponent(`${mo(F.months)} free of the Honestech Mobile Mechanic App`)}&body=${encodeURIComponent(msg)}`;toast("Gift ready. Send the email.");}
+    if(via==="share"&&navigator.share){try{await navigator.share({text:msg});}catch(e){}}
     else{copyText(msg);toast("Gift message copied. Paste it anywhere.");}
     rerenderKeep();}
   catch(e){GIFTS.busy=false;GIFTS.msg=(e&&e.msg)||"Couldn't create the gift. Check your connection.";rerenderKeep();}}
